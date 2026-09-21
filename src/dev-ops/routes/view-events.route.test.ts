@@ -3726,4 +3726,101 @@ describe('viewEventsRoute', () => {
     expect($('main').text()).not.toContain('Parked')
     expect($('main').html()).not.toContain('PARKED')
   })
+
+  const purged: Partial<EventRow> = {
+    status: 'PURGED',
+    statusLabel: 'Purged',
+    statusRole: 'neutral',
+    statusRetrying: false
+  }
+
+  const givenPurgedStatus = (events: EventRow[] = [event(purged)]) =>
+    vi.mocked(getEventsUseCase).mockResolvedValue({
+      page: { events, pagination: pagination(), sourceErrors: [] },
+      statuses: [
+        ...statuses,
+        { value: 'PURGED', label: 'Purged', explainer: '' }
+      ],
+      services,
+      facets: { counts: { ...counts(), PURGED: 5 } },
+      breakdown: null,
+      unavailable: false
+    })
+
+  test('forwards a filter on the purged status', async () => {
+    const { statusCode } = await viewPage('/dev-ops/events?status=PURGED')
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(getEventsUseCase).toHaveBeenCalledWith({ status: 'PURGED' })
+  })
+
+  test('puts the Purged tile last, and filters the list with it', async () => {
+    givenPurgedStatus()
+
+    const { $ } = await viewPage()
+
+    expect(segments($, 'events-status-tile').at(-1)).toBe('Purged 5')
+    expect(segmentFor($, 'events-status-tile', 'PURGED').attr('href')).toBe(
+      '/dev-ops/events?status=PURGED'
+    )
+  })
+
+  // A purged event is a decision somebody made, not a problem to go and fix.
+  test('counts the Purged tile plainly, with no alarm and no tooltip', async () => {
+    givenPurgedStatus()
+
+    const { $ } = await viewPage()
+
+    const tile = segmentFor($, 'events-status-tile', 'PURGED')
+    const count = tile.find('[data-testid="events-status-tile-count"]')
+
+    expect(count.attr('class')).not.toContain('text-error')
+    expect(tile.attr('title')).toBeUndefined()
+    expect(tile.attr('aria-label')).toBe('Purged: 5 events')
+  })
+
+  test('marks the Purged tile as the one in use when it is', async () => {
+    givenPurgedStatus()
+
+    const { $ } = await viewPage('/dev-ops/events?status=PURGED')
+
+    expect(
+      segmentFor($, 'events-status-tile', 'PURGED').attr('aria-current')
+    ).toBe('page')
+  })
+
+  test('draws a purged row with a plain dot and the word, not a dead letter row', async () => {
+    givenPurgedStatus()
+
+    const { $ } = await viewPage()
+
+    const badge = $('[data-testid="do-status-badge"]')
+
+    expect(badge.attr('title')).toBe('PURGED')
+    expect(badge.find('[data-testid="do-status-dot"]').attr('class')).toBe(
+      'status'
+    )
+    expect(badge.find('[data-testid="do-status-label"]').text()).toBe('Purged')
+    expect($('[data-testid="event-row"]').attr('class')).not.toContain(
+      'bg-error'
+    )
+  })
+
+  test('leaves a purged row out of the dead-letter styling and the top errors', async () => {
+    givenPurgedStatus([event(purged), event(purged)])
+
+    const { $ } = await viewPage()
+
+    expect($('[data-testid="events-failures"]')).toHaveLength(0)
+    expect($('.bg-error\\/5')).toHaveLength(0)
+  })
+
+  test('says nothing about how long a purged event is kept', async () => {
+    givenPurgedStatus()
+
+    const { $ } = await viewPage()
+
+    expect($('main').text()).not.toContain('kept until')
+    expect($('main').text()).not.toContain('retention')
+  })
 })

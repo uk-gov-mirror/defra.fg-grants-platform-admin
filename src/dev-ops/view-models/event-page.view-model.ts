@@ -82,6 +82,8 @@ export interface EventPageModel {
   segregationRefTitle: string | null
   traceId: string | null
   traceHref: string | null
+  expiresText: string | null
+  expiresInstant: string | null
 
   isInbox: boolean
 
@@ -258,6 +260,8 @@ const emptyDetail: Omit<EventPageModel, ShellKey> = {
   segregationRefTitle: null,
   traceId: null,
   traceHref: null,
+  expiresText: null,
+  expiresInstant: null,
   isInbox: true,
   lastResubmissionDate: null,
   lastResubmissionInstant: null,
@@ -619,6 +623,19 @@ const toTrace = (event: EventDetail) => {
   }
 }
 
+/** A dashed "Deletion date" would read as a date this page failed to find. */
+const toExpiry = (event: EventDetail) => {
+  const expiresAt = event.expiresAt ?? null
+  const date = expiresAt === null ? null : toValidDate(expiresAt)
+
+  return date === null
+    ? { expiresText: null, expiresInstant: null }
+    : {
+        expiresText: toPreciseInstant(date),
+        expiresInstant: toAbsoluteInstant(expiresAt)
+      }
+}
+
 const toAttempts = (context: DetailContext, attempts: AttemptEntry[]) => ({
   ...toResubmission(context),
   attemptHistory: attempts,
@@ -646,6 +663,7 @@ const toDetail = (
     targetTopic: event.targetTopic,
     ...toSegregationRef(event),
     ...toTrace(event),
+    ...toExpiry(event),
     isInbox: key.box === 'inbox',
     ...toFailure(event.lastError),
     errorRole: toLastErrorRole(state),

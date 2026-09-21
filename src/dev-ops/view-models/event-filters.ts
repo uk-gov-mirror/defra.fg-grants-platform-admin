@@ -11,7 +11,8 @@ const eventStatuses: (keyof EventCounts)[] = [
   'FAILED',
   'RESUBMITTED',
   'COMPLETED',
-  'DEAD_LETTER'
+  'DEAD_LETTER',
+  'PURGED'
 ]
 
 export const eventServices: { value: EventService; label: string }[] = [

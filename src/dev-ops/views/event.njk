@@ -90,6 +90,12 @@
               {% endif %}
             {% endcall %}
 
+            {% if expiresText %}
+              {% call fact("Deletion date", "event-fact-deletion-date") %}
+                {{ timestamp(expiresText, expiresInstant, monoValue ~ " tabular-nums", "event-deletion-date") }}
+              {% endcall %}
+            {% endif %}
+
             {% if lastRedriveText %}
               {% call fact("Last redrive", "event-fact-last-redrive") %}
                 <span data-testid="event-last-redrive">{{ timestamp(lastRedriveText, lastRedriveInstant, monoValue ~ " tabular-nums", "event-last-redrive-at") }}{% if lastRedriveBy %} <span class="text-sm text-base-content/70" data-testid="event-last-redrive-by">· by {{ lastRedriveBy }}</span>{% endif %}</span>

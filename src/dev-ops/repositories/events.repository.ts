@@ -112,6 +112,7 @@ export interface EventCounts {
   RESUBMITTED: number
   COMPLETED: number
   DEAD_LETTER: number
+  PURGED?: number
 }
 
 export interface EventFacets {
@@ -131,6 +132,8 @@ export interface EventDetail extends EventWithAttempts {
   segregationRef?: string | null
   traceId?: string | null
   completionDate: string | null
+  /** Only a row the database is scheduled to delete has one. */
+  expiresAt?: string | null
   lastResubmissionDate: string | null
   lastRedrive: EventLastRedrive | null
 }

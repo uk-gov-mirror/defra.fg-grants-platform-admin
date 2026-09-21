@@ -2136,6 +2136,61 @@ describe('viewEventRoute', () => {
     expect($('[data-testid="event-fact-last-redrive"]')).toHaveLength(0)
   })
 
+  test('names the date a completed event will be deleted, in UK time', async () => {
+    givenEvent(
+      detail({
+        status: 'COMPLETED',
+        completionDate: '2026-06-16T10:17:00.000Z',
+        expiresAt: '2026-09-14T10:17:00.000Z'
+      })
+    )
+
+    const { $ } = await viewPage()
+    const at = $('[data-testid="event-deletion-date"]')
+
+    expect(valueOf($, 'event-fact-deletion-date')).toBe(
+      'Deletion date 14 Sep 2026 11:17:00.000'
+    )
+    expect(at.attr('datetime')).toBe('2026-09-14T10:17:00Z')
+    expect(at.attr('title')).toBeUndefined()
+  })
+
+  test('puts the deletion date straight after the trace id', async () => {
+    givenEvent(
+      inboxDetail({
+        status: 'COMPLETED',
+        expiresAt: '2026-09-14T10:17:00.000Z'
+      })
+    )
+
+    const { $ } = await viewPage(inboxPath)
+
+    expect(
+      $('[data-testid="event-facts-common"] > [data-testid]')
+        .map((_, row) => $(row).attr('data-testid'))
+        .get()
+    ).toEqual([
+      'event-fact-service',
+      'event-fact-route',
+      'event-fact-trace-id',
+      'event-fact-deletion-date'
+    ])
+  })
+
+  test('says nothing about deletion on a dead letter nothing will delete', async () => {
+    givenEvent(detail({ expiresAt: null }))
+
+    const { $ } = await viewPage()
+
+    expect($('[data-testid="event-fact-deletion-date"]')).toHaveLength(0)
+  })
+
+  test('says nothing about deletion when the backend sends no date', async () => {
+    const { $ } = await viewPage()
+
+    expect($('[data-testid="event-fact-deletion-date"]')).toHaveLength(0)
+  })
+
   test('offers every other dead letter with this error', async () => {
     const { $ } = await viewPage()
     const link = $('[data-testid="event-error-search"]')

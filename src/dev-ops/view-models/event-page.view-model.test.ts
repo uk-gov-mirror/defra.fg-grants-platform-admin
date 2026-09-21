@@ -9,6 +9,7 @@ import type {
   EventRow,
   ServiceFilter
 } from '../use-cases/get-events.use-case.ts'
+import { hoursPerDay, minutesPerHour, msPerMinute } from './event-formats.ts'
 import { toEventPage, toSafeFrom } from './event-page.view-model.ts'
 import { toEventsPage } from './events-page.view-model.ts'
 
@@ -1062,6 +1063,58 @@ describe('the last redrive', () => {
   test('says nothing on an event nobody has redriven', () => {
     expect(model().lastRedriveInstant).toBeNull()
     expect(model().lastRedriveBy).toBeNull()
+  })
+})
+
+describe('the deletion date', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  test('spells out when the database will delete a completed event', () => {
+    const page = model(
+      found(detail({ ...completed, expiresAt: '2026-09-14T10:00:00.000Z' }))
+    )
+
+    expect(page.expiresText).toBe('14 Sep 2026 11:00:00.000')
+    expect(page.expiresInstant).toBe('2026-09-14T10:00:00Z')
+  })
+
+  test('says nothing on an event nothing is scheduled to delete', () => {
+    const page = model(found(detail({ expiresAt: null })))
+
+    expect(page.expiresText).toBeNull()
+    expect(page.expiresInstant).toBeNull()
+  })
+
+  test('says nothing when the backend sends no deletion date at all', () => {
+    expect(model().expiresText).toBeNull()
+    expect(model().expiresInstant).toBeNull()
+  })
+
+  test('hides the fact rather than dashing it when the date will not parse', () => {
+    const page = model(found(detail({ ...completed, expiresAt: 'soon' })))
+
+    expect(page.expiresText).toBeNull()
+    expect(page.expiresInstant).toBeNull()
+  })
+
+  test('reads the clocks going back over the retention period, not through them', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    // 11:00 by the British Summer Time clock these dates are read against.
+    vi.setSystemTime(new Date('2026-09-21T10:00:00.000Z'))
+
+    const expiring = (at: number) =>
+      model(
+        found(detail({ ...completed, expiresAt: new Date(at).toISOString() }))
+      ).expiresText
+
+    const retention = 90 * hoursPerDay * minutesPerHour * msPerMinute
+
+    expect(expiring(Date.now())).toBe('21 Sep 2026 11:00:00.000')
+    // The clocks have gone back by then, so the same span of days reads an
+    // hour earlier on the wall clock.
+    expect(expiring(Date.now() + retention)).toBe('20 Dec 2026 10:00:00.000')
   })
 })
 
