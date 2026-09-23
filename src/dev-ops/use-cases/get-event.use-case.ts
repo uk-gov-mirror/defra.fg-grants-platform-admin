@@ -11,6 +11,7 @@ import { toGasStatusCode } from './gas-status.ts'
 export type {
   EventDetail,
   EventKey,
+  EventLastEdit,
   EventLastPurge
 } from '../repositories/events.repository.ts'
 

@@ -203,6 +203,27 @@ export const toPreciseInstant = (date: Date): string => {
   return `${parts.day} ${parts.month} ${parts.year} ${parts.hour}:${parts.minute}:${parts.second}.${ms}`
 }
 
+export const toAbsoluteInstant = (at: string | null): string | null =>
+  at === null ? null : toAbsolute(at)
+
+export const toPreciseOrNone = (value: string | null): string => {
+  if (value === null) {
+    return none
+  }
+
+  const date = toValidDate(value)
+
+  return date === null ? none : toPreciseInstant(date)
+}
+
+/** Compared as instants: two ISO spellings of one moment need not sort as strings. */
+export const isAfter = (later: string, earlier: string): boolean => {
+  const a = toValidDate(later)
+  const b = toValidDate(earlier)
+
+  return a !== null && b !== null && a.getTime() > b.getTime()
+}
+
 /** Relative on the page, the same instant spelled out beside it. */
 export const toTimestamp = (value: string | null, now: Date): Timestamp => {
   const date = value === null ? null : toValidDate(value)

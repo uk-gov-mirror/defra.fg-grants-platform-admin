@@ -21,11 +21,13 @@ import { toEventState } from './event-state.ts'
 import type { EventState } from './event-state.ts'
 import type { BadgeRole } from './event-formats.ts'
 import {
-  none,
+  isAfter,
   toAbsolute,
+  toAbsoluteInstant,
   toEventHref,
   toGap,
   toPreciseInstant,
+  toPreciseOrNone,
   toSearchHref,
   toSearchTitle,
   toTraceHref,
@@ -37,6 +39,15 @@ import {
   purgeReasons,
   toPurgeReasonLabel
 } from './purge-form.ts'
+import type { EditedFact } from './payload-edit.ts'
+import {
+  hasNoAttemptsSinceEdit,
+  isEditedSinceAttempts,
+  isEditedSinceRedrive,
+  toEditedFact,
+  toOriginalPayloadJson,
+  toRedriveEditedNote
+} from './payload-edit.ts'
 import { toStackFrames } from './stack-frames.ts'
 
 type AttemptRole = Extract<BadgeRole, 'warning' | 'error'>
@@ -152,8 +163,11 @@ export interface EventPageModel {
   attemptHistory: AttemptEntry[]
   attemptSuccess: AttemptSuccess | null
   attemptsBlock: AttemptsBlock
+  noAttemptsSinceEdit: boolean
 
   payloadJson: string | null
+  originalPayloadJson: string | null
+  editedFact: EditedFact | null
 
   canRedrive: boolean
   confirmRedrive: boolean
@@ -161,6 +175,7 @@ export interface EventPageModel {
   cancelHref: string
   redriveAction: string
   redrivePurgedNote: string | null
+  redriveEditedNote: string | null
 
   canPurge: boolean
   purgeHref: string
@@ -199,19 +214,6 @@ const toSelfHref = (
   }
 
   return params.size ? `${toEventHref(key)}?${params}` : toEventHref(key)
-}
-
-const toAbsoluteInstant = (at: string | null): string | null =>
-  at === null ? null : toAbsolute(at)
-
-const toPreciseOrNone = (value: string | null): string => {
-  if (value === null) {
-    return none
-  }
-
-  const date = toValidDate(value)
-
-  return date === null ? none : toPreciseInstant(date)
 }
 
 const toPayloadJson = (payload: unknown): string | null =>
@@ -395,12 +397,16 @@ const emptyDetail: Omit<EventPageModel, ShellKey> = {
   attemptHistory: [],
   attemptSuccess: null,
   attemptsBlock: 'notYet',
+  noAttemptsSinceEdit: false,
   payloadJson: null,
+  originalPayloadJson: null,
+  editedFact: null,
   canRedrive: false,
   confirmRedrive: false,
   redriveHref: '',
   cancelHref: '',
   redrivePurgedNote: null,
+  redriveEditedNote: null,
   canPurge: false,
   purgeHref: '',
   purgeConfirm: null,
@@ -461,14 +467,6 @@ const toSegregationRef = (event: EventDetail) => {
         segregationRefHref: toSearchHref(segregationRef, isAuditRecord(event)),
         segregationRefTitle: toSearchTitle(segregationRef, 'segregation ref')
       }
-}
-
-/** Compared as instants: two ISO spellings of one moment need not sort as strings. */
-const isAfter = (later: string, earlier: string): boolean => {
-  const a = toValidDate(later)
-  const b = toValidDate(earlier)
-
-  return a !== null && b !== null && a.getTime() > b.getTime()
 }
 
 const lastKnownAt = (attempts: EventDetail['attemptHistory']): string | null =>
@@ -669,6 +667,12 @@ const toRedrive = (
 const lastPurgeOf = (event: EventDetail): EventLastPurge | null =>
   event.lastPurge ?? null
 
+/** An edit not yet retried is the fix for a broken payload, so the warning that it will fail again would contradict the edit note beside it. */
+const toBrokenPayloadClause = (event: EventDetail): string =>
+  isEditedSinceRedrive(event)
+    ? '.'
+    : '; if the payload is broken, it will fail again.'
+
 /** Redriving a purged event reverses a decision somebody made, so the confirm names it first. */
 const toRedrivePurgedNote = ({
   event,
@@ -680,10 +684,7 @@ const toRedrivePurgedNote = ({
     return null
   }
 
-  return (
-    `It was purged as '${toPurgeReasonLabel(purge.reasonCode)}'; if the payload is broken, ` +
-    'it will fail again. Its deletion date is cleared.'
-  )
+  return `It was purged as '${toPurgeReasonLabel(purge.reasonCode)}'${toBrokenPayloadClause(event)} Its deletion date is cleared.`
 }
 
 const noteId = 'purge-note'
@@ -831,14 +832,16 @@ const failedTheSameWayTwice = (
   return history.length >= 2 && previous.message === last.message
 }
 
-const toFutileWarning = ({ event, state }: DetailContext): string | null => {
-  const redrive = event.lastRedrive
+/** Nothing has run on an edited payload yet, so the old failures say nothing about it. */
+const mayBeFutile = ({ event, state }: DetailContext): boolean =>
+  state.deadLetter &&
+  failedTheSameWayTwice(event.attemptHistory) &&
+  !isEditedSinceAttempts(event)
 
-  if (
-    redrive === null ||
-    !state.deadLetter ||
-    !failedTheSameWayTwice(event.attemptHistory)
-  ) {
+const toFutileWarning = (context: DetailContext): string | null => {
+  const redrive = context.event.lastRedrive
+
+  if (redrive === null || !mayBeFutile(context)) {
     return null
   }
 
@@ -912,7 +915,8 @@ const toAttempts = (context: DetailContext, attempts: AttemptEntry[]) => ({
   ...toResubmission(context),
   attemptHistory: attempts,
   attemptSuccess: toAttemptSuccess(context),
-  attemptsBlock: toAttemptsBlock(context)
+  attemptsBlock: toAttemptsBlock(context),
+  noAttemptsSinceEdit: hasNoAttemptsSinceEdit(context.event)
 })
 
 const toDetail = (
@@ -942,8 +946,11 @@ const toDetail = (
     errorRole: toLastErrorRole(state),
     ...toAttempts(context, attempts),
     payloadJson: toPayloadJson(event.payload),
+    originalPayloadJson: toOriginalPayloadJson(event),
+    editedFact: toEditedFact(event),
     ...toRedrive(state, key, query, from),
     redrivePurgedNote: toRedrivePurgedNote(context),
+    redriveEditedNote: toRedriveEditedNote(event),
     ...toPurge(context, key, query, from, form),
     purgedFact: toPurgedFact(context),
     ...toLastRedriveDetail(event.lastRedrive),

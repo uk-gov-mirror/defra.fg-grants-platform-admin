@@ -1916,3 +1916,160 @@ describe('the message a purge leaves behind', () => {
     ).toBeNull()
   })
 })
+
+// The detail's two attempts ran at 10:08 and 10:16:05.
+const lastEdit = {
+  at: '2026-06-16T10:18:00.000Z',
+  by: 'Grace Hopper',
+  note: 'sheetId arrives as a number'
+}
+
+const editedBeforeAttempts = { ...lastEdit, at: '2026-06-16T10:12:00.000Z' }
+
+const redrivenAfterEdit = { at: '2026-06-16T10:19:00.000Z', by: 'Ada Lovelace' }
+
+describe('an edited payload', () => {
+  test('says who edited the payload and when, with the note', () => {
+    expect(model(found(detail({ lastEdit }))).editedFact).toEqual({
+      by: 'Grace Hopper',
+      at: '16 Jun 2026 11:18:00.000',
+      atInstant: '2026-06-16T10:18:00Z',
+      note: 'sheetId arrives as a number'
+    })
+  })
+
+  test('says the edit in GMT once the clocks have gone back', () => {
+    expect(
+      model(
+        found(detail({ lastEdit: { ...lastEdit, at: '2026-12-01T14:08:00Z' } }))
+      ).editedFact?.at
+    ).toBe('1 Dec 2026 14:08:00.000')
+  })
+
+  test.each([
+    ['none was sent', null],
+    ['it is empty', '']
+  ])('leaves the note out when %s', (_name, note) => {
+    expect(
+      model(found(detail({ lastEdit: { ...lastEdit, note } }))).editedFact?.note
+    ).toBeNull()
+  })
+
+  test.each([
+    ['absent', {}],
+    ['null', { lastEdit: null }]
+  ])('says nothing of an edit when the field is %s', (_name, overrides) => {
+    const page = model(found(detail(overrides)))
+
+    expect(page.editedFact).toBeNull()
+    expect(page.noAttemptsSinceEdit).toBe(false)
+    expect(page.redriveEditedNote).toBeNull()
+  })
+
+  test('marks an edit nobody has redriven since', () => {
+    const page = model(found(detail({ lastEdit, lastRedrive: null })))
+
+    expect(page.noAttemptsSinceEdit).toBe(true)
+    expect(page.redriveEditedNote).toBe(
+      "The payload was edited on 16 Jun 2026 11:18:00.000 and hasn't been retried since."
+    )
+  })
+
+  test('marks an edit made after the last redrive', () => {
+    const page = model(found(detail({ lastEdit, lastRedrive })))
+
+    expect(page.redriveEditedNote).not.toBeNull()
+  })
+
+  test('keeps the broken-payload warning off a purged event while its edit is untried', () => {
+    const purged = { ...purgedState, lastPurge, lastEdit }
+
+    expect(
+      model(found(detail({ ...purged, lastRedrive: null }))).redrivePurgedNote
+    ).toBe(
+      "It was purged as 'Payload is broken'. Its deletion date is cleared."
+    )
+    expect(
+      model(found(detail({ ...purged, lastRedrive: redrivenAfterEdit })))
+        .redrivePurgedNote
+    ).toBe(
+      "It was purged as 'Payload is broken'; if the payload is broken, it will fail again. Its deletion date is cleared."
+    )
+  })
+
+  test('drops the mark once the edit has been redriven', () => {
+    const page = model(
+      found(detail({ lastEdit, lastRedrive: redrivenAfterEdit }))
+    )
+
+    expect(page.noAttemptsSinceEdit).toBe(false)
+    expect(page.redriveEditedNote).toBeNull()
+    expect(page.editedFact?.by).toBe('Grace Hopper')
+  })
+
+  test('reads a redrive with no instant as older than the edit', () => {
+    expect(
+      model(found(detail({ lastEdit, lastRedrive: { at: null, by: 'Ada' } })))
+        .redriveEditedNote
+    ).not.toBeNull()
+  })
+
+  test('dashes an undated edit, and marks it only while nothing is known to be newer', () => {
+    const undated = { ...lastEdit, at: null }
+
+    expect(model(found(detail({ lastEdit: undated }))).editedFact).toEqual({
+      by: 'Grace Hopper',
+      at: '—',
+      atInstant: null,
+      note: 'sheetId arrives as a number'
+    })
+    expect(
+      model(found(detail({ lastEdit: undated, lastRedrive }))).redriveEditedNote
+    ).toBeNull()
+  })
+
+  test('says attempts have run since an edit that came before them', () => {
+    expect(
+      model(found(detail({ lastEdit: editedBeforeAttempts })))
+        .noAttemptsSinceEdit
+    ).toBe(false)
+  })
+
+  test('keeps the futile warning off while nothing has run on the edit', () => {
+    expect(
+      model(
+        found(
+          detail({ attemptHistory: identicalAttempts, lastRedrive, lastEdit })
+        )
+      ).futileWarning
+    ).toBeNull()
+  })
+
+  test('warns again once attempts on the edited payload fail the same way', () => {
+    expect(
+      model(
+        found(
+          detail({
+            attemptHistory: identicalAttempts,
+            lastRedrive,
+            lastEdit: { ...lastEdit, at: '2026-06-16T10:05:00.000Z' }
+          })
+        )
+      ).futileWarning
+    ).not.toBeNull()
+  })
+
+  test('prints the payload before the first edit as the payload is printed', () => {
+    expect(
+      model(found(detail({ originalPayload: { sheetId: 12345 } })))
+        .originalPayloadJson
+    ).toBe('{\n  "sheetId": 12345\n}')
+  })
+
+  test.each([
+    ['absent', {}],
+    ['null', { originalPayload: null }]
+  ])('keeps no original when the field is %s', (_name, overrides) => {
+    expect(model(found(detail(overrides))).originalPayloadJson).toBeNull()
+  })
+})

@@ -140,6 +140,11 @@ export interface EventDetail extends EventWithAttempts {
   lastRedrive: EventLastRedrive | null
   /** The one purge this row remembers, kept through a later redrive. */
   lastPurge?: EventLastPurge | null
+  /** Sent only by an owning service that can edit the payload, so its presence gates the Edit button. */
+  payloadRevision?: number | null
+  lastEdit?: EventLastEdit | null
+  /** The payload as it was before the first edit, kept for as long as the row is. */
+  originalPayload?: unknown
 }
 
 export interface EventLastRedrive {
@@ -149,6 +154,10 @@ export interface EventLastRedrive {
 
 export interface EventLastPurge extends EventLastRedrive {
   reasonCode: string
+  note: string | null
+}
+
+export interface EventLastEdit extends EventLastRedrive {
   note: string | null
 }
 

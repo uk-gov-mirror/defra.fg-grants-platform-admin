@@ -10,6 +10,8 @@
 {# `leading-none`: an inline mono box on the sans line otherwise makes its row a pixel taller. #}
 {% set monoValue = "font-mono text-sm leading-none break-all" %}
 {% set monoMuted = "font-mono text-sm leading-none text-base-content/70" %}
+{# A time is short enough to keep whole; `break-all` would split it mid-number. #}
+{% set monoTime = "font-mono text-sm leading-none tabular-nums whitespace-nowrap" %}
 {# `select-all` so one click takes the whole id, and `break-all` so the hex
    wraps inside the column rather than widening a phone. #}
 {% set idLine = "font-mono text-sm break-all text-base-content/70 select-all" %}
@@ -35,6 +37,12 @@
   instant to name, and `datetime` is what makes a `time` machine-readable.
 #}
 {% macro timestamp(text, instant, class, testId) %}{% if class %}<time class="{{ class }}"{% else %}<time{% endif %}{% if instant %} datetime="{{ instant }}"{% endif %}{% if testId %} data-testid="{{ testId }}"{% endif %}>{{ text }}</time>{% endmacro %}
+
+{% macro payloadLines(json, label, testId) %}
+  <div class="max-h-[30rem] w-full overflow-auto rounded-box border border-base-300 bg-base-200 py-2 font-mono text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content" tabindex="0" role="region" aria-label="{{ label }}" data-testid="{{ testId }}">
+    {% for line in json.split("\n") %}<pre class="flex gap-3 px-3" data-testid="{{ testId }}-line"><span class="w-9 shrink-0 text-right tabular-nums text-base-content/30 before:content-[attr(data-line)]" data-line="{{ loop.index }}" aria-hidden="true"></span><code>{{ line }}</code></pre>{% endfor %}
+  </div>
+{% endmacro %}
 
 {% macro fact(label, testId) %}
   <div class="contents" data-testid="{{ testId }}">
@@ -106,13 +114,22 @@
 
             {% if expiresText %}
               {% call fact("Deletion date", "event-fact-deletion-date") %}
-                {{ timestamp(expiresText, expiresInstant, monoValue ~ " tabular-nums", "event-deletion-date") }}
+                {{ timestamp(expiresText, expiresInstant, monoTime, "event-deletion-date") }}
+              {% endcall %}
+            {% endif %}
+
+            {% if editedFact %}
+              {% call fact("Payload edited", "event-fact-edited") %}
+                <div data-testid="event-edited">
+                  <span data-testid="event-edited-by">by {{ editedFact.by }} on {{ timestamp(editedFact.at, editedFact.atInstant, monoTime, "event-edited-at") }}</span>
+                  {% if editedFact.note %}<div class="italic text-base-content/70" data-testid="event-edited-note">"{{ editedFact.note }}"</div>{% endif %}
+                </div>
               {% endcall %}
             {% endif %}
 
             {% if lastRedriveText %}
               {% call fact("Last redrive", "event-fact-last-redrive") %}
-                <span data-testid="event-last-redrive">{{ timestamp(lastRedriveText, lastRedriveInstant, monoValue ~ " tabular-nums", "event-last-redrive-at") }}{% if lastRedriveBy %} <span class="text-sm text-base-content/70" data-testid="event-last-redrive-by">· by {{ lastRedriveBy }}</span>{% endif %}</span>
+                <span data-testid="event-last-redrive">{{ timestamp(lastRedriveText, lastRedriveInstant, monoTime, "event-last-redrive-at") }}{% if lastRedriveBy %} <span class="text-sm text-base-content/70" data-testid="event-last-redrive-by">· by {{ lastRedriveBy }}</span>{% endif %}</span>
               {% endcall %}
             {% endif %}
           </dl>
@@ -146,7 +163,7 @@
               {% call fact(purgedFact.label, "event-fact-purged") %}
                 <div data-testid="event-purged">
                   <span data-testid="event-purged-reason">{{ purgedFact.reason }}</span>
-                  <span class="text-base-content/70" data-testid="event-purged-by">· by {{ purgedFact.by }} on {{ timestamp(purgedFact.at, purgedFact.atInstant, monoValue ~ " tabular-nums", "event-purged-at") }}</span>
+                  <span class="text-base-content/70" data-testid="event-purged-by">· by {{ purgedFact.by }} on {{ timestamp(purgedFact.at, purgedFact.atInstant, monoTime, "event-purged-at") }}</span>
                   {% if purgedFact.note %}<div class="italic text-base-content/70" data-testid="event-purged-note">"{{ purgedFact.note }}"</div>{% endif %}
                 </div>
               {% endcall %}
@@ -258,6 +275,9 @@
         {% elif attemptsBlock == "notYet" %}
           <p class="text-sm text-base-content/70" data-testid="event-attempts-empty">No attempts recorded yet.</p>
         {% endif %}
+        {% if noAttemptsSinceEdit %}
+          <p class="text-sm text-base-content/70" data-testid="event-no-attempts-since-edit">No attempts since the payload was edited.</p>
+        {% endif %}
       </div>
     </section>
 
@@ -294,7 +314,7 @@
               </div>
             {% endif %}
             <h3 id="redrive-question" class="text-sm font-semibold focus:outline-none" tabindex="-1" data-focus-on-arrival data-testid="event-redrive-heading">Redrive this event?</h3>
-            <p id="redrive-explain" class="text-sm" data-testid="event-redrive-question">The poller will retry it up to its attempt limit. {% if redrivePurgedNote %}<span data-testid="event-redrive-purged">{{ redrivePurgedNote }}</span> {% endif %}This action is audited.</p>
+            <p id="redrive-explain" class="text-sm" data-testid="event-redrive-question">The poller will retry it up to its attempt limit. {% if redrivePurgedNote %}<span data-testid="event-redrive-purged">{{ redrivePurgedNote }}</span> {% endif %}{% if redriveEditedNote %}<span data-testid="event-redrive-edited">{{ redriveEditedNote }}</span> {% endif %}This action is audited.</p>
             <div class="flex items-center gap-2">
               <form method="post" action="{{ redriveAction }}" data-testid="event-redrive-form">
                 <input type="hidden" name="from" value="{{ from }}" data-testid="event-redrive-from">
@@ -366,11 +386,18 @@
         {% endif %}
 
         {% if payloadJson %}
-          <div class="max-h-[30rem] w-full overflow-auto rounded-box border border-base-300 bg-base-200 py-2 font-mono text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content" tabindex="0" role="region" aria-label="Payload" data-testid="event-payload">
-            {% for line in payloadJson.split("\n") %}<pre class="flex gap-3 px-3" data-testid="event-payload-line"><span class="w-9 shrink-0 text-right tabular-nums text-base-content/30 before:content-[attr(data-line)]" data-line="{{ loop.index }}" aria-hidden="true"></span><code>{{ line }}</code></pre>{% endfor %}
-          </div>
+          {{ payloadLines(payloadJson, "Payload", "event-payload") }}
         {% else %}
           <p class="py-6 text-center text-sm text-base-content/70" data-testid="event-payload-empty">This event carries no payload.</p>
+        {% endif %}
+
+        {% if originalPayloadJson %}
+          <details class="collapse collapse-arrow border border-base-300" data-testid="event-original-payload">
+            <summary class="collapse-title text-sm font-semibold" data-testid="event-original-payload-summary">Payload before the first edit</summary>
+            <div class="collapse-content">
+              {{ payloadLines(originalPayloadJson, "Payload before the first edit", "event-original-payload-lines") }}
+            </div>
+          </details>
         {% endif %}
       </div>
     </section>

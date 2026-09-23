@@ -2634,3 +2634,198 @@ describe('a purged event', () => {
     expect(valueOf($, 'event-purged-note')).toContain(xss)
   })
 })
+
+// After the detail's two attempts, which ran at 10:08 and 10:16:05.
+const lastEdit = {
+  at: '2026-06-16T10:18:00.000Z',
+  by: 'Grace Hopper',
+  note: 'sheetId arrives as a number'
+}
+
+const editedDetail = (overrides: Partial<EventDetail> = {}) =>
+  detail({
+    lastEdit,
+    originalPayload: { sheetId: 12345 },
+    payload: { sheetId: '12345' },
+    ...overrides
+  })
+
+describe('an edited event', () => {
+  beforeEach(() => {
+    givenEvent(editedDetail({ lastRedrive }))
+  })
+
+  test('says who edited the payload and when, just before the last redrive', async () => {
+    const { $ } = await viewPage()
+
+    expect(labelsOf($)).toEqual([
+      'Service',
+      'Queue',
+      'Trace ID',
+      'Payload edited',
+      'Last redrive',
+      'Segregation ref',
+      'Topic'
+    ])
+    expect(valueOf($, 'event-edited-by')).toBe(
+      'by Grace Hopper on 16 Jun 2026 11:18:00.000'
+    )
+    expect($('[data-testid="event-edited-at"]').attr('datetime')).toBe(
+      '2026-06-16T10:18:00Z'
+    )
+    expect(valueOf($, 'event-edited-note')).toBe(
+      '"sheetId arrives as a number"'
+    )
+  })
+
+  test('sets the edit time in the type the other times on the card are in', async () => {
+    const { $ } = await viewPage()
+
+    expect($('[data-testid="event-edited-at"]').attr('class')).toBe(
+      $('[data-testid="event-last-redrive-at"]').attr('class')
+    )
+  })
+
+  test('keeps each time on the card whole rather than breaking it mid-number', async () => {
+    givenEvent(
+      editedDetail({ lastRedrive, expiresAt: '2026-09-14T10:17:00.000Z' })
+    )
+
+    const { $ } = await viewPage()
+
+    const times = $('[data-testid="event-facts"] time')
+
+    expect(times.toArray().map((time) => $(time).attr('data-testid'))).toEqual([
+      'event-deletion-date',
+      'event-edited-at',
+      'event-last-redrive-at'
+    ])
+    times.each((_, time) => {
+      expect($(time).attr('class')).toContain('whitespace-nowrap')
+      expect($(time).attr('class')).not.toContain('break-all')
+    })
+  })
+
+  test('leaves the note line out where none was recorded', async () => {
+    givenEvent(editedDetail({ lastEdit: { ...lastEdit, note: null } }))
+
+    const { $ } = await viewPage()
+
+    expect($('[data-testid="event-edited-note"]')).toHaveLength(0)
+    expect($('[data-testid="event-edited-by"]')).toHaveLength(1)
+  })
+
+  test('renders an edit note carrying markup as text', async () => {
+    givenEvent(editedDetail({ lastEdit: { ...lastEdit, note: xss } }))
+
+    const { $ } = await viewPage()
+
+    expect($('main script')).toHaveLength(0)
+    expect(valueOf($, 'event-edited-note')).toContain(xss)
+  })
+
+  test('puts nothing beside the status for an edit: the facts say it', async () => {
+    const { $ } = await viewPage()
+
+    expect(flatten($('[data-testid="event-header-status"]').text())).toBe(
+      'Dead letter'
+    )
+    expect($('[data-testid="event-header-status"] .badge')).toHaveLength(1)
+  })
+
+  test('keeps the fact, and drops the note on attempts, once the edit is redriven', async () => {
+    givenEvent(
+      editedDetail({
+        status: 'RESUBMITTED',
+        statusLabel: 'Resubmitted',
+        statusRole: 'info',
+        attemptHistory: [],
+        lastRedrive: { at: '2026-06-16T10:19:00.000Z', by: 'Ada Lovelace' }
+      })
+    )
+
+    const { $ } = await viewPage()
+
+    expect(labelsOf($)).toContain('Payload edited')
+    expect($('[data-testid="event-no-attempts-since-edit"]')).toHaveLength(0)
+  })
+
+  test('says no attempt has run since the edit', async () => {
+    const { $ } = await viewPage()
+
+    expect(valueOf($, 'event-no-attempts-since-edit')).toBe(
+      'No attempts since the payload was edited.'
+    )
+    expect(
+      $(
+        '[data-testid="event-attempts-card"] [data-testid="event-no-attempts-since-edit"]'
+      )
+    ).toHaveLength(1)
+  })
+
+  test('keeps the futile warning away from a payload nothing has run on', async () => {
+    givenEvent(editedDetail({ attemptHistory: identicalAttempts, lastRedrive }))
+
+    const { $ } = await viewPage()
+
+    expect($('[data-testid="event-futile-warning"]')).toHaveLength(0)
+  })
+
+  test('keeps the payload before the first edit below the payload, closed', async () => {
+    const { $ } = await viewPage()
+
+    const original = $('[data-testid="event-original-payload"]')
+
+    expect(original.is('details')).toBe(true)
+    expect(original.attr('open')).toBeUndefined()
+    expect(original.prev().attr('data-testid')).toBe('event-payload')
+    expect(valueOf($, 'event-original-payload-summary')).toBe(
+      'Payload before the first edit'
+    )
+    expect(
+      original
+        .find('[data-testid="event-original-payload-lines-line"] code')
+        .toArray()
+        .map((line) => $(line).text())
+    ).toEqual(['{', '  "sheetId": 12345', '}'])
+    expect(
+      original
+        .find('[data-testid="event-original-payload-lines"]')
+        .attr('aria-label')
+    ).toBe('Payload before the first edit')
+  })
+
+  test('says in the redrive confirm that the edit has not been retried', async () => {
+    const { $ } = await viewPage(`${path}?confirm=redrive`)
+
+    expect(valueOf($, 'event-redrive-question')).toBe(
+      'The poller will retry it up to its attempt limit. ' +
+        "The payload was edited on 16 Jun 2026 11:18:00.000 and hasn't been retried since. " +
+        'This action is audited.'
+    )
+  })
+
+  test('does not warn that a purged payload will fail again once it has been edited', async () => {
+    givenEvent(purgedDetail({ lastEdit, lastRedrive }))
+
+    const { $ } = await viewPage(`${path}?confirm=redrive`)
+
+    expect(valueOf($, 'event-redrive-question')).toBe(
+      'The poller will retry it up to its attempt limit. ' +
+        "It was purged as 'Payload is broken'. Its deletion date is cleared. " +
+        "The payload was edited on 16 Jun 2026 11:18:00.000 and hasn't been retried since. " +
+        'This action is audited.'
+    )
+  })
+
+  test('says nothing of an edit on an event nobody has edited', async () => {
+    givenEvent(detail({ lastRedrive }))
+
+    const { $ } = await viewPage(`${path}?confirm=redrive`)
+
+    expect(labelsOf($)).not.toContain('Payload edited')
+    expect($('[data-testid="event-no-attempts-since-edit"]')).toHaveLength(0)
+    expect($('[data-testid="event-original-payload"]')).toHaveLength(0)
+    expect($('[data-testid="event-redrive-edited"]')).toHaveLength(0)
+  })
+})
