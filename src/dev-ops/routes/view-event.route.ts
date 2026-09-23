@@ -6,6 +6,7 @@ import { getEventUseCase } from '../use-cases/get-event.use-case.ts'
 import { eventAddress } from '../view-models/event-address.ts'
 import type { EventPageQuery } from '../view-models/event-page.view-model.ts'
 import {
+  eventPageCache,
   purgeFormKey,
   redriveNoticeKey,
   toEventPage,
@@ -19,13 +20,15 @@ export const viewEventRoute: ServerRoute = {
   method: 'GET',
   path: '/dev-ops/events/{service}/{box}/{id}',
   options: {
+    cache: eventPageCache,
     validate: {
       params: Joi.object(eventAddress),
       // `from` is checked by the view model: a bad one falls back to the plain list, not an error page.
       query: Joi.object({
         // Bounded because it is echoed into every link on the page.
         from: Joi.string().allow('').max(fromMax),
-        confirm: Joi.string()
+        confirm: Joi.string(),
+        edit: Joi.string()
       })
     }
   },

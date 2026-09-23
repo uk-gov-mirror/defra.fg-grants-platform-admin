@@ -44,6 +44,16 @@
   </div>
 {% endmacro %}
 
+{# D7: a value a JSON round trip would change. Shown where the payload is about to be saved, never on the read-only view. #}
+{% macro plainJsonAlert(warning) %}
+  {% if warning %}
+    <div role="status" class="alert alert-warning alert-soft text-sm" data-testid="event-plain-json-warning">
+      {{ icon({ name: 'exclamation-triangle', class: 'size-4 shrink-0' }) }}
+      <span>{{ warning }}</span>
+    </div>
+  {% endif %}
+{% endmacro %}
+
 {% macro fact(label, testId) %}
   <div class="contents" data-testid="{{ testId }}">
     <dt class="{{ factLabel }}">{{ label }}</dt>
@@ -57,7 +67,7 @@
   {{ back({ href: backHref }) }}
 
   {% if banner %}
-    <div role="alert" class="alert {{ bannerAlerts[banner.role] }} mt-3 text-sm" data-testid="event-banner">
+    <div id="event-banner" role="alert" class="alert {{ bannerAlerts[banner.role] }} mt-3 text-sm{% if bannerFocus %} focus:outline-none" tabindex="-1" data-focus-on-arrival{% else %}"{% endif %} data-testid="event-banner">
       {{ icon({ name: bannerIcons[banner.role], class: 'size-4 shrink-0' }) }}
       <span>{{ banner.message }}</span>
     </div>
@@ -283,11 +293,16 @@
 
     <section id="payload" class="card card-border scroll-mt-4 bg-base-100" data-testid="event-payload-card">
       <div class="card-body gap-3 p-5">
-        <div class="{{ "flex min-h-10 flex-wrap items-center justify-between gap-2" if canRedrive or canPurge else "flex flex-wrap items-center justify-between gap-2" }}">
-          <h2 class="card-title text-base" data-testid="event-payload-heading">Payload</h2>
-          {# Neither way in while one of them is being confirmed: the panel below is the question. #}
-          {% if not confirmRedrive and not purgeConfirm %}
+        {% set editing = payloadEditor or payloadReview %}
+        <div class="{{ "flex min-h-10 flex-wrap items-center justify-between gap-2" if canRedrive or canPurge or canEdit else "flex flex-wrap items-center justify-between gap-2" }}">
+          {# One heading for the card, renamed for the step it is on. The review's takes focus, so arriving there says where you are. #}
+          <h2 id="payload-heading" class="card-title text-base focus:outline-none" tabindex="-1"{% if payloadReview and not payloadReview.error %} data-focus-on-arrival{% endif %} data-testid="event-payload-heading">{% if payloadEditor %}Edit payload{% elif payloadReview %}Review your changes{% else %}Payload{% endif %}</h2>
+          {# No way in while one of them is under way: the panel below is the question. #}
+          {% if not confirmRedrive and not purgeConfirm and not editing %}
             <div class="flex flex-wrap items-center gap-2" data-testid="event-payload-actions">
+              {% if canEdit %}
+                <a id="edit" class="btn btn-outline scroll-mt-4" href="{{ editHref }}#payload" data-testid="event-edit">Edit<span class="sr-only"> payload</span></a>
+              {% endif %}
               {% if canPurge %}
                 <a id="purge" class="btn btn-outline scroll-mt-4" href="{{ purgeHref }}#payload" data-testid="event-purge">Purge</a>
               {% endif %}
@@ -295,10 +310,17 @@
                 <a id="redrive" class="btn btn-error scroll-mt-4" href="{{ redriveHref }}#payload" data-testid="event-redrive">Redrive</a>
               {% endif %}
             </div>
+          {% elif editing %}
+            {# Unseen, but holding the row at the height the buttons gave it, so the editor's lines sit where the payload's did even where the buttons wrap. #}
+            <div class="invisible flex flex-wrap items-center gap-2" aria-hidden="true" data-testid="event-payload-actions-placeholder">
+              {% if canEdit %}<span class="btn btn-outline">Edit</span>{% endif %}
+              {% if canPurge %}<span class="btn btn-outline">Purge</span>{% endif %}
+              {% if canRedrive %}<span class="btn btn-error">Redrive</span>{% endif %}
+            </div>
           {% endif %}
         </div>
 
-        {% if futileWarning and not confirmRedrive %}
+        {% if futileWarning and not confirmRedrive and not editing %}
           <div role="note" class="alert alert-warning text-sm" data-testid="event-futile-warning">
             {{ icon({ name: 'exclamation-triangle', class: 'size-4 shrink-0' }) }}
             <span>{{ futileWarning }}</span>
@@ -385,19 +407,142 @@
           </section>
         {% endif %}
 
-        {% if payloadJson %}
-          {{ payloadLines(payloadJson, "Payload", "event-payload") }}
-        {% else %}
-          <p class="py-6 text-center text-sm text-base-content/70" data-testid="event-payload-empty">This event carries no payload.</p>
-        {% endif %}
+        {% if payloadEditor %}
+          <do-payload-editor class="flex flex-col gap-3" data-step="edit" data-testid="event-payload-editor">
+            {{ plainJsonAlert(plainJsonWarning) }}
 
-        {% if originalPayloadJson %}
-          <details class="collapse collapse-arrow border border-base-300" data-testid="event-original-payload">
-            <summary class="collapse-title text-sm font-semibold" data-testid="event-original-payload-summary">Payload before the first edit</summary>
-            <div class="collapse-content">
-              {{ payloadLines(originalPayloadJson, "Payload before the first edit", "event-original-payload-lines") }}
-            </div>
-          </details>
+            {% if payloadEditor.alert %}
+              {# The one thing to read on arrival, so it takes focus; the textarea does otherwise. #}
+              <div role="{{ "alert" if payloadEditor.alert.role == "error" else "status" }}" class="alert {{ "alert-error alert-soft" if payloadEditor.alert.role == "error" }} text-sm focus:outline-none" tabindex="-1" data-focus-on-arrival data-testid="event-payload-editor-alert">
+                {{ icon({ name: 'exclamation-circle', class: 'size-4 shrink-0' }) }}
+                <span><span class="font-semibold">{{ payloadEditor.alert.lead }}</span> {{ payloadEditor.alert.message }}{% if payloadEditor.alert.line %} <a class="link" href="#payload-text" data-payload-editor-go-to data-line="{{ payloadEditor.alert.line }}" data-column="{{ payloadEditor.alert.column }}" data-testid="event-payload-editor-go-to">Go to line {{ payloadEditor.alert.line }}</a>{% endif %}</span>
+              </div>
+            {% endif %}
+
+            <form class="flex flex-col gap-3" method="post" action="{{ reviewAction }}" data-testid="event-payload-editor-form">
+              <input type="hidden" name="from" value="{{ from }}" data-testid="event-payload-editor-from">
+              <input type="hidden" name="revision" value="{{ payloadEditor.revision }}" data-testid="event-payload-editor-revision">
+              {# The gutter is drawn by the element, which keeps it level with the text as it scrolls; without it there is no gutter to fall out of step. #}
+              {# daisyUI's own pattern for a field with more than the control in it: the component class on the parent, which takes the focus outline and the `validator` colours, and a bare textarea inside.
+                 `p-0` and the gutter's `w-12` put each number and each line exactly where the read-only payload has them. #}
+              <div class="textarea validator flex max-h-[30rem] w-full overflow-hidden p-0" data-testid="event-payload-editor-frame">
+                <div class="w-12 shrink-0 overflow-hidden py-2 text-right font-mono text-sm leading-5 tabular-nums text-base-content/50 select-none [&>[data-error]]:font-semibold [&>[data-error]]:text-error" aria-hidden="true" hidden data-payload-editor-gutter data-testid="event-payload-editor-gutter"></div>
+                {# The line break after the tag is the one the parser drops, so a text that starts with one keeps it. #}
+                <textarea id="payload-text" class="min-h-40 w-full resize-y overflow-auto px-3 py-2 font-mono text-sm leading-5 whitespace-pre" name="text" rows="{{ payloadEditor.rows }}" wrap="off" spellcheck="false" autocapitalize="off" autocomplete="off" aria-labelledby="payload-heading"{% if payloadEditor.alert and payloadEditor.alert.role == "error" %} aria-invalid="true"{% endif %}{% if not payloadEditor.alert %} data-focus-on-arrival{% endif %} data-payload-editor-text data-testid="event-payload-editor-text">
+{{ payloadEditor.text }}</textarea>
+              </div>
+              <div class="flex items-center gap-2">
+                <button class="btn btn-neutral" type="submit" data-payload-editor-review data-testid="event-payload-editor-review">Review changes</button>
+                <a class="btn btn-ghost" href="{{ cancelHref }}#payload" data-payload-editor-discard data-testid="event-payload-editor-discard">Discard<span class="sr-only"> changes</span></a>
+              </div>
+            </form>
+
+            {% if payloadEditor.currentJson %}
+              <details class="collapse collapse-arrow border border-base-300" open data-testid="event-payload-current">
+                <summary class="collapse-title text-sm font-semibold" data-testid="event-payload-current-summary">The payload as it is now</summary>
+                <div class="collapse-content">
+                  {{ payloadLines(payloadEditor.currentJson, "The payload as it is now", "event-payload-current-lines") }}
+                </div>
+              </details>
+            {% endif %}
+          </do-payload-editor>
+        {% elif payloadReview %}
+          <do-payload-editor class="flex flex-col gap-3" data-step="review" data-testid="event-payload-review">
+            {{ plainJsonAlert(plainJsonWarning) }}
+
+            {% if payloadReview.numberWarning %}
+              <div role="status" class="alert alert-warning alert-soft text-sm" data-testid="event-payload-number-warning">
+                {{ icon({ name: 'exclamation-triangle', class: 'size-4 shrink-0' }) }}
+                <span>{{ payloadReview.numberWarning }}</span>
+              </div>
+            {% endif %}
+
+            {% if payloadReview.diff.tooLong %}
+              <p class="text-sm text-base-content/70" data-testid="event-payload-diff-too-long">Too many changes to show; the whole payload is below.</p>
+            {% else %}
+              {# Colour and a sign for each changed line, and words for a screen reader, which is told neither. #}
+              <div class="max-h-[30rem] w-full overflow-auto rounded-box border border-base-300 bg-base-200 py-2 font-mono text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content" tabindex="0" role="region" aria-label="What changed" data-testid="event-payload-diff">
+                {% for row in payloadReview.diff.rows %}
+                  {% if row.op == "skipped" %}
+                    <pre class="flex gap-3 bg-base-300/50 px-3 text-base-content/70 italic" data-testid="event-payload-diff-skipped"><span class="w-9 shrink-0" aria-hidden="true"></span><span class="w-9 shrink-0" aria-hidden="true"></span><span class="w-3 shrink-0" aria-hidden="true"></span><code>{{ row.text }}</code></pre>
+                  {% elif row.op == "removed" %}
+                    <pre class="flex gap-3 bg-error/15 px-3" data-testid="event-payload-diff-removed"><span class="w-9 shrink-0 text-right tabular-nums text-base-content/50" aria-hidden="true">{{ row.a }}</span><span class="w-9 shrink-0" aria-hidden="true"></span><span class="w-3 shrink-0 font-bold text-error" aria-hidden="true">−</span><code><span class="sr-only">Removed line {{ row.a }}: </span>{{ row.text }}</code></pre>
+                  {% elif row.op == "added" %}
+                    <pre class="flex gap-3 bg-success/15 px-3" data-testid="event-payload-diff-added"><span class="w-9 shrink-0" aria-hidden="true"></span><span class="w-9 shrink-0 text-right tabular-nums text-base-content/50" aria-hidden="true">{{ row.b }}</span><span class="w-3 shrink-0 font-bold text-success" aria-hidden="true">+</span><code><span class="sr-only">Added line {{ row.b }}: </span>{{ row.text }}</code></pre>
+                  {% else %}
+                    <pre class="flex gap-3 px-3" data-testid="event-payload-diff-same"><span class="w-9 shrink-0 text-right tabular-nums text-base-content/50" aria-hidden="true">{{ row.a }}</span><span class="w-9 shrink-0 text-right tabular-nums text-base-content/50" aria-hidden="true">{{ row.b }}</span><span class="w-3 shrink-0" aria-hidden="true"></span><code>{{ row.text }}</code></pre>
+                  {% endif %}
+                {% endfor %}
+              </div>
+            {% endif %}
+
+            <details class="collapse collapse-arrow border border-base-300"{% if payloadReview.diff.tooLong %} open{% endif %} data-testid="event-payload-to-save">
+              <summary class="collapse-title text-sm font-semibold" data-testid="event-payload-to-save-summary">Show the payload you're about to save</summary>
+              <div class="collapse-content">
+                {{ payloadLines(payloadReview.text, "The payload you're about to save", "event-payload-to-save-lines") }}
+              </div>
+            </details>
+
+            <section class="flex flex-col gap-3 rounded-box border border-base-300 p-4" aria-labelledby="edit-question" aria-describedby="edit-explain" data-testid="event-edit-confirm">
+              <h3 id="edit-question" class="text-sm font-semibold" data-testid="event-edit-heading">Save these changes?</h3>
+              <p id="edit-explain" class="text-sm" data-testid="event-edit-question">{{ payloadReview.confirmBody }}</p>
+
+              <form class="flex flex-col gap-3" method="post" action="{{ saveAction }}" data-testid="event-edit-form">
+                <input type="hidden" name="from" value="{{ from }}" data-testid="event-edit-from">
+                <input type="hidden" name="revision" value="{{ payloadReview.revision }}" data-testid="event-edit-revision">
+                {# The formatted text rides the page body, never a url or the session; the save reads it again. #}
+                <input type="hidden" name="text" value="{{ payloadReview.text }}" data-testid="event-edit-text">
+
+                {% if payloadReview.error %}
+                  <div role="alert" class="alert alert-error alert-soft text-sm focus:outline-none" tabindex="-1" data-focus-on-arrival data-testid="event-edit-error">
+                    {{ icon({ name: 'exclamation-circle', class: 'size-4 shrink-0' }) }}
+                    <span><span class="font-semibold">Couldn't save.</span> <a class="link" href="{{ payloadReview.error.href }}" data-testid="event-edit-error-link">{{ payloadReview.error.message }}</a></span>
+                  </div>
+                {% endif %}
+
+                <div class="fieldset gap-1 py-0" data-testid="event-edit-note">
+                  <div class="flex items-center gap-2" data-testid="event-edit-note-legend">
+                    <label class="fieldset-legend me-0 text-sm" for="edit-note" data-testid="event-edit-note-label">Why are you changing it?</label>
+                    <span class="badge badge-ghost badge-sm" data-testid="event-edit-note-badge">Required</span>
+                  </div>
+                  {{ charCount({
+                    id: "edit-note",
+                    name: "note",
+                    value: payloadReview.note,
+                    count: payloadReview.noteCount,
+                    max: payloadReview.noteMax,
+                    message: payloadReview.noteMessage,
+                    messageId: "edit-note-hint",
+                    helpId: "edit-note-help",
+                    describedBy: payloadReview.noteDescribedBy,
+                    hint: "",
+                    placeholder: "What was wrong, and why is this the right fix?",
+                    testId: "event-edit-note-field"
+                  }) }}
+                </div>
+
+                <div class="flex items-center gap-2">
+                  <button class="btn btn-neutral" type="submit" data-testid="event-edit-submit">Confirm save</button>
+                  <button class="btn btn-ghost" type="submit" formaction="{{ reviewAction }}" name="back" value="edit" data-payload-editor-back data-testid="event-edit-back">Back to editing</button>
+                </div>
+              </form>
+            </section>
+          </do-payload-editor>
+        {% else %}
+          {% if payloadJson %}
+            {{ payloadLines(payloadJson, "Payload", "event-payload") }}
+          {% else %}
+            <p class="py-6 text-center text-sm text-base-content/70" data-testid="event-payload-empty">This event carries no payload.</p>
+          {% endif %}
+
+          {% if originalPayloadJson %}
+            <details class="collapse collapse-arrow border border-base-300" data-testid="event-original-payload">
+              <summary class="collapse-title text-sm font-semibold" data-testid="event-original-payload-summary">Payload before the first edit</summary>
+              <div class="collapse-content">
+                {{ payloadLines(originalPayloadJson, "Payload before the first edit", "event-original-payload-lines") }}
+              </div>
+            </details>
+          {% endif %}
         {% endif %}
       </div>
     </section>

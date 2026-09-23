@@ -2073,3 +2073,362 @@ describe('an edited payload', () => {
     expect(model(found(detail(overrides))).originalPayloadJson).toBeNull()
   })
 })
+
+const editable = (overrides: Partial<EventDetail> = {}) =>
+  detail({ payloadRevision: 2, ...overrides })
+
+const auditRow = {
+  type: 'audit',
+  targetTopic: 'fcp_audit'
+}
+
+describe('the edit button', () => {
+  test('offers an edit on a dead letter whose service sent a revision', () => {
+    expect(model(found(editable())).canEdit).toBe(true)
+  })
+
+  test('offers one at revision 0, before anyone has edited it', () => {
+    expect(model(found(editable({ payloadRevision: 0 }))).canEdit).toBe(true)
+  })
+
+  test('offers one on a purged event, as the redrive is', () => {
+    expect(
+      model(found(editable({ ...stateOf('PURGED', 'Purged') }))).canEdit
+    ).toBe(true)
+  })
+
+  test('offers one on an audit row: nothing in the payload is locked', () => {
+    expect(model(found(editable(auditRow))).canEdit).toBe(true)
+  })
+
+  test.each([
+    ['absent', {}],
+    ['null', { payloadRevision: null }]
+  ])(
+    'offers none when the revision is %s: the service cannot edit',
+    (_name, overrides) => {
+      expect(model(found(detail(overrides))).canEdit).toBe(false)
+    }
+  )
+
+  test.each(['PUBLISHED', 'PROCESSING', 'FAILED', 'RESUBMITTED', 'COMPLETED'])(
+    'offers none on a %s event',
+    (status) => {
+      expect(model(found(editable({ ...stateOf(status) }))).canEdit).toBe(false)
+    }
+  )
+
+  test('points at this same event, keeping the list query', () => {
+    const page = model(found(editable()), { from: '?status=DEAD_LETTER' })
+
+    expect(page.editHref).toBe(
+      `/dev-ops/events/gas/outbox/${id}?from=%3Fstatus%3DDEAD_LETTER&edit=payload`
+    )
+    expect(page.reviewAction).toBe(
+      `/dev-ops/events/gas/outbox/${id}/payload/review#payload`
+    )
+    expect(page.saveAction).toBe(
+      `/dev-ops/events/gas/outbox/${id}/payload#payload`
+    )
+  })
+})
+
+describe('the payload editor', () => {
+  test('opens on the stored payload, pretty-printed, at the revision it was read at', () => {
+    const page = model(found(editable()), { edit: 'payload' })
+
+    expect(page.payloadEditor).toEqual({
+      text: '{\n  "data": {\n    "caseRef": "GLD-9B2"\n  }\n}',
+      revision: 2,
+      rows: 5,
+      alert: null,
+      currentJson: null
+    })
+    expect(page.payloadReview).toBeNull()
+  })
+
+  test('opens only when asked for', () => {
+    expect(model(found(editable())).payloadEditor).toBeNull()
+  })
+
+  test('opens on nothing an event cannot be edited', () => {
+    expect(model(found(detail()), { edit: 'payload' }).payloadEditor).toBeNull()
+  })
+
+  test('stays shut while a redrive is being confirmed', () => {
+    expect(
+      model(found(editable()), { edit: 'payload', confirm: 'redrive' })
+        .payloadEditor
+    ).toBeNull()
+  })
+
+  test('grows with the payload up to the height of the viewer, then scrolls', () => {
+    const payload = Object.fromEntries(
+      Array.from({ length: 40 }, (_, index) => [`k${index}`, index])
+    )
+
+    expect(
+      model(found(editable({ payload })), { edit: 'payload' }).payloadEditor
+        ?.rows
+    ).toBe(24)
+  })
+})
+
+describe('the plain JSON warning', () => {
+  const warning =
+    "Some values in this payload aren't plain JSON and will be saved as JSON text, for example dates as strings."
+
+  test('warns in the editor when the service says the payload is not plain JSON', () => {
+    expect(
+      model(found(editable({ payloadIsPlainJson: false })), { edit: 'payload' })
+        .plainJsonWarning
+    ).toBe(warning)
+  })
+
+  test('warns on the review as well', () => {
+    expect(
+      toEventPage(
+        found(editable({ payloadIsPlainJson: false })),
+        key,
+        {},
+        undefined,
+        undefined,
+        {
+          step: 'review',
+          text: '{\n  "a": 1\n}',
+          revision: 2,
+          note: '',
+          noteError: null
+        }
+      ).plainJsonWarning
+    ).toBe(warning)
+  })
+
+  test('says nothing on the read-only payload', () => {
+    expect(
+      model(found(editable({ payloadIsPlainJson: false }))).plainJsonWarning
+    ).toBeNull()
+  })
+
+  test.each([
+    ['plain JSON', { payloadIsPlainJson: true }],
+    ['unknown', { payloadIsPlainJson: null }],
+    ['not sent', {}]
+  ])('says nothing when the payload is %s', (_name, overrides) => {
+    expect(
+      model(found(editable(overrides)), { edit: 'payload' }).plainJsonWarning
+    ).toBeNull()
+  })
+})
+
+describe('the review', () => {
+  const review = (
+    event: EventDetail = editable(),
+    overrides: { note?: string; noteError?: string | null } = {}
+  ) =>
+    toEventPage(found(event), key, {}, undefined, undefined, {
+      step: 'review',
+      text: '{\n  "data": {\n    "caseRef": "GLD-9B3"\n  }\n}',
+      revision: 2,
+      note: '',
+      noteError: null,
+      ...overrides
+    }).payloadReview
+
+  test('diffs the stored payload against the text to save', () => {
+    expect(
+      review()
+        ?.diff.rows.filter(({ op }) => op !== 'same')
+        .map(({ op, text }) => [op, text])
+    ).toEqual([
+      ['removed', '    "caseRef": "GLD-9B2"'],
+      ['added', '    "caseRef": "GLD-9B3"']
+    ])
+  })
+
+  test('says the event stays a dead letter', () => {
+    expect(review()?.confirmBody).toBe(
+      'Your version replaces the stored payload. The edit is audited. The event stays a dead letter — nothing is retried until you redrive it.'
+    )
+  })
+
+  test('says a purged event stays purged', () => {
+    expect(
+      review(editable({ ...stateOf('PURGED', 'Purged') }))?.confirmBody
+    ).toContain('The event stays purged')
+  })
+
+  test('starts with an empty note and a counter at nothing', () => {
+    expect(review()).toMatchObject({
+      note: '',
+      noteCount: '0 / 500',
+      noteMax: 500,
+      noteMessage: null,
+      noteInvalid: false,
+      noteDescribedBy: 'edit-note-help',
+      error: null
+    })
+  })
+
+  test('keeps a refused note and sends the alert at it', () => {
+    expect(
+      review(editable(), {
+        note: 'x'.repeat(501),
+        noteError: 'Shorten the note to 500 characters or fewer.'
+      })
+    ).toMatchObject({
+      noteCount: '501 / 500',
+      noteMessage: 'Shorten the note to 500 characters or fewer.',
+      noteInvalid: true,
+      noteDescribedBy: 'edit-note-hint edit-note-help',
+      error: {
+        message: 'Shorten the note to 500 characters or fewer.',
+        href: '#edit-note'
+      }
+    })
+  })
+})
+
+describe('the message an edit leaves behind', () => {
+  const afterEdit = (
+    outcome: Parameters<typeof noticed>[0]['outcome'],
+    extra: { status?: string | null; reason?: string | null } = {},
+    event: EventDetail = editable()
+  ) =>
+    toEventPage(
+      found(event),
+      key,
+      {},
+      {
+        outcome,
+        status: null,
+        reason: null,
+        ...extra,
+        action: 'edit',
+        page: `/dev-ops/events/gas/outbox/${id}`
+      }
+    )
+
+  test('says the payload was saved and the dead letter was not retried', () => {
+    expect(afterEdit('saved').banner).toEqual({
+      role: 'success',
+      message:
+        "Payload saved. The event is still a dead letter and hasn't been retried."
+    })
+  })
+
+  test('says a purged event is still purged', () => {
+    expect(
+      afterEdit('saved', {}, editable({ ...stateOf('PURGED', 'Purged') }))
+        .banner?.message
+    ).toBe("Payload saved. The event is still purged and hasn't been retried.")
+  })
+
+  test('says only that it was saved when the page could not read the event back', () => {
+    expect(
+      toEventPage(
+        { outcome: 'unavailable', event: null },
+        key,
+        {},
+        {
+          outcome: 'saved',
+          status: null,
+          action: 'edit',
+          page: `/dev-ops/events/gas/outbox/${id}`
+        }
+      ).banner?.message
+    ).toBe("Payload saved. It hasn't been retried.")
+  })
+
+  test('takes focus, where the editor it replaces had it', () => {
+    expect(afterEdit('saved').bannerFocus).toBe(true)
+    expect(noticed({ outcome: 'redriven', status: null }).bannerFocus).toBe(
+      false
+    )
+  })
+
+  test.each([
+    [
+      'conflict',
+      { status: 'Completed' },
+      'warning',
+      "Not saved — this event can't be edited. Its status is now Completed."
+    ],
+    ['conflict', {}, 'warning', "Not saved — this event can't be edited."],
+    [
+      'stale',
+      {},
+      'error',
+      'Not saved — the payload changed while you were editing. Open the editor again to make your change to the payload as it is now.'
+    ],
+    [
+      'refused',
+      { reason: 'TOO_LARGE' },
+      'error',
+      'Not saved — the payload is over 256 KiB once formatted. Nothing has changed.'
+    ],
+    [
+      'refused',
+      { reason: 'UNCHANGED' },
+      'error',
+      'Not saved — the payload is the same as the one stored. Nothing has changed.'
+    ],
+    [
+      'refused',
+      { reason: 'NOT_AN_OBJECT' },
+      'error',
+      'Not saved — the payload must be a JSON object. Nothing has changed.'
+    ],
+    [
+      'refused',
+      { reason: 'DOLLAR_KEY' },
+      'error',
+      "Not saved — a key starts with $, which can't be stored. Nothing has changed."
+    ],
+    [
+      'refused',
+      { reason: 'SOMETHING_NEW' },
+      'error',
+      'Not saved — fg-gas-backend refused the change. Nothing has changed.'
+    ],
+    [
+      'refused',
+      {},
+      'error',
+      'Not saved — fg-gas-backend refused the change. Nothing has changed.'
+    ],
+    [
+      'not-found',
+      {},
+      'error',
+      'Not saved — fg-gas-backend no longer has this event. Nothing has changed.'
+    ],
+    [
+      'timed-out',
+      {},
+      'warning',
+      'Save status unknown — refresh to check whether your change went through.'
+    ],
+    [
+      'unavailable',
+      {},
+      'error',
+      'Not saved — fg-gas-backend could not be reached. Nothing has changed.'
+    ]
+  ] as const)(
+    'says what happened to a %s save %o',
+    (outcome, extra, role, message) => {
+      expect(afterEdit(outcome, extra).banner).toEqual({ role, message })
+    }
+  )
+
+  test('says only a timeout or an outage could not be answered', () => {
+    const answered = ['conflict', 'stale', 'refused', 'not-found'] as const
+
+    for (const outcome of answered) {
+      expect(afterEdit(outcome).banner?.message).not.toContain(
+        'could not be reached'
+      )
+    }
+  })
+})

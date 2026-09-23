@@ -145,6 +145,8 @@ export interface EventDetail extends EventWithAttempts {
   lastEdit?: EventLastEdit | null
   /** The payload as it was before the first edit, kept for as long as the row is. */
   originalPayload?: unknown
+  /** False when a JSON round trip would change a stored value; null when the service can't tell. */
+  payloadIsPlainJson?: boolean | null
 }
 
 export interface EventLastRedrive {
@@ -198,6 +200,26 @@ export const purgeEvent = async (
 ): Promise<void> => {
   await postToGas(`${toPath(key)}/purge`, {
     payload: { reasonCode, ...(note === '' ? {} : { note }) },
+    actor
+  })
+}
+
+export interface PayloadEdit {
+  payload: Record<string, unknown>
+  /** Already normalised and trimmed. */
+  note: string
+  /** The revision the edit was made against, so a save over someone else's is refused. */
+  revision: number
+}
+
+/** GAS answers a saved edit with the new revision and the changed paths; the page reads the event again instead. */
+export const editPayload = async (
+  key: EventKey,
+  { payload, note, revision }: PayloadEdit,
+  actor?: string
+): Promise<void> => {
+  await postToGas(`${toPath(key)}/payload`, {
+    payload: { payload, note, revision },
     actor
   })
 }

@@ -2829,3 +2829,266 @@ describe('an edited event', () => {
     expect($('[data-testid="event-redrive-edited"]')).toHaveLength(0)
   })
 })
+
+describe('the edit button', () => {
+  test('offers an edit left of the purge and the redrive', async () => {
+    givenEvent(
+      detail({ payloadRevision: 0, purgeDeletionDate: '2026-09-14T09:00:00Z' })
+    )
+
+    const { $ } = await viewPage(
+      `${path}?from=${encodeURIComponent('?status=DEAD_LETTER')}`
+    )
+
+    const actions = $('[data-testid="event-payload-actions"] a')
+      .toArray()
+      .map((action) => flatten($(action).text()))
+
+    expect(actions).toEqual(['Edit payload', 'Purge', 'Redrive'])
+    expect(
+      flatten(
+        $('[data-testid="event-edit"]')
+          .clone()
+          .find('.sr-only')
+          .remove()
+          .end()
+          .text()
+      )
+    ).toBe('Edit')
+    expect($('[data-testid="event-edit"] .sr-only').text()).toBe(' payload')
+    expect($('[data-testid="event-edit"]').attr('class')).toBe(
+      'btn btn-outline scroll-mt-4'
+    )
+    expect($('[data-testid="event-edit"]').attr('href')).toBe(
+      `${path}?from=%3Fstatus%3DDEAD_LETTER&edit=payload#payload`
+    )
+  })
+
+  test('offers one on an audit row, since nothing is locked', async () => {
+    givenEvent(detail({ type: 'audit', payloadRevision: 1 }))
+
+    const { $ } = await viewPage()
+
+    expect($('[data-testid="event-edit"]')).toHaveLength(1)
+  })
+
+  test.each([
+    ['absent', {}],
+    ['null', { payloadRevision: null }]
+  ])('offers none when the revision is %s', async (_name, overrides) => {
+    givenEvent(detail(overrides))
+
+    const { $ } = await viewPage()
+
+    expect($('[data-testid="event-edit"]')).toHaveLength(0)
+    expect($('[data-testid="event-redrive"]')).toHaveLength(1)
+  })
+
+  test('offers none on a completed event', async () => {
+    givenEvent(
+      detail({
+        status: 'COMPLETED',
+        statusLabel: 'Completed',
+        statusRole: 'success',
+        payloadRevision: 2
+      })
+    )
+
+    const { $ } = await viewPage()
+
+    expect($('[data-testid="event-edit"]')).toHaveLength(0)
+  })
+})
+
+describe('the payload editor', () => {
+  beforeEach(() => {
+    givenEvent(detail({ payloadRevision: 2 }))
+  })
+
+  test('accepts the edit query rather than refusing it', async () => {
+    const { statusCode } = await viewPage(`${path}?edit=payload`)
+
+    expect(statusCode).toBe(statusCodes.ok)
+  })
+
+  test('swaps the payload for a form holding it, pretty-printed, and renames the card', async () => {
+    const { $ } = await viewPage(`${path}?edit=payload`)
+
+    expect(valueOf($, 'event-payload-heading')).toBe('Edit payload')
+    expect($('[data-testid="event-payload"]')).toHaveLength(0)
+    expect($('[data-testid="event-payload-actions"]')).toHaveLength(0)
+    expect($('[data-testid="event-payload-editor-text"]').text()).toBe(
+      JSON.stringify(detail().payload, null, 2)
+    )
+  })
+
+  test('is never stored, so Back after a save reads the event again rather than showing a spent editor', async () => {
+    const { headers } = await server.inject({
+      method: 'GET',
+      url: `${path}?edit=payload`,
+      auth: { strategy: 'session', credentials }
+    })
+
+    expect(headers['cache-control']).toBe('no-store')
+  })
+
+  test('frames gutter and text as one daisyUI textarea, so focus and an error look as daisyUI draws them', async () => {
+    const { $ } = await viewPage(`${path}?edit=payload`)
+    const frame = $('[data-testid="event-payload-editor-frame"]')
+
+    expect(frame.attr('class')?.split(' ')).toEqual(
+      expect.arrayContaining(['textarea', 'validator', 'p-0'])
+    )
+    expect(
+      frame.find('[data-testid="event-payload-editor-gutter"]')
+    ).toHaveLength(1)
+    expect(frame.find('textarea').attr('class')).not.toContain('textarea')
+  })
+
+  test('marks the text invalid for the validator when it could not be read', async () => {
+    givenEvent(detail({ payloadRevision: 2 }))
+
+    const { $ } = await server
+      .inject({
+        method: 'POST',
+        url: `${path}/payload/review`,
+        payload: 'text=%7B&revision=2&from=',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        auth: { strategy: 'session', credentials }
+      })
+      .then(({ result }) => ({ $: load(result as unknown as string) }))
+
+    expect(
+      $('[data-testid="event-payload-editor-frame"] textarea').attr(
+        'aria-invalid'
+      )
+    ).toBe('true')
+  })
+
+  test('holds the heading row at the height the buttons gave it, unseen', async () => {
+    const view = (await viewPage()).$
+    const buttonsInView = view('[data-testid="event-payload-actions"] a')
+      .map((_, button) => view(button).contents().first().text())
+      .get()
+    const { $ } = await viewPage(`${path}?edit=payload`)
+    const placeholder = $('[data-testid="event-payload-actions-placeholder"]')
+
+    expect(placeholder.attr('class')).toContain('invisible')
+    expect(placeholder.attr('aria-hidden')).toBe('true')
+    expect(placeholder.find('a, button')).toHaveLength(0)
+    expect(
+      placeholder
+        .children()
+        .map((_, button) => $(button).text())
+        .get()
+    ).toEqual(buttonsInView)
+  })
+
+  test('posts the text, the revision and the list query to the review', async () => {
+    const { $ } = await viewPage(
+      `${path}?edit=payload&from=${encodeURIComponent('?status=DEAD_LETTER')}`
+    )
+
+    const form = $('[data-testid="event-payload-editor-form"]')
+
+    expect(form.attr('method')).toBe('post')
+    expect(form.attr('action')).toBe(`${path}/payload/review#payload`)
+    expect(form.find('textarea').attr('name')).toBe('text')
+    expect(
+      $('[data-testid="event-payload-editor-revision"]').attr('value')
+    ).toBe('2')
+    expect($('[data-testid="event-payload-editor-from"]').attr('value')).toBe(
+      '?status=DEAD_LETTER'
+    )
+  })
+
+  test('names the textarea by the card heading and puts focus in it', async () => {
+    const { $ } = await viewPage(`${path}?edit=payload`)
+
+    const text = $('[data-testid="event-payload-editor-text"]')
+
+    expect(text.attr('aria-labelledby')).toBe('payload-heading')
+    expect(text.is('[data-focus-on-arrival]')).toBe(true)
+    expect(text.attr('wrap')).toBe('off')
+    expect(text.attr('spellcheck')).toBe('false')
+  })
+
+  test('reviews with a neutral button and discards with a link back to the page', async () => {
+    const { $ } = await viewPage(`${path}?edit=payload`)
+
+    expect(
+      flatten($('[data-testid="event-payload-editor-review"]').text())
+    ).toBe('Review changes')
+    expect($('[data-testid="event-payload-editor-review"]').attr('class')).toBe(
+      'btn btn-neutral'
+    )
+    expect($('[data-testid="event-payload-editor-discard"]').attr('href')).toBe(
+      `${path}#payload`
+    )
+    expect(
+      $('[data-testid="event-payload-editor-discard"]')
+        .contents()
+        .first()
+        .text()
+    ).toBe('Discard')
+    expect(
+      flatten($('[data-testid="event-payload-editor-discard"]').text())
+    ).toBe('Discard changes')
+    expect(
+      $('[data-testid="event-payload-editor-discard"] .sr-only').text()
+    ).toBe(' changes')
+  })
+
+  test('leaves the gutter for the element to draw, hidden from assistive technology', async () => {
+    const { $ } = await viewPage(`${path}?edit=payload`)
+
+    const gutter = $('[data-testid="event-payload-editor-gutter"]')
+
+    expect(gutter.attr('aria-hidden')).toBe('true')
+    expect(gutter.attr('hidden')).toBeDefined()
+  })
+
+  test('opens no editor on an event the service cannot edit', async () => {
+    givenEvent(detail())
+
+    const { $ } = await viewPage(`${path}?edit=payload`)
+
+    expect($('[data-testid="event-payload-editor"]')).toHaveLength(0)
+    expect($('[data-testid="event-payload"]')).toHaveLength(1)
+  })
+
+  test('warns in the editor when the stored payload is not plain JSON, and nowhere else', async () => {
+    givenEvent(detail({ payloadRevision: 2, payloadIsPlainJson: false }))
+
+    const editing = await viewPage(`${path}?edit=payload`)
+    const reading = await viewPage()
+
+    expect(
+      editing.$(
+        '[data-testid="event-payload-editor"] [data-testid="event-plain-json-warning"]'
+      )
+    ).toHaveLength(1)
+    expect(
+      editing.$('[data-testid="event-plain-json-warning"]').next().is('form')
+    ).toBe(true)
+    expect(reading.$('[data-testid="event-plain-json-warning"]')).toHaveLength(
+      0
+    )
+  })
+
+  test('renders a payload carrying markup as text inside the textarea', async () => {
+    givenEvent(
+      detail({
+        payloadRevision: 2,
+        payload: { note: `</textarea>${xss}` }
+      })
+    )
+
+    const { $ } = await viewPage(`${path}?edit=payload`)
+
+    expect($('main script')).toHaveLength(0)
+    expect($('[data-testid="event-payload-editor-text"]').text()).toContain(
+      `</textarea>${xss}`
+    )
+  })
+})
