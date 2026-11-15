@@ -18,6 +18,7 @@ import { pageMates, toPageHead } from './bucket-tabs.ts'
 import { toUrlQuery } from './bucket-urls.ts'
 import {
   presentationOf,
+  toChipOrder,
   toFactLabel,
   toListColumns,
   toTimeLabel,
@@ -486,7 +487,7 @@ const toSetFilters = (context: Context, range: RangeModel): Applied[] => {
   }
 
   return [
-    ...bucket.facts.filter(hasValues).flatMap(tagsOf),
+    ...toChipOrder(bucket, bucket.facts.filter(hasValues)).flatMap(tagsOf),
     ...timeTags(context, range),
     ...searchTags(context),
     ...bucket.facts.filter((fact) => !hasValues(fact)).flatMap(tagsOf)
@@ -978,7 +979,9 @@ export const toListPage = (input: ListPageInput): ListPageModel => {
     meta: toMeta(bucket),
     tabs: toTabs(bucket, buckets),
     filterLabel: `Filter ${bucket.noun.many}`,
-    chips: bucket.facts.filter(hasValues).map(toChip(context)),
+    chips: toChipOrder(bucket, bucket.facts.filter(hasValues)).map(
+      toChip(context)
+    ),
     range,
     searchField: toSearchField(context, input.attempt),
     applied: set,

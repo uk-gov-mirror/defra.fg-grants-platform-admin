@@ -38,7 +38,10 @@ import { toSafeFrom } from '../view-models/event-page.view-model.ts'
 import { definitionFetchNoticeKey } from '../view-models/definition-fetch.ts'
 import type { DefinitionFetchFlash } from '../view-models/definition-fetch.ts'
 import { toGrantPage } from '../view-models/grant-page.view-model.ts'
-import type { GrantPageQuery } from '../view-models/grant-page.view-model.ts'
+import type {
+  GrantPageModel,
+  GrantPageQuery
+} from '../view-models/grant-page.view-model.ts'
 import { grantType } from '../view-models/grants-page.view-model.ts'
 import { recordPageCache } from '../view-models/list-filters.ts'
 import {
@@ -52,8 +55,6 @@ import {
   workflowCodeSchema
 } from '../view-models/record-filters.ts'
 import { toTabHref } from '../view-models/record-page.view-model.ts'
-import type { RecordPageModel } from '../view-models/record-page.view-model.ts'
-import { roles as appRoles } from '../../common/roles.ts'
 import type { RecordType } from '../view-models/record-type.ts'
 import { toBackHref } from '../view-models/record-view.ts'
 import { toVersionPath } from '../view-models/record-type.ts'
@@ -77,6 +78,8 @@ interface RecordPageRoute<
   M extends { navActive: string | null }
 > {
   record: RecordType
+  /** Tabs the page no longer has: an old link to one opens Overview. */
+  retiredTabs?: string[]
   /** Each URL param after the record's path, in order, with its schema. */
   params: Record<keyof K & string, Schema>
   /** Query params the record's tabs read, besides `tab` and `back`. */
@@ -175,14 +178,29 @@ const toMissingState = (outcome: string): MissingState =>
 /** `tab` and `back` on every record page, then whatever else its tabs read. */
 const toQuerySchema = (
   record: RecordType,
-  query: Record<string, Schema> = {}
+  query: Record<string, Schema> = {},
+  retiredTabs: string[] = []
 ) =>
   Joi.object({
-    tab: recordTabSchema(record).default('overview'),
+    tab: recordTabSchema(record)
+      .valid(...retiredTabs)
+      .default('overview'),
     back: backSchema,
     ...query,
     ...shellQuery
   })
+
+/** An old link to a tab the page no longer has opens its Overview, keeping where it goes back to. */
+const toRetiredTabRedirect =
+  (retiredTabs: string[]) => (request: Request, h: ResponseToolkit) => {
+    const { tab, back } = request.query as RecordPageQuery<string>
+
+    return retiredTabs.includes(tab)
+      ? h
+          .redirect(toTabHref(request.path, 'overview', toSafeFrom(back)))
+          .takeover()
+      : h.continue
+  }
 
 /** Hapi types the credentials scope as either one role or many. */
 const rolesOf = (request: Request): string[] =>
@@ -198,9 +216,10 @@ const recordPageRoute = <
   T extends string,
   N = never,
   Q = object,
-  M extends { navActive: string | null } = RecordPageModel
+  M extends { navActive: string | null } = { navActive: string | null }
 >({
   record,
+  retiredTabs = [],
   params,
   query,
   read,
@@ -215,8 +234,9 @@ const recordPageRoute = <
     cache: recordPageCache,
     validate: {
       params: recordParamsSchema(params),
-      query: toQuerySchema(record, query)
-    }
+      query: toQuerySchema(record, query, retiredTabs)
+    },
+    pre: [{ method: toRetiredTabRedirect(retiredTabs) }]
   },
   async handler(request: Request, h: ResponseToolkit) {
     const key = request.params as unknown as K
@@ -273,6 +293,7 @@ const toStatusQuery = (status: unknown): Record<string, string> | undefined =>
 
 interface CurrentVersionRoute {
   record: RecordType
+  retiredTabs: string[]
   code: Schema
   read: (code: string) => Promise<RecordResult<{ current: string | null }>>
 }
@@ -280,6 +301,7 @@ interface CurrentVersionRoute {
 /** A code alone opens its current version, on the tab asked for; a code with none is not found. */
 const currentVersionRoute = ({
   record,
+  retiredTabs,
   code,
   read
 }: CurrentVersionRoute): ServerRoute => ({
@@ -289,8 +311,9 @@ const currentVersionRoute = ({
     cache: recordPageCache,
     validate: {
       params: recordParamsSchema({ code }),
-      query: toQuerySchema(record, { status: statusSchema })
-    }
+      query: toQuerySchema(record, { status: statusSchema }, retiredTabs)
+    },
+    pre: [{ method: toRetiredTabRedirect(retiredTabs) }]
   },
   async handler(request: Request, h: ResponseToolkit) {
     const { code: asked } = request.params
@@ -366,28 +389,28 @@ export const viewGrantRoute = recordPageRoute<
   GrantVersionPage,
   GrantTabId,
   DefinitionFetchFlash,
-  GrantPageQuery
+  GrantPageQuery,
+  GrantPageModel
 >({
   record: grantType,
+  retiredTabs: ['events'],
   params: { code: slugFilterSchema, version: versionSchema },
   query: { status: statusSchema },
   read: getGrantPageUseCase,
-  toPage: (page, tab, from, { roles, ...options }) =>
-    toGrantPage(page, tab, from, {
-      ...options,
-      canAdministerGrants: roles.includes(appRoles.grantApplicationsAdmin)
-    }),
+  toPage: toGrantPage,
   noticeKey: definitionFetchNoticeKey
 })
 
 export const viewCurrentGrantRoute = currentVersionRoute({
   record: grantType,
+  retiredTabs: ['events'],
   code: slugFilterSchema,
   read: getGrantVersionsUseCase
 })
 
 export const viewWorkflowRoute = recordPageRoute({
   record: workflowType,
+  retiredTabs: ['events'],
   params: { code: workflowCodeSchema, version: versionSchema },
   query: { status: statusSchema },
   read: getWorkflowPageUseCase,
@@ -397,6 +420,7 @@ export const viewWorkflowRoute = recordPageRoute({
 
 export const viewCurrentWorkflowRoute = currentVersionRoute({
   record: workflowType,
+  retiredTabs: ['events'],
   code: workflowCodeSchema,
   read: getWorkflowVersionsUseCase
 })

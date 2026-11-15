@@ -1,0 +1,34 @@
+{% import "components/macros.njk" as gpa %}
+
+{#- A mapped value: where it comes from, then the value as written. A calculated one points to the Calculated fields table when the page has one. -#}
+{% macro valueCell(cell, calculatedTable) -%}
+  {%- if not cell -%}
+    {{ gpa.NoValue() }}
+  {%- else -%}
+    {%- call gpa.Inline({ gap: 'xs' }) -%}
+      {{ gpa.Text({ text: cell.how, tone: 'subtle' }) }}
+      {%- if cell.calculated and calculatedTable -%}
+        {{ gpa.Text({ text: 'see Calculated fields', tone: 'subtle' }) }}
+      {%- elif cell.value !== null -%}
+        {{ gpa.Text({ text: cell.value, mono: true }) }}
+      {%- else -%}
+        {{ gpa.Text({ text: 'empty', tone: 'subtle' }) }}
+      {%- endif -%}
+    {%- endcall -%}
+  {%- endif -%}
+{%- endmacro %}
+
+{#- Field and Value, a row per mapped field. -#}
+{% macro valueTable(label, rows, calculatedTable, testId) -%}
+  {%- call gpa.DataTable({ styleNonce: styleNonce, label: label, testId: testId, columns: [
+    { key: 'field', label: 'Field', width: 'minmax(180px, 1fr)', mono: true },
+    { key: 'value', label: 'Value', width: 'minmax(260px, 3fr)' }
+  ] }) -%}
+    {%- for row in rows -%}
+      {%- call gpa.TableRow() -%}
+        <td role="cell" class="gpa-cell-mono">{{ row.field }}</td>
+        <td role="cell">{{ valueCell(row, calculatedTable) }}</td>
+      {%- endcall -%}
+    {%- endfor -%}
+  {%- endcall -%}
+{%- endmacro %}

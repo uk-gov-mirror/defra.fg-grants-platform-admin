@@ -11,7 +11,6 @@ const workflowTabLabels: Record<(typeof workflowTabIds)[number], string> = {
   tasks: 'Tasks',
   pages: 'Pages',
   integrations: 'Integrations',
-  events: 'Events',
   raw: 'Raw'
 }
 

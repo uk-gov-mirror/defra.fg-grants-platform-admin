@@ -1,33 +1,20 @@
 import type {
-  WorkflowVersionHeader,
   WorkflowPage,
-  WorkflowVersionOverview,
-  WorkflowVersionRef
+  WorkflowVersionHeader,
+  WorkflowVersionOverview
 } from '../use-cases/get-workflow-page.use-case.ts'
-import type { Catalogue } from '../use-cases/get-catalogue.use-case.ts'
 import { workflowTabs } from '../use-cases/workflow-tabs.ts'
 import type { WorkflowTabId } from '../use-cases/workflow-tabs.ts'
-import { toVersionListHref } from './bucket-links.ts'
 import type { DefinitionFetchFlash } from './definition-fetch.ts'
-import { toUnavailableSources } from './event-row.ts'
-import { grantType, toGrantHref } from './grants-page.view-model.ts'
-import {
-  toDateFact,
-  toNoneFact,
-  toLinkFact,
-  toReleaseCounterpartFacts,
-  toEvents,
-  toSizeFact,
-  toTabHref,
-  toTabSection,
-  toTabs,
-  toTextFact
-} from './record-page.view-model.ts'
-import type { Fact, RecordPageModel } from './record-page.view-model.ts'
-import type { Zone } from './zoned-clock.ts'
-import { toFileLines } from './version-banner.ts'
-import { toNotStored, toVersionShell } from './version-page.ts'
-import type { NotStored, VersionShell } from './version-page.ts'
+import { toGrantHref } from './grants-page.view-model.ts'
+import { toTabHref } from './record-page.view-model.ts'
+import type { Times } from './times.ts'
+import { toVersionEvent } from './version-event.ts'
+import type { VersionEvent } from './version-event.ts'
+import { toFileRows } from './version-files.ts'
+import type { FileRow } from './version-files.ts'
+import { toVersionShell } from './version-page.ts'
+import type { VersionPageShell, VersionTab } from './version-page.ts'
 import { toWorkflowIntegrations } from './workflow-integrations.ts'
 import type { WorkflowIntegrations } from './workflow-integrations.ts'
 import { toWorkflowPagesTab } from './workflow-pages-tab.ts'
@@ -37,13 +24,32 @@ import type { WorkflowPhasesTab } from './workflow-phases.view-model.ts'
 import { toStageAnchor, toTaskGroups } from './workflow-tasks.view-model.ts'
 import type { TaskGroupCard } from './workflow-tasks.view-model.ts'
 import { toWorkflowHref, workflowType } from './workflows-page.view-model.ts'
+import type { Words } from './words.ts'
 
-export interface WorkflowPageModel extends RecordPageModel, VersionShell {
-  notStored: NotStored | null
+/** The grant version of the same code and version, linked when GAS has it. */
+export type GrantVersionFact =
+  | { kind: 'link'; text: string; href: string }
+  | { kind: 'text'; text: string }
+
+/** Who CW lets work the workflow's cases; null while the workflow is not stored. */
+export type RolesFact = Words[] | null
+
+export interface WorkflowDetails {
+  grant: GrantVersionFact
+  roles: RolesFact
+  event: VersionEvent
+}
+
+export interface WorkflowPageModel extends VersionPageShell {
+  details: WorkflowDetails | null
+  /** Overview's: the definition file, as a grant version lists its own. */
+  files: FileRow[] | null
   phases: WorkflowPhasesTab | null
   taskGroups: TaskGroupCard[] | null
   pages: WorkflowPagesTab | null
   integrations: WorkflowIntegrations | null
+  /** The stored workflow, as Raw shows it. */
+  raw: string | null
 }
 
 /** Query params the workflow's tabs read. */
@@ -52,100 +58,79 @@ export interface WorkflowPageQuery {
   status?: string
 }
 
-const toCasesHref = (
-  catalogue: Catalogue | null,
-  { code, version }: WorkflowVersionRef
-): string | null =>
-  toVersionListHref(
-    catalogue,
-    'cw.cases',
-    { codeFact: 'workflowCode', versionFact: 'currentConfigVersion' },
-    { code, version }
-  )
+interface WorkflowPageOptions {
+  notice?: DefinitionFetchFlash
+  query: WorkflowPageQuery
+  times: Times
+}
 
-const whoCanWork = 'Who can work cases'
+const toVersionTabs = (): VersionTab[] =>
+  workflowType.tabs.map(({ id, label }) => ({
+    id,
+    label,
+    ...workflowTabs[id as WorkflowTabId]
+  }))
 
-/** Each list only when it names a role; none at all lets any caseworker. */
-const toRolesFact = (roles: WorkflowVersionOverview['requiredRoles']): Fact => {
+/** Back to this page, so the grant version leads back to the workflow it was opened from. */
+const toGrantFact = (
+  header: WorkflowVersionHeader,
+  back: string
+): GrantVersionFact => {
+  const name = `${header.code}@${header.version}`
+
+  if (header.counterpart === null) {
+    return { kind: 'text', text: 'Couldn’t be checked: GAS didn’t answer.' }
+  }
+
+  return header.counterpart.exists
+    ? {
+        kind: 'link',
+        text: name,
+        href: toTabHref(toGrantHref(header), 'overview', back)
+      }
+    : { kind: 'text', text: `None: GAS has no grant version ${name}` }
+}
+
+const roleLines = (lead: string, roles: string[]): Words[] =>
+  roles.length
+    ? [roles.flatMap((role, at) => [at ? ', ' : lead, { code: role }])]
+    : []
+
+/** Each list only when it names a role; neither lets any caseworker. */
+const toRolesFact = (
+  roles: WorkflowVersionOverview['requiredRoles']
+): RolesFact => {
   if (roles === null) {
-    return toNoneFact('roles', whoCanWork)
+    return null
   }
 
   const lines = [
-    { label: 'all of:', codes: roles.allOf },
-    { label: 'any of:', codes: roles.anyOf }
-  ].filter(({ codes }) => codes.length)
+    ...roleLines('All of: ', roles.allOf),
+    ...roleLines('Any of: ', roles.anyOf)
+  ]
 
-  return lines.length
-    ? { id: 'roles', label: whoCanWork, kind: 'lines', lines }
-    : { id: 'roles', label: whoCanWork, kind: 'text', text: 'Any caseworker' }
+  return lines.length ? lines : [['Any caseworker (no roles set)']]
 }
 
-const toFacts = (
-  header: WorkflowVersionHeader,
-  overview: WorkflowVersionOverview,
-  catalogue: Catalogue | null,
-  zone: Zone
-): Fact[][] => [
-  [
-    toTextFact('scheme-name', 'Scheme name', overview.schemeName),
-    toDateFact('received', 'Received', header.receivedAt, zone),
-    toRolesFact(overview.requiredRoles),
-    {
-      id: 'definition',
-      label: 'Definition',
-      kind: 'lines',
-      lines: toFileLines(workflowType, header, catalogue)
-    }
-  ],
-  [
-    ...toReleaseCounterpartFacts(
-      grantType,
-      header.counterpart,
-      toGrantHref(header)
-    ),
-    toLinkFact('cases', 'Cases', 'View cases', toCasesHref(catalogue, header)),
-    toTextFact('versions', 'Versions', String(header.versions.length)),
-    toSizeFact(overview.storedBytes, 'Definition size')
-  ]
-]
+const toDetails = (page: WorkflowPage, back: string): WorkflowDetails => ({
+  grant: toGrantFact(page.header, back),
+  roles: toRolesFact(page.overview?.requiredRoles ?? null),
+  event: toVersionEvent(page.events, 'CW', back)
+})
 
-const toTasksTab = (
-  { definition }: WorkflowPage,
-  tab: WorkflowTabId
-): TaskGroupCard[] | null =>
-  tab === 'tasks' && definition
-    ? toTaskGroups(definition.workflow.phases)
-    : null
-
-const toPagesTab = (
-  { definition }: WorkflowPage,
-  tab: WorkflowTabId,
-  integrationsHref: string
-): WorkflowPagesTab | null =>
-  tab === 'pages' && definition
-    ? toWorkflowPagesTab(definition, integrationsHref)
-    : null
-
-const toIntegrationsTab = (
-  { definition }: WorkflowPage,
-  tab: WorkflowTabId,
-  pagesHref: string
-): WorkflowIntegrations | null =>
-  tab === 'integrations' && definition
-    ? toWorkflowIntegrations(definition, pagesHref)
-    : null
+interface TabInput {
+  page: WorkflowPage
+  href: string
+  from: string
+  query: WorkflowPageQuery
+}
 
 /**
  * The grant link comes back to this tab without its own `back`, so links
  * followed back and forth never nest one `back` inside another.
  */
-const toPhasesTab = (
-  { header, definition, grantStatusMap }: WorkflowPage,
-  from: string,
-  { status }: WorkflowPageQuery
-): WorkflowPhasesTab | null => {
-  const href = toWorkflowHref(header)
+const toPhases = ({ page, href, from, query }: TabInput) => {
+  const { header, definition, grantStatusMap } = page
   const self = (selected: string) =>
     toTabHref(href, 'phases', '', { status: selected })
 
@@ -153,7 +138,7 @@ const toPhasesTab = (
     ? toWorkflowPhases(
         definition.workflow.phases,
         grantStatusMap,
-        status,
+        query.status,
         {
           status: (position) =>
             toTabHref(href, 'phases', from, { status: position }),
@@ -166,57 +151,80 @@ const toPhasesTab = (
           tasks: (phase, stage) =>
             `${toTabHref(href, 'tasks', from)}#${toStageAnchor(phase, stage)}`
         },
-        header.version
+        header,
+        { href, from }
       )
     : null
 }
 
-const toOverviewFacts = (
-  { header, overview }: WorkflowPage,
-  catalogue: Catalogue | null,
-  zone: Zone
-): Fact[][] | null =>
-  overview ? toFacts(header, overview, catalogue, zone) : null
+const toTasks = ({ page }: TabInput) =>
+  page.definition ? toTaskGroups(page.definition.workflow.phases) : null
+
+const toPages = ({ page }: TabInput) =>
+  page.definition ? toWorkflowPagesTab(page.definition) : null
+
+const toIntegrations = ({ page }: TabInput) =>
+  page.definition ? toWorkflowIntegrations(page.definition) : null
+
+const toRaw = ({ page }: TabInput) =>
+  page.raw ? JSON.stringify(page.raw, null, 2) : null
+
+/** Each tab's own model, built only on its own tab. */
+const tabModels = {
+  phases: toPhases,
+  taskGroups: toTasks,
+  pages: toPages,
+  integrations: toIntegrations,
+  raw: toRaw
+}
+
+const modelOfTab: Partial<Record<WorkflowTabId, keyof typeof tabModels>> = {
+  phases: 'phases',
+  tasks: 'taskGroups',
+  pages: 'pages',
+  integrations: 'integrations',
+  raw: 'raw'
+}
+
+type TabModels = {
+  [K in keyof typeof tabModels]: ReturnType<(typeof tabModels)[K]> | null
+}
+
+const toTabModels = (tab: WorkflowTabId, input: TabInput): TabModels => {
+  const models = Object.fromEntries(
+    Object.keys(tabModels).map((id) => [id, null])
+  ) as TabModels
+  const key = modelOfTab[tab]
+
+  return key ? { ...models, [key]: tabModels[key](input) } : models
+}
 
 export const toWorkflowPage = (
   page: WorkflowPage,
   tab: WorkflowTabId,
   from: string,
-  {
-    notice,
-    query,
-    catalogue,
-    zone
-  }: {
-    notice?: DefinitionFetchFlash
-    query: WorkflowPageQuery
-    catalogue: Catalogue | null
-    zone: Zone
-  },
-  now: Date = new Date()
+  { notice, query, times }: WorkflowPageOptions
 ): WorkflowPageModel => {
   const href = toWorkflowHref(page.header)
-  const { read } = workflowTabs[tab]
+  const tabs = toVersionTabs()
 
   return {
-    record: workflowType,
-    ref: page.header.code,
-    tabs: toTabs(workflowType, href, tab, from),
-    tab,
-    facts: toOverviewFacts(page, catalogue, zone),
-    events: toEvents(page.events, now, zone, toTabHref(href, 'events', from)),
-    ...toTabSection(page.raw, page.sectionErrors, tab, read),
-    unavailableSources: toUnavailableSources(page.sourceErrors),
-    ...toVersionShell(workflowType, page.header, tab, from, {
+    ...toVersionShell({
+      kind: 'workflow',
+      record: workflowType,
+      header: page.header,
+      tabs,
+      tab: tabs.find(({ id }) => id === tab) ?? tabs[0],
+      from,
+      sectionErrors: page.sectionErrors,
       notice,
-      catalogue,
-      now,
-      zone
+      times
     }),
-    notStored: toNotStored(page.header, tab, workflowTabs[tab].file),
-    phases: tab === 'phases' ? toPhasesTab(page, from, query) : null,
-    taskGroups: toTasksTab(page, tab),
-    pages: toPagesTab(page, tab, toTabHref(href, 'integrations', from)),
-    integrations: toIntegrationsTab(page, tab, toTabHref(href, 'pages', from))
+    details:
+      tab === 'overview'
+        ? toDetails(page, toTabHref(href, 'overview', from))
+        : null,
+    files: tab === 'overview' ? toFileRows(page.header) : null,
+    ...toTabModels(tab, { page, href, from, query })
   }
 }

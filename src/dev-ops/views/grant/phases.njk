@@ -1,0 +1,26 @@
+{% from "grant/phases-panel.njk" import grantStatusPanel %}
+
+{%- if phases.kind == 'unreadable' -%}
+  {%- set body %}{{ gpa.Code({ text: phases.problem }) }}. Publish a fixed version.{% endset -%}
+  {{ gpa.Alert({ tone: 'danger', title: 'GAS cannot load this grant definition, so its phases cannot be shown.', html: body, testId: 'grant-phases-unreadable' }) }}
+{%- elif phases -%}
+  {%- set aside -%}
+    {%- call gpa.Stack({ attributes: { id: 'grant-phase-panels' } }) -%}
+      {%- for panel in phases.panels %}{{ grantStatusPanel(panel, panel.id != phases.selected) }}{% endfor -%}
+    {%- endcall -%}
+  {%- endset -%}
+  {{ gpa.Text({ as: 'p', tone: 'muted', text: 'Arrows show the moves GAS allows. A move happens only when CW or Agreements sends a status, when the last claim is submitted, or when a GAS process sets a status itself.' }) }}
+  {%- call gpa.Columns({ aside: aside, asideLabel: 'Selected status' }) -%}
+    {{ gpa.StateMap({
+      label: 'Grant statuses',
+      name: 'status',
+      form: phases.form.id,
+      panels: 'grant-phase-panels',
+      selected: phases.selected,
+      legend: [{ kind: 'process', label: 'Runs a GAS process' }, { kind: 'move', label: 'Move only' }],
+      phases: phases.phases,
+      testId: 'grant-phases-map'
+    }) }}
+  {%- endcall -%}
+  {{ gpa.Form({ id: phases.form.id, method: 'get', action: phases.form.action, label: 'Pick a status', hidden: phases.form.hidden, attributes: { hidden: true } }) }}
+{%- endif -%}

@@ -1,0 +1,23 @@
+{% import "components/macros.njk" as gpa %}
+
+{#- What CW's service line says of an address: its service, and when it has no usable URL, that. -#}
+{% macro serviceLine(cell, environment) -%}
+  {{- cell.service or '' -}}
+  {%- if not cell.hasUrl %}{{ ': ' if cell.service }}no usable URL in CW on {{ environment }}{% if cell.service %} ({{ cell.service }}_URL unset or invalid){% endif %}{% endif -%}
+{%- endmacro %}
+
+{#- What CW calls for one action: its method and address, or why it calls nothing. -#}
+{% macro callCell(cell, environment) -%}
+  {%- if cell.kind == 'no-endpoint' -%}
+    {{ gpa.Text({ text: 'No endpoint', tone: 'subtle' }) }}
+  {%- elif cell.kind == 'not-defined' -%}
+    {%- call gpa.Inline({ gap: 'xs' }) -%}{{ gpa.Code({ text: cell.code }) }}{{ gpa.Badge({ text: 'Not defined', tone: 'danger', size: 'sm' }) }}{%- endcall -%}
+  {%- else -%}
+    {%- call gpa.Stack({ gap: '2xs' }) -%}
+      {%- call gpa.Inline({ gap: 'xs', wrap: false }) -%}
+        {{ gpa.Badge({ text: cell.method, size: 'sm', mono: true }) }}{{ gpa.Text({ text: cell.url, mono: true, truncate: true, title: cell.url }) }}
+      {%- endcall -%}
+      {{ gpa.Text({ text: serviceLine(cell, environment), tone: 'subtle' if cell.hasUrl else 'warning' }) }}
+    {%- endcall -%}
+  {%- endif -%}
+{%- endmacro %}

@@ -1,0 +1,59 @@
+{% extends 'layouts/page.njk' %}
+{% import "components/macros.njk" as gpa %}
+{% from "version/words.njk" import words %}
+{% from "version/tab-state.njk" import tabState as tabStateView %}
+
+{#- A grant's or a workflow's version: its status, the version switcher, what needs acting on, and its tabs. -#}
+
+{% block oldPage %}{% endblock %}
+
+{% macro versionAlert(alert) -%}
+  {%- set body %}{{ words(alert.text) }}{% endset -%}
+  {%- set actions -%}
+    {%- if alert.action and alert.action.kind == 'fetch' and fetchForm -%}
+      {{ gpa.Button({ text: alert.action.text, size: 'sm', variant: alert.action.variant, iconStart: alert.action.icon, type: 'submit', form: fetchForm.id, loadingOnSubmit: true, testId: 'alert-fetch' }) }}
+    {%- elif alert.action and alert.action.kind == 'refresh' -%}
+      {{ gpa.Button({ text: alert.action.text, size: 'sm', iconStart: alert.action.icon, href: selfHref, testId: 'alert-refresh' }) }}
+    {%- endif -%}
+  {%- endset -%}
+  {{ gpa.Alert({ tone: alert.tone, title: alert.title, html: body, actions: actions if alert.action, testId: 'version-alert' }) }}
+{%- endmacro %}
+
+{% block content %}
+  {%- set trigger %}<span>{{ switcher.text }}</span>{{ gpa.Icon({ name: 'chevron-down', size: 'md', classes: 'gpa-chevron' }) }}{% endset -%}
+  {%- set versionMenu -%}
+    {%- call gpa.Dropdown({ trigger: trigger, triggerClasses: 'gpa-btn gpa-btn-default gpa-btn-md', triggerLabel: switcher.label, triggerTestId: 'version-switcher', align: 'end', menuLabel: 'Versions', panelTestId: 'version-switcher-menu' }) -%}
+      {%- for item in switcher.items %}{{ gpa.MenuItem({ text: item.text, href: item.href, checked: item.checked }) }}{% endfor -%}
+    {%- endcall -%}
+  {%- endset -%}
+
+  {%- set alertsHtml -%}
+    {%- if alerts | length -%}
+      {%- call gpa.Stack({ gap: 'md', testId: 'version-alerts' }) -%}
+        {%- for alert in alerts %}{{ versionAlert(alert) }}{% endfor -%}
+      {%- endcall -%}
+    {%- endif -%}
+  {%- endset -%}
+
+  {%- call gpa.RecordPage({
+    title: title,
+    mono: true,
+    back: { href: backHref, text: backLabel, testId: 'version-back' },
+    meta: [gpa.StatusDot({ text: status.text, tone: status.tone, testId: 'version-status' })],
+    actions: versionMenu,
+    alert: alertsHtml if alerts | length,
+    tabs: { label: tabsLabel, items: tabs },
+    titleTestId: 'version-title'
+  }) -%}
+    {%- if tabState -%}
+      {{ tabStateView(tabState, fetchForm, selfHref) }}
+    {%- else -%}
+      {% block tabContent %}{% endblock %}
+    {%- endif -%}
+  {%- endcall -%}
+
+  {%- if fetchForm -%}
+    {#- Every Fetch button on the page submits this one form, which shows nothing of its own. -#}
+    {{ gpa.Form({ id: fetchForm.id, action: fetchForm.action, method: 'post', label: 'Fetch the definitions not stored', hidden: fetchForm.hidden, attributes: { hidden: true } }) }}
+  {%- endif -%}
+{% endblock %}

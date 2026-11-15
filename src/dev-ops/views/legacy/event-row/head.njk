@@ -1,7 +1,0 @@
-{% from "table-head/macro.njk" import tableHead %}
-{{ tableHead({
-  testId: params.testId,
-  title: params.title | default("Event", true),
-  columns: [{ label: params.status | default("Status", true), format: "badge", right: false }],
-  time: params.time | default("Created", true)
-}) }}

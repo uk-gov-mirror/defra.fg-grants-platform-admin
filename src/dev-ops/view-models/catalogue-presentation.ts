@@ -32,6 +32,8 @@ export interface ListPresentation {
   /** The row's subtitle as a column of its own. */
   subtitle?: { label: string; mono?: boolean; width?: string }
   columns?: Record<string, ColumnPresentation>
+  /** Fact names in the order their chips go; any other follows, as the catalogue has it. */
+  chipOrder?: string[]
   /** By fact name: the chip, the column and the applied tag say the same. */
   facts?: Record<string, { label: string }>
   /** By fact name, then value. */
@@ -87,6 +89,7 @@ const configList = (title: string, column: string): ListPresentation => ({
     versionColumn: 'version',
     width: 'minmax(220px, 1fr)'
   },
+  chipOrder: ['grantCode', column, 'status'],
   columns: versionWidths,
   time: { width: dateWidth },
   facts: { [column]: { label: 'Stored' } },
@@ -103,7 +106,8 @@ const configList = (title: string, column: string): ListPresentation => ({
  * - gas.applications, cw.cases: the code column becomes "Grant", the
  *   position column goes, and GAS labels its time "Received".
  * - gas.grants, cw.workflows: the title and version become one "Grant"
- *   / "Workflow" column, and "Definition" is labelled "Stored".
+ *   / "Workflow" column, "Definition" is labelled "Stored", and the
+ *   Stored chip comes before Status.
  */
 export const cataloguePresentation: Record<string, ListPresentation> = {
   'gas.outbox': eventsList('outbox'),
@@ -170,6 +174,24 @@ export const toFactLabel = (
   bucket: Pick<BucketEntry, 'id'>,
   { name, label }: Pick<BucketFact, 'name' | 'label'>
 ): string => presentationOf(bucket).facts?.[name]?.label ?? label
+
+const chipRank = (order: string[], name: string): number => {
+  const at = order.indexOf(name)
+
+  return at < 0 ? order.length : at
+}
+
+/** The facts in the order the list's chips go. */
+export const toChipOrder = <F extends Pick<BucketFact, 'name'>>(
+  bucket: Pick<BucketEntry, 'id'>,
+  facts: F[]
+): F[] => {
+  const order = presentationOf(bucket).chipOrder ?? []
+
+  return [...facts].sort(
+    (a, b) => chipRank(order, a.name) - chipRank(order, b.name)
+  )
+}
 
 export const toTimeLabel = (bucket: Pick<BucketEntry, 'id' | 'time'>) =>
   presentationOf(bucket).time?.label ?? bucket.time.label

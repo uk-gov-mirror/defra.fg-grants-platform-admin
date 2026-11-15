@@ -4,68 +4,37 @@ import type {
   WayIn
 } from '../use-cases/get-grant-page.use-case.ts'
 import {
+  isRunning,
   knowsEffects,
   runsOf,
-  toPanelBadges,
   toStatusRef,
   toStatusSetters
 } from './lifecycle-effects.ts'
-import type {
-  PanelBadge,
-  StatusRef,
-  StatusSetter
-} from './lifecycle-effects.ts'
+import type { StatusRef, StatusSetter } from './lifecycle-effects.ts'
 import {
   sourceLabel,
   stageCodeOf,
   stageKeyOf,
-  statusCodeOf,
   toLifecycleNames
 } from './lifecycle-names.ts'
 import type { LifecycleNames } from './lifecycle-names.ts'
 import { toTabHref } from './record-page.view-model.ts'
-import { toStateGraphs } from './state-graph.view-model.ts'
-import type {
-  MoveKind,
-  StateGraphs,
-  StateMap,
-  StateMove
-} from './state-graph.view-model.ts'
+import { firstByPosition, pickPosition, toPhasesForm } from './state-map.ts'
+import type { MapPhase, MapState, PhasesForm } from './state-map.ts'
 
 type Move = Extract<WayIn, { kind: 'move' }>
 
-interface LegendItem {
-  kind: MoveKind | 'flagged' | 'other-phase'
-  label: string
-}
-
-/** The bare `validFrom` code a way matched by; said aloud only where that code is in more than one stage, else in its title. */
-type BareCode = { bareCode: { code: string; said: boolean } | null }
-
-type WayInRow = { processes: string[] } & (
-  | ({ kind: 'move'; from: StatusRef } & BareCode)
-  | ({ kind: 'code'; code: string } & BareCode)
+type WayInRow =
+  | { kind: 'move'; from: StatusRef }
+  | { kind: 'code'; code: string }
   | { kind: 'any' }
-)
-
-/** What makes a move happen, said after the move. */
-type TriggerSummary =
-  | { kind: 'sends'; source: string; code: string }
-  | { kind: 'claim' }
-  | { kind: 'gas'; process: string }
-
-export interface WayOutRow extends BareCode {
-  to: StatusRef
-  processes: string[]
-  triggers: TriggerSummary[]
-  /** Said only when GAS says what its processes do, so it is never guessed. */
-  untriggered: boolean
-}
 
 type TriggerRow =
   | {
       kind: 'external'
       source: string
+      /** The source is none GAS names. */
+      unknown: boolean
       code: string
       href: string | null
       stageName: string
@@ -80,7 +49,8 @@ type TriggerRow =
       onlyWhen: string | null
     }
 
-type BadgeLabel = 'initial' | 'amendable'
+/** What GAS runs on entering the status: its processes, nothing (a move only), or not said (no move leads in). */
+type Runs = { kind: 'processes'; processes: string[] } | { kind: 'move-only' }
 
 /** A position a GAS process sets that the grant does not define. */
 interface UndefinedTarget {
@@ -88,18 +58,16 @@ interface UndefinedTarget {
   onlyWhen: string | null
 }
 
-interface CodeAndName {
-  code: string
-  name: string
-}
-
 export interface StatusPanel {
-  badges: PanelBadge<BadgeLabel>[]
-  phase: CodeAndName
-  stage: CodeAndName
+  id: string
+  name: string
+  badges: ('initial' | 'amendable')[]
+  phase: string
+  stage: string
+  runs: Runs | null
   undefinedTargets: UndefinedTarget[]
   waysIn: WayInRow[]
-  waysOut: WayOutRow[]
+  waysOut: StatusRef[]
   triggeredBy: TriggerRow[]
   /** What an empty Triggered by says; null says nothing. */
   noTrigger: 'initial' | 'nothing' | null
@@ -107,10 +75,11 @@ export interface StatusPanel {
 
 export type GrantPhasesTab =
   | {
-      kind: 'graph'
-      graphs: StateGraphs
-      legend: LegendItem[]
-      panel: StatusPanel | null
+      kind: 'map'
+      selected: string
+      phases: MapPhase[]
+      panels: StatusPanel[]
+      form: PhasesForm
     }
   | { kind: 'unreadable'; problem: string }
 
@@ -124,55 +93,11 @@ interface GrantPhasesOptions {
   workflowHref: ((cwStatus: string, back: string) => string) | null
 }
 
-const nothingSetsIt = 'nothing in this version sets it'
-
-const bareCodeLegends: LegendItem[] = [
-  { kind: 'dotted', label: 'Matched by status code only, in any stage' },
-  {
-    kind: 'strong-dotted',
-    label: 'Matched by status code only, in any stage, and runs a GAS process'
-  }
-]
-
-const flaggedLegend: LegendItem = {
-  kind: 'flagged',
-  label: 'Nothing in this version sets it'
-}
-
-const isBare = (wayIn: WayIn): boolean =>
-  'matchedBy' in wayIn && wayIn.matchedBy === 'status'
-
-/** Known only when GAS says a way matched by a bare code; an older GAS says nothing of how it matched. */
-const toBareCode = (
-  { names }: Context,
-  wayIn: WayIn,
+interface Place {
   position: string
-): BareCode['bareCode'] =>
-  isBare(wayIn)
-    ? { code: statusCodeOf(position), said: names.repeated(position) }
-    : null
-
-const toLegend = (map: StateMap): LegendItem[] => [
-  { kind: 'strong', label: 'Runs a GAS process on the move' },
-  { kind: 'dashed', label: 'Move only' },
-  { kind: 'other-phase', label: 'Other phase' },
-  ...(map.phases.some(({ stages }) =>
-    stages.some(({ statuses }) => statuses.some(({ flagged }) => flagged))
-  )
-    ? [flaggedLegend]
-    : []),
-  ...bareCodeLegends.filter(({ kind }) =>
-    map.moves.some((move) => move.kind === kind)
-  )
-]
-
-const badgeTexts: Record<BadgeLabel, string> = {
-  initial: 'New applications start here',
-  amendable:
-    'The applicant can submit an amended application from here (amendablePositions)'
+  phase: GrantLifecycle['phases'][number]
+  stage: GrantLifecycle['phases'][number]['stages'][number]
 }
-
-const isMove = (wayIn: WayIn): wayIn is Move => wayIn.kind === 'move'
 
 interface Context {
   lifecycle: GrantLifecycle
@@ -182,64 +107,92 @@ interface Context {
   hrefOf: (position: string) => string
 }
 
-const isTriggered = ({ setters }: Context, position: string) =>
-  setters.some(({ to }) => to === position)
+const isMove = (wayIn: WayIn): wayIn is Move => wayIn.kind === 'move'
 
-const toMoveKind = (move: Move, processes: string[]): MoveKind => {
-  if (isBare(move)) {
-    return processes.length ? 'strong-dotted' : 'dotted'
+const placesOf = ({ phases }: GrantLifecycle): Place[] =>
+  phases.flatMap((phase) =>
+    phase.stages.flatMap((stage) =>
+      stage.statuses.map(({ code }) => ({
+        position: `${phase.code}:${stage.code}:${code}`,
+        phase,
+        stage
+      }))
+    )
+  )
+
+const waysInto = ({ lifecycle }: Context, position: string) =>
+  lifecycle.waysIn.filter(({ to }) => to === position)
+
+/** An unmatched `validFrom` entry never runs, so only the ways GAS takes count. */
+const toRuns = (context: Context, position: string): Runs | null => {
+  const ways = waysInto(context, position).filter(isRunning)
+  const processes = [
+    ...new Set(ways.flatMap((way) => runsOf(way, context.knows)))
+  ]
+
+  if (processes.length) {
+    return { kind: 'processes', processes }
   }
 
-  return processes.length ? 'strong' : 'dashed'
+  return ways.length ? { kind: 'move-only' } : null
 }
 
-const toMove =
-  (knows: boolean) =>
-  (move: Move): StateMove => {
-    const { from, to } = move
-    const processes = runsOf(move, knows)
+const isSet = ({ setters }: Context, position: string) =>
+  setters.some(({ to }) => to === position)
+
+const mapKinds: Record<Runs['kind'], MapState['kind']> = {
+  processes: 'process',
+  'move-only': 'move'
+}
+
+const toMapState =
+  (context: Context) =>
+  ({ position }: Place): MapState => {
+    const runs = toRuns(context, position)
+    const flagged = context.knows && !isSet(context, position)
+    const initial = position === context.lifecycle.initialPosition
 
     return {
-      from,
-      to,
-      kind: toMoveKind(move, processes),
-      title: processes.length
-        ? `${from} → ${to}: ${processes.join(', ')}`
-        : `${from} → ${to}`
+      id: position,
+      label: context.names.status(position),
+      tone: 'neutral',
+      ...(runs ? { kind: mapKinds[runs.kind] } : {}),
+      ...(initial ? { badge: 'initial' } : {}),
+      ...toMapIcon(runs, flagged)
     }
   }
 
-const fromAnyStatus = ({ waysIn }: GrantLifecycle, position: string) =>
-  waysIn.some(({ to, kind }) => to === position && kind === 'any')
-
-const toStateMap = (context: Context): StateMap => {
-  const { lifecycle, names, knows } = context
-
-  return {
-    phases: lifecycle.phases.map((phase) => ({
-      ...phase,
-      stages: phase.stages.map((stage) => ({
-        ...stage,
-        statuses: stage.statuses.map(({ code }) => {
-          const position = `${phase.code}:${stage.code}:${code}`
-          const flagged = knows && !isTriggered(context, position)
-
-          return {
-            code,
-            name: names.status(position),
-            tone: null,
-            flagged,
-            findings: flagged ? [nothingSetsIt] : [],
-            ...(fromAnyStatus(lifecycle, position)
-              ? { chip: 'any status' as const }
-              : {})
-          }
-        })
-      }))
-    })),
-    moves: lifecycle.waysIn.filter(isMove).map(toMove(knows))
+/** A warning outranks the process cog: one icon fits a state. */
+const toMapIcon = (
+  runs: Runs | null,
+  flagged: boolean
+): Pick<MapState, 'icon' | 'iconLabel' | 'iconTone'> => {
+  if (flagged) {
+    return {
+      icon: 'triangle-alert',
+      iconLabel: 'Nothing in this version sets it',
+      iconTone: 'warning'
+    }
   }
+
+  return runs?.kind === 'processes'
+    ? { icon: 'cog', iconLabel: `Runs ${runs.processes.join(', ')}` }
+    : {}
 }
+
+/** Each position once, where it first appears, as GAS takes it. */
+const toMapPhases = (context: Context, first: Set<Place>): MapPhase[] =>
+  context.lifecycle.phases.map((phase) => ({
+    id: phase.code,
+    label: context.names.phase(phase.code),
+    stages: phase.stages.map((stage) => ({
+      id: `${phase.code}:${stage.code}`,
+      label: context.names.stage(`${phase.code}:${stage.code}`),
+      states: [...first]
+        .filter((place) => place.phase === phase && place.stage === stage)
+        .map(toMapState(context))
+    }))
+  }))
 
 const refFor =
   ({ names, hrefOf }: Context, selected: string) =>
@@ -248,90 +201,22 @@ const refFor =
       name: names.status(position),
       stageName: names.stage(stageKeyOf(position)),
       repeated: names.repeated(position),
-      href: `${hrefOf(position)}#panel`
+      href: hrefOf(position)
     })
 
-const toBadges = (
-  { initialPosition, amendablePositions }: GrantLifecycle,
-  position: string
-): PanelBadge<BadgeLabel>[] =>
-  toPanelBadges(badgeTexts, [
-    ...(position === initialPosition ? (['initial'] as const) : []),
-    ...(amendablePositions.includes(position) ? (['amendable'] as const) : [])
-  ])
-
 const toWayIn =
-  (context: Context, refOf: (position: string) => StatusRef) =>
+  (refOf: (position: string) => StatusRef) =>
   (wayIn: WayIn): WayInRow => {
     if (wayIn.kind === 'move') {
-      return {
-        kind: 'move',
-        from: refOf(wayIn.from),
-        processes: runsOf(wayIn, context.knows),
-        bareCode: toBareCode(context, wayIn, wayIn.from)
-      }
+      return { kind: 'move', from: refOf(wayIn.from) }
     }
 
     return wayIn.kind === 'unmatched'
-      ? {
-          kind: 'code',
-          code: wayIn.code,
-          processes: runsOf(wayIn, context.knows),
-          bareCode: toBareCode(context, wayIn, wayIn.code)
-        }
-      : { kind: 'any', processes: runsOf(wayIn, context.knows) }
+      ? { kind: 'code', code: wayIn.code }
+      : { kind: 'any' }
   }
 
-const toTrigger = (setter: StatusSetter): TriggerSummary[] => {
-  if (setter.kind === 'external') {
-    const { source, code } = setter.mapping
-
-    return [{ kind: 'sends', source: sourceLabel(source), code }]
-  }
-
-  if (setter.kind === 'claim') {
-    return [{ kind: 'claim' }]
-  }
-
-  return setter.kind === 'gas' ? [{ kind: 'gas', process: setter.process }] : []
-}
-
-/** Whether the setter moves an application at `from`: a message keyed on its stage, the last claim at that exact status, or a GAS process run on entering it. */
-const setsFrom = (setter: StatusSetter, from: string): boolean => {
-  if (setter.kind === 'external') {
-    return setter.mapping.whileIn === stageKeyOf(from)
-  }
-
-  if (setter.kind === 'claim') {
-    return setter.from === from
-  }
-
-  return setter.kind === 'gas' && setter.on === from
-}
-
-/** What moves an application from `from` to `to`. */
-const toTriggers = (
-  { setters }: Context,
-  from: string,
-  to: string
-): TriggerSummary[] =>
-  setters
-    .filter((setter) => setter.to === to && setsFrom(setter, from))
-    .flatMap(toTrigger)
-
-const toWayOut =
-  (context: Context, selected: string, refOf: (p: string) => StatusRef) =>
-  (move: Move): WayOutRow => {
-    const triggers = toTriggers(context, selected, move.to)
-
-    return {
-      to: refOf(move.to),
-      processes: runsOf(move, context.knows),
-      bareCode: toBareCode(context, move, selected),
-      triggers,
-      untriggered: context.knows && triggers.length === 0
-    }
-  }
+const unknownSource = /^unknown source/
 
 /** @param back Where a link to the workflow comes back to. */
 const toExternal =
@@ -343,26 +228,27 @@ const toExternal =
   ({ source, code, whileIn }: ExternalStatusMapping): TriggerRow => ({
     kind: 'external',
     source: sourceLabel(source),
+    unknown: unknownSource.test(sourceLabel(source)),
     code,
     href: source === 'CW' && workflowHref ? workflowHref(code, back) : null,
     stageName: names.stage(whileIn),
     missingStage: names.stages.has(whileIn) ? null : stageCodeOf(whileIn)
   })
 
+interface TriggerLinks {
+  workflowHref: GrantPhasesOptions['workflowHref']
+  entitlementsHref: string
+}
+
 const toTriggerRow =
-  (
-    context: Context,
-    position: string,
-    workflowHref: GrantPhasesOptions['workflowHref'],
-    entitlementsHref: string
-  ) =>
+  (context: Context, position: string, links: TriggerLinks) =>
   (setter: StatusSetter): TriggerRow[] => {
     if (setter.kind === 'external') {
       return [
         toExternal(
           context,
           context.hrefOf(position),
-          workflowHref
+          links.workflowHref
         )(setter.mapping)
       ]
     }
@@ -372,7 +258,7 @@ const toTriggerRow =
         {
           kind: 'claim',
           at: refFor(context, position)(setter.from),
-          href: entitlementsHref
+          href: links.entitlementsHref
         }
       ]
     }
@@ -388,16 +274,6 @@ const toTriggerRow =
         ]
       : []
   }
-
-const toTriggeredBy = (
-  context: Context,
-  position: string,
-  workflowHref: GrantPhasesOptions['workflowHref'],
-  entitlementsHref: string
-): TriggerRow[] =>
-  context.setters
-    .filter(({ to }) => to === position)
-    .flatMap(toTriggerRow(context, position, workflowHref, entitlementsHref))
 
 /** A position a GAS process sets on entering `position` that the grant does not define. */
 const toUndefinedTargets = (
@@ -428,40 +304,54 @@ const toNoTrigger = (
   return knows ? 'nothing' : null
 }
 
+const toBadges = (
+  { initialPosition, amendablePositions }: GrantLifecycle,
+  position: string
+): StatusPanel['badges'] => [
+  ...(position === initialPosition ? (['initial'] as const) : []),
+  ...(amendablePositions.includes(position) ? (['amendable'] as const) : [])
+]
+
 const toPanel = (
   context: Context,
-  { position, phase, stage }: NonNullable<StateGraphs['selected']>,
-  workflowHref: GrantPhasesOptions['workflowHref'],
-  entitlementsHref: string
+  { position, phase, stage }: Place,
+  links: TriggerLinks
 ): StatusPanel => {
-  const { lifecycle, names } = context
+  const { lifecycle, names, setters } = context
   const refOf = refFor(context, position)
-  const triggeredBy = toTriggeredBy(
-    context,
-    position,
-    workflowHref,
-    entitlementsHref
-  )
+  const triggeredBy = setters
+    .filter(({ to }) => to === position)
+    .flatMap(toTriggerRow(context, position, links))
 
   return {
+    id: position,
+    name: names.status(position),
     badges: toBadges(lifecycle, position),
-    phase: { code: phase.code, name: names.phase(phase.code) },
-    stage: {
-      code: stage.code,
-      name: names.stage(`${phase.code}:${stage.code}`)
-    },
+    phase: names.phase(phase.code),
+    stage: names.stage(`${phase.code}:${stage.code}`),
+    runs: toRuns(context, position),
     undefinedTargets: toUndefinedTargets(context, position),
-    waysIn: lifecycle.waysIn
-      .filter(({ to }) => to === position)
-      .map(toWayIn(context, refOf)),
+    waysIn: waysInto(context, position).map(toWayIn(refOf)),
     waysOut: lifecycle.waysIn
       .filter(isMove)
       .filter(({ from }) => from === position)
-      .map(toWayOut(context, position, refOf)),
+      .map(({ to }) => refOf(to)),
     triggeredBy,
     noTrigger: toNoTrigger(context, position, triggeredBy)
   }
 }
+
+/** Unasked, the status new applications start at. */
+const toSelected = (
+  positions: string[],
+  asked: string | undefined,
+  { initialPosition }: GrantLifecycle
+): string =>
+  pickPosition(
+    positions,
+    asked,
+    positions.includes(initialPosition) ? initialPosition : positions[0]
+  ) ?? ''
 
 const toContext = (
   lifecycle: GrantLifecycle,
@@ -474,7 +364,7 @@ const toContext = (
   hrefOf
 })
 
-/** The grant's state graphs and the selected status's panel; null when GAS sent neither, as for a grant not stored. */
+/** The grant's statuses by phase and stage, and a panel for each; null when GAS sent neither, as for a grant not stored. */
 export const toGrantPhases = (
   {
     lifecycle,
@@ -490,27 +380,20 @@ export const toGrantPhases = (
     return null
   }
 
-  const hrefOf = (position: string) =>
+  const context = toContext(lifecycle, (position) =>
     toTabHref(href, 'phases', from, { status: position })
-  const context = toContext(lifecycle, hrefOf)
-  const map = toStateMap(context)
-  const graphs = toStateGraphs(
-    map,
-    status,
-    (position) => `${hrefOf(position)}#panel`
   )
+  const first = firstByPosition(placesOf(lifecycle))
+  const links = {
+    workflowHref,
+    entitlementsHref: toTabHref(href, 'entitlements', from)
+  }
 
   return {
-    kind: 'graph',
-    graphs,
-    legend: toLegend(map),
-    panel:
-      graphs.selected &&
-      toPanel(
-        context,
-        graphs.selected,
-        workflowHref,
-        toTabHref(href, 'entitlements', from)
-      )
+    kind: 'map',
+    selected: toSelected([...first.keys()], status, lifecycle),
+    phases: toMapPhases(context, new Set(first.values())),
+    panels: [...first.values()].map((place) => toPanel(context, place, links)),
+    form: toPhasesForm(href, from)
   }
 }

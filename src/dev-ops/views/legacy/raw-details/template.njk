@@ -1,8 +1,0 @@
-{% from "json-viewer/macro.njk" import jsonViewer %}
-
-<details class="collapse collapse-arrow mt-4 rounded-box border border-base-300 bg-base-100"{% if params.open %} open{% endif %} data-testid="{{ params.testId }}-details">
-  <summary class="collapse-title text-sm font-medium" data-testid="{{ params.testId }}-summary">{{ params.summary | default("Raw", true) }}</summary>
-  <div class="collapse-content">
-    {{ jsonViewer({ view: params.view, label: params.label, testId: params.testId }) }}
-  </div>
-</details>

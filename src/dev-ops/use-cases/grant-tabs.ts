@@ -18,7 +18,6 @@ export const grantTabs = {
   entitlements: { read: 'entitlements', file: 'grant' },
   agreement: { read: 'agreement', file: 'agreement' },
   payment: { read: 'payment', file: 'payment' },
-  events: { read: 'events', file: null },
   raw: { read: 'definition', file: 'grant' }
 } as const satisfies Record<string, GrantTab>
 

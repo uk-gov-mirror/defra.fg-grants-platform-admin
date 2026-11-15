@@ -102,16 +102,18 @@ const follow = async (cookie: string, url = page) => {
   const $ = load(result as unknown as string)
 
   return {
-    notices: $('[data-testid="grant-notice"]')
+    alerts: $('[data-testid="version-alert"]')
       .toArray()
-      .map((notice) => ({
-        role: $(notice).attr('role'),
-        className: $(notice).attr('class'),
-        text: flatten($(notice).text()),
-        mono: $(notice).find('.font-mono').text(),
-        icon: $(notice).find('[data-testid^="do-icon-"]').attr('data-testid')
+      .map((alert) => ({
+        tone: /gpa-alert-(\w+)/.exec($(alert).attr('class') ?? '')?.[1],
+        text: flatten(
+          `${$(alert).find('.gpa-alert-title').text()} ${$(alert).find('.gpa-alert-title').next().text()}`
+        ),
+        action: flatten($(alert).find('.gpa-alert-actions').text())
       })),
-    banner: flatten($('[data-testid="grant-banner"]').text())
+    toast: flatten($('[data-testid="toast"]').text()),
+    toastRegions: $('.gpa-toast-region').length,
+    tabFetch: flatten($('[data-testid="tab-fetch"]').text())
   }
 }
 
@@ -203,6 +205,13 @@ describe('fetchGrantDefinitionsRoute', () => {
     )
   })
 
+  test('goes back to Overview from a page still on the old Events tab', async () => {
+    const { statusCode, headers } = await fetch({ back: from, tab: 'events' })
+
+    expect(statusCode).toBe(statusCodes.seeOther)
+    expect(headers.location).toBe(`${page}?back=${encodeURIComponent(from)}`)
+  })
+
   test('accepts a POST with no body, going back to the Overview tab', async () => {
     const { statusCode, headers } = await fetch(undefined)
 
@@ -230,23 +239,16 @@ describe('fetchGrantDefinitionsRoute', () => {
     expect(fetchGrantDefinitionsUseCase).not.toHaveBeenCalled()
   })
 
-  test('names every file stored, once, in a solid success notice with a ticked circle', async () => {
-    const { cookie, notices, banner } = await fetchAndFollow()
+  test('toasts the definitions stored, once', async () => {
+    const { cookie, alerts, toast, toastRegions } = await fetchAndFollow()
 
-    expect(notices).toEqual([
-      {
-        role: 'status',
-        className: expect.stringMatching(/^(?!.*alert-soft).*alert-success$/),
-        text: 'Stored: grant, agreement and payment definitions.',
-        mono: '',
-        icon: 'do-icon-circle-check'
-      }
-    ])
-    expect(banner).toBe('')
-    expect((await follow(cookie)).notices).toEqual([])
+    expect(toast).toBe('Definitions stored for woodland-creation@2.0.0')
+    expect(toastRegions).toBe(1)
+    expect(alerts).toEqual([])
+    expect(await follow(cookie)).toMatchObject({ toast: '', toastRegions: 0 })
   })
 
-  test('names a file that failed and its reason in mono, and keeps the banner for it', async () => {
+  test('says why a file could not be fetched, in place of its state, as GAS keeps no record of the fetch', async () => {
     givenOutcome({
       outcome: 'fetched',
       files: [
@@ -256,84 +258,93 @@ describe('fetchGrantDefinitionsRoute', () => {
     })
     givenFiles({ grant: fetched, agreement: fetched, payment: pending })
 
-    const { notices, banner } = await fetchAndFollow()
+    const { alerts, toast } = await fetchAndFollow()
 
-    expect(notices).toEqual([
-      expect.objectContaining({
-        role: 'status',
-        text: 'Stored: grant definition.'
-      }),
+    expect(toast).toBe('Definitions stored for woodland-creation@2.0.0')
+    expect(alerts).toEqual([
       {
-        role: 'alert',
-        className: expect.stringContaining('alert-soft alert-error'),
-        text: "Couldn't fetch the payment definition: Definition file missing. Pressing Fetch again fails the same way until the file is in S3. Nothing has changed.",
-        mono: 'Definition file missing',
-        icon: 'do-icon-exclamation-circle'
+        tone: 'danger',
+        text: 'The payment definition couldn’t be fetched: the file isn’t in S3. Fetching again fails the same way until the file is in S3. Nothing has changed.',
+        action: 'Try again'
       }
     ])
-    expect(banner).toMatch(
-      / Payment definition not stored yet\. Fetch definitions$/
-    )
   })
 
   // An aliased grant's files are stored under the code they publish, so GAS
   // reports them stored while this version still reads not stored.
-  test('shows what GAS said even when the version still reads not stored', async () => {
+  test('toasts what GAS stored even when the version still reads not stored', async () => {
     givenOutcome({
       outcome: 'fetched',
       files: [{ file: 'grant', outcome: 'stored' }]
     })
     givenFiles({ grant: pending })
 
-    const { notices, banner } = await fetchAndFollow()
+    const { alerts, toast } = await fetchAndFollow()
 
-    expect(notices.map(({ text }) => text)).toEqual([
-      'Stored: grant definition.'
-    ])
-    expect(banner).toMatch(
-      / Grant definition not stored yet\. Fetch definitions$/
-    )
+    expect(toast).toBe('Definitions stored for woodland-creation@2.0.0')
+    expect(alerts.map(({ tone }) => tone)).toEqual(['info'])
   })
 
-  test.each([
-    [
-      'not-found',
-      'Not fetched: GAS no longer has this version. Nothing has changed.'
-    ],
-    [
-      'unavailable',
-      'Fetch failed: GAS could not finish it. Refresh to see what was stored.'
-    ],
-    [
-      'timed-out',
-      'Fetch status unknown: GAS did not answer in time. Refresh to check.'
-    ]
-  ] as const)('says what a %s fetch means', async (outcome, text) => {
-    givenOutcome({ outcome, files: [] })
+  test('says a fetch GAS did not answer in time may still have worked, with Refresh', async () => {
+    givenOutcome({ outcome: 'timed-out', files: [] })
+    givenFiles({ grant: pending })
 
-    const { notices } = await fetchAndFollow()
+    const { alerts } = await fetchAndFollow()
 
-    expect(notices.map((notice) => [notice.role, notice.text])).toEqual([
-      ['alert', text]
+    expect(alerts).toEqual([
+      {
+        tone: 'warning',
+        text: 'Fetch status unknown: GAS didn’t answer in time. The fetch may still have worked. Refresh to check before fetching again.',
+        action: 'Refresh'
+      }
     ])
   })
+
+  test('keeps the waiting tab’s Fetch while the alert above offers only Refresh', async () => {
+    givenOutcome({ outcome: 'timed-out', files: [] })
+    givenFiles({ grant: pending })
+
+    const { alerts, tabFetch } = await fetchAndFollow({ tab: 'questions' })
+
+    expect(alerts.map(({ action }) => action)).toEqual(['Refresh'])
+    expect(tabFetch).toBe('Fetch definitions')
+  })
+
+  test.each(['not-found', 'unavailable'] as const)(
+    'says a %s fetch may have stored some files',
+    async (outcome) => {
+      givenOutcome({ outcome, files: [] })
+
+      const { alerts } = await fetchAndFollow()
+
+      expect(alerts).toEqual([
+        {
+          tone: 'danger',
+          text: 'The definitions couldn’t be fetched: GAS answered with an error. Some files may have been stored. Refresh to check.',
+          action: 'Refresh'
+        }
+      ])
+    }
+  )
 
   test('says nothing after a fetch that found every file already stored', async () => {
     givenOutcome({ outcome: 'fetched', files: [] })
 
-    const { notices } = await fetchAndFollow()
+    const { alerts, toast } = await fetchAndFollow()
 
-    expect(notices).toEqual([])
+    expect(alerts).toEqual([])
+    expect(toast).toBe('')
   })
 
   test("never shows one version's outcome on another", async () => {
     const cookie = sessionCookie(await fetch())
 
-    const { notices } = await follow(
+    const { alerts, toast } = await follow(
       cookie,
       '/dev-ops/grants/woodland-creation/1.2.0'
     )
 
-    expect(notices).toEqual([])
+    expect(alerts).toEqual([])
+    expect(toast).toBe('')
   })
 })

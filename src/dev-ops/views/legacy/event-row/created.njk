@@ -1,7 +1,0 @@
-{% from "muted/macro.njk" import muted -%}
-{% from "./macro.njk" import createdAt %}
-{# The relative time over the clock, the precise instant on hover and spoken. #}
-<td class="whitespace-nowrap text-right">
-  {{- createdAt(params) -}}
-  {% if params.clock %}<time class="ml-auto block w-fit font-mono text-sm tabular-nums {{ muted }}" datetime="{{ params.instant }}" title="{{ params.precise }}" aria-hidden="true" data-testid="{{ params.testId }}-clock"><span data-testid="{{ params.testId }}-clock-text">{{ params.clock }}</span></time>{% endif %}
-</td>

@@ -1,7 +1,0 @@
-{%- from "code-text/macro.njk" import codeText -%}
-{%- from "name-code/macro.njk" import nameCode -%}
-{%- if params.href -%}
-{{ nameCode({ name: params.name, code: params.code, layout: "stacked", href: params.href, title: params.position, note: params.stageName if params.stageName != params.name }) }}
-{%- else -%}
-{{ codeText(params.code) }}
-{%- endif -%}

@@ -1,8 +1,0 @@
-{%- from "code-text/macro.njk" import codeText -%}
-{%- for part in parts -%}
-  {%- if part is string %}{{ part }}
-  {%- elif part.code !== undefined %}{{ codeText(part.code) }}
-  {%- elif part.strong !== undefined %}<strong>{{ part.strong }}</strong>
-  {%- else %}<a class="link" href="{{ part.href }}">{{ part.link }}</a>{% endif -%}
-{%- endfor -%}
-{#- -#}

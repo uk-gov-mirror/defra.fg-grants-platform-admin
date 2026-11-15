@@ -5,117 +5,105 @@ import type {
 import {
   caseViewOf,
   toActionCall,
-  toActionHref,
   toBannerButtons,
   toCall,
+  toCallCell,
   toCaseTabs
 } from './workflow-external-actions.ts'
-import type { ActionCall, CaseTab } from './workflow-external-actions.ts'
+import type { CallCell, CaseTab } from './workflow-external-actions.ts'
 import { toMappingValue } from './mapping-table.ts'
-import type { MappingValue } from './mapping-table.ts'
 
 /**
- * A stored path: an empty one is shown as such, so it never reads as missing.
- * CW evaluates every `jsonata:` string (`resolve-json.js`); anything else
- * follows CW's own rules, not GAS's, so only an expression is a mapping value.
+ * A stored path, as written; an empty one is shown as `""`, so it never reads
+ * as missing. CW evaluates every `jsonata:` string (`resolve-json.js`): that
+ * is a calculated value, shown without its prefix.
  */
-type StoredText =
-  | { kind: 'value' | 'empty'; text: string }
-  | { kind: 'expression'; value: MappingValue }
-  | { kind: 'none' }
+export interface StoredText {
+  text: string
+  calculated: boolean
+}
 
 interface SummaryRow {
-  key: string
   label: string
-  valueFrom: StoredText
+  /** Null when the row names no value. */
+  valueFrom: StoredText | null
   type: string
 }
 
 interface CaseTabRow {
   order: number
-  key: string
   label: string
   builtIn: boolean
+  /** Where the workflow points the tab's link: a path, or worked out from the case; null when CW's own. */
+  link: { address: string | null } | null
   /** Null when the tab is always shown. */
   shownWhen: StoredText | null
-  fires: ActionLink[]
+  calls: CallCell[]
   components: string[]
-  customLink: CaseTab['customLink']
 }
 
-/** What CW calls for an action, linked to its Integrations card when it is defined. */
-type ActionLink = ActionCall & { href: string | null }
-
 export interface WorkflowPagesTab {
-  banner: { title: StoredText; buttons: ActionLink[]; summary: SummaryRow[] }
+  banner: {
+    heading: StoredText | null
+    buttons: { name: string; call: CallCell }[]
+    summary: SummaryRow[]
+  }
   tabs: CaseTabRow[]
 }
 
-const toStoredText = (text: string | undefined): StoredText => {
+const toStoredText = (text: string | undefined): StoredText | null => {
   if (text === undefined) {
-    return { kind: 'none' }
+    return null
   }
 
-  if (text.startsWith('jsonata:')) {
-    return { kind: 'expression', value: toMappingValue(text) }
-  }
+  const value = toMappingValue(text)
 
-  return text === '' ? { kind: 'empty', text: '""' } : { kind: 'value', text }
+  return {
+    text: value.empty ? '""' : value.text,
+    calculated: value.kind === 'expression'
+  }
 }
 
 const toSummary = ({ summary = {} }: StoredBanner = {}): SummaryRow[] =>
-  Object.entries(summary).map(([key, { label, text, type, format }]) => ({
-    key,
+  Object.values(summary).map(({ label, text, type, format }) => ({
     label,
     valueFrom: toStoredText(text),
     type: format ? `${type} (${format})` : type
   }))
 
-const toActionLink =
-  (integrationsHref: string) =>
-  (call: ActionCall): ActionLink => ({
-    ...call,
-    href:
-      call.kind === 'not-defined'
-        ? null
-        : toActionHref(integrationsHref, call.action.code)
-  })
-
 const toCaseTabRow =
-  (definition: WorkflowDefinition, toLink: (call: ActionCall) => ActionLink) =>
+  (definition: WorkflowDefinition) =>
   (
-    { key, label, builtIn, renderIf, fires, components, customLink }: CaseTab,
+    { label, builtIn, renderIf, fires, components, customLink }: CaseTab,
     index: number
   ): CaseTabRow => ({
     order: index + 1,
-    key,
     label,
     builtIn,
+    link: customLink,
     shownWhen: renderIf ? toStoredText(renderIf) : null,
-    fires: fires.map(({ actionCode }) =>
-      toLink(toActionCall(definition, actionCode))
+    calls: fires.map(({ actionCode }) =>
+      toCallCell(toActionCall(definition, actionCode))
     ),
-    components,
-    customLink
+    components
   })
 
 /** The case view CW builds from this workflow: its banner, then its tabs in order. */
 export const toWorkflowPagesTab = (
-  definition: WorkflowDefinition,
-  integrationsHref: string
+  definition: WorkflowDefinition
 ): WorkflowPagesTab => {
   const { workflow } = definition
   const { banner } = caseViewOf(workflow)
-  const toLink = toActionLink(integrationsHref)
 
   return {
     banner: {
-      title: toStoredText(banner?.title?.text),
-      buttons: toBannerButtons(workflow).map((action) =>
-        toLink(toCall(definition, action))
-      ),
+      heading: toStoredText(banner?.title?.text),
+      buttons: toBannerButtons(workflow).map((action) => ({
+        name: action.name,
+        call: toCallCell(toCall(definition, action))
+      })),
       summary: toSummary(banner)
     },
-    tabs: toCaseTabs(workflow).map(toCaseTabRow(definition, toLink))
+    tabs: toCaseTabs(workflow).map(toCaseTabRow(definition))
   }
 }

@@ -1,14 +1,15 @@
-import type { BadgeRole } from '../use-cases/get-event.use-case.ts'
+/** How CW colours a status, as the status tones say it. */
+export type ThemeTone = 'neutral' | 'info' | 'warning' | 'success' | 'danger'
 
-const themeRoles = new Map<string, BadgeRole>([
+const themeTones = new Map<string, ThemeTone>([
   ['NEUTRAL', 'neutral'],
   ['INFO', 'info'],
   ['NOTICE', 'warning'],
   ['WARN', 'warning'],
-  ['ERROR', 'error'],
+  ['ERROR', 'danger'],
   ['SUCCESS', 'success']
 ])
 
-/** A CW theme as a badge role; `NONE`, or any theme CW does not draw, has no colour. */
-export const toThemeRole = (theme: string): BadgeRole | null =>
-  themeRoles.get(theme) ?? null
+/** A CW theme as a tone; `NONE`, or any theme CW does not draw, is neutral. */
+export const toThemeTone = (theme: string): ThemeTone =>
+  themeTones.get(theme) ?? 'neutral'

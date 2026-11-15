@@ -141,6 +141,18 @@
   {%- set __html %}{% include "./molecules/disclosure/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
 {%- endmacro %}
+{% macro Accordion(p) -%}
+  {%- set __html %}{% include "./molecules/accordion/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro AccordionItem(p) -%}
+  {%- set __html %}{% include "./molecules/accordion-item/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro StatusMark(p) -%}
+  {%- set __html %}{% include "./molecules/status-mark/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
 {% macro FactsList(p) -%}
   {%- set __html %}{% include "./molecules/facts-list/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
@@ -339,6 +351,10 @@
 {%- endmacro %}
 {% macro Time(p) -%}
   {%- set __html %}{% include "./atoms/time/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro StateMap(p) -%}
+  {%- set __html %}{% include "./organisms/state-map/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
 {%- endmacro %}
 {% macro DiffViewer(p) -%}

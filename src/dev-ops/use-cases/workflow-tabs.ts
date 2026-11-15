@@ -15,7 +15,6 @@ export const workflowTabs = {
   tasks: { read: 'definition', file: 'workflow' },
   pages: { read: 'definition', file: 'workflow' },
   integrations: { read: 'definition', file: 'workflow' },
-  events: { read: 'events', file: null },
   raw: { read: 'raw', file: 'workflow' }
 } as const satisfies Record<string, WorkflowTab>
 

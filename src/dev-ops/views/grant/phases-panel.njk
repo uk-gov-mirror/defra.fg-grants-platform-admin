@@ -1,0 +1,86 @@
+{% import "components/macros.njk" as gpa %}
+
+{% macro statusLink(ref) -%}
+  {%- if ref.href %}{{ gpa.Link({ text: ref.name, href: ref.href }) }}{% else %}{{ gpa.Code({ text: ref.position }) }}{% endif -%}
+{%- endmacro %}
+
+{% macro arrowRow(icon, ref) -%}
+  {%- call gpa.Inline({ gap: 'sm', align: 'center' }) -%}
+    {{ gpa.Icon({ name: icon, size: 'sm', classes: 'gpa-dir-icon' }) }}{{ statusLink(ref) }}
+  {%- endcall -%}
+{%- endmacro %}
+
+{% macro wayIn(way) -%}
+  {%- if way.kind == 'move' -%}
+    {{ arrowRow('arrow-left', way.from) }}
+  {%- elif way.kind == 'code' -%}
+    {%- call gpa.Inline({ gap: 'sm', align: 'center' }) -%}{{ gpa.Code({ text: way.code }) }}{{ gpa.Text({ text: 'matches no status in this version', tone: 'subtle' }) }}{%- endcall -%}
+  {%- else -%}
+    {%- set any %}Any status: GAS accepts this move from every position (no {{ gpa.Code({ text: 'validFrom' }) }}).{% endset -%}
+    {{ gpa.Text({ html: any }) }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro trigger(item) -%}
+  {%- call gpa.Inline({ gap: 'sm', align: 'center' }) -%}
+    {%- if item.kind == 'external' -%}
+      {%- if item.unknown %}{{ gpa.Badge({ text: item.source, tone: 'warning', size: 'sm' }) }}{% else %}{{ gpa.Text({ text: item.source }) }}{% endif -%}
+      {%- if item.href %}{{ gpa.Link({ html: gpa.Code({ text: item.code }), href: item.href }) }}{% else %}{{ gpa.Code({ text: item.code }) }}{% endif -%}
+      {{ gpa.Text({ text: 'while the application is in ' ~ item.stageName, tone: 'subtle' }) }}
+    {%- elif item.kind == 'claim' -%}
+      {{ gpa.Link({ text: 'Last claim submitted', href: item.href }) }}{{ gpa.Text({ text: 'while the application is at ' ~ item.at.name, tone: 'subtle' }) }}
+    {%- else -%}
+      {{ gpa.Text({ text: 'GAS process' }) }}{{ gpa.Code({ text: item.process }) }}{{ gpa.Text({ text: 'on entering ' ~ item.onEntering ~ ((', when ' ~ item.onlyWhen) if item.onlyWhen else ''), tone: 'subtle' }) }}
+    {%- endif -%}
+  {%- endcall -%}
+  {%- if item.missingStage -%}
+    {%- set missing %}Applies only to applications still in {{ gpa.Code({ text: item.missingStage }) }} from an earlier version: this version has no such stage.{% endset -%}
+    {{ gpa.Text({ html: missing, tone: 'subtle' }) }}
+  {%- endif -%}
+{%- endmacro %}
+
+{#- One status's aside: shown while it is the pick, hidden otherwise. -#}
+{% macro grantStatusPanel(panel, hidden) -%}
+  {%- call gpa.Card({ padded: true, title: 'Selected status', testId: 'grant-status-panel', attributes: { 'data-state': panel.id, hidden: hidden } }) -%}{%- call gpa.Stack({ gap: 'lg' }) -%}
+    {%- call gpa.Inline({ gap: 'sm', align: 'center' }) -%}
+      {{ gpa.Heading({ level: 3, text: panel.name }) }}
+      {%- for badge in panel.badges %}{{ gpa.Badge({ text: badge, size: 'sm' }) }}{% endfor -%}
+    {%- endcall -%}
+    {%- for target in panel.undefinedTargets -%}
+      {%- set body %}{% if target.onlyWhen %}When {{ target.onlyWhen }}, GAS{% else %}GAS{% endif %} moves the application to {{ gpa.Code({ text: target.position }) }}, which this grant doesn’t define.{% endset -%}
+      {{ gpa.Alert({ tone: 'warning', html: body, testId: 'grant-status-undefined-target' }) }}
+    {%- endfor -%}
+    {%- call gpa.FactsList({ stacked: true }) -%}
+      {{ gpa.Fact({ label: 'Phase', text: panel.phase }) }}
+      {{ gpa.Fact({ label: 'Stage', text: panel.stage }) }}
+      {%- if panel.runs and panel.runs.kind == 'processes' -%}
+        {%- set runs %}{% call gpa.Inline({ gap: 'xs' }) %}{% for process in panel.runs.processes %}{{ gpa.Code({ text: process }) }}{% endfor %}{% endcall %}{% endset -%}
+        {{ gpa.Fact({ label: 'Runs', html: runs }) }}
+      {%- elif panel.runs -%}
+        {{ gpa.Fact({ label: 'Runs', text: 'Nothing: move only' }) }}
+      {%- endif -%}
+      {%- set waysIn -%}
+        {%- if panel.waysIn | length -%}
+          {%- call gpa.Stack({ gap: 'xs' }) %}{% for way in panel.waysIn %}{{ wayIn(way) }}{% endfor %}{% endcall -%}
+        {%- else %}{{ gpa.NoValue() }}{% endif -%}
+      {%- endset -%}
+      {{ gpa.Fact({ label: 'Ways in', html: waysIn }) }}
+      {%- set waysOut -%}
+        {%- if panel.waysOut | length -%}
+          {%- call gpa.Stack({ gap: 'xs' }) %}{% for ref in panel.waysOut %}{{ arrowRow('arrow-right', ref) }}{% endfor %}{% endcall -%}
+        {%- else %}{{ gpa.Text({ text: 'None. Applications stay here.', tone: 'subtle' }) }}{% endif -%}
+      {%- endset -%}
+      {{ gpa.Fact({ label: 'Ways out', html: waysOut }) }}
+      {%- set triggeredBy -%}
+        {%- if panel.triggeredBy | length -%}
+          {%- call gpa.Stack({ gap: 'xs' }) %}{% for item in panel.triggeredBy %}{{ trigger(item) }}{% endfor %}{% endcall -%}
+        {%- elif panel.noTrigger == 'initial' -%}
+          {{ gpa.Text({ text: 'Set when the application is submitted.' }) }}
+        {%- elif panel.noTrigger == 'nothing' -%}
+          {{ gpa.Text({ text: 'Nothing in this version sets this status.', tone: 'warning' }) }}
+        {%- else %}{{ gpa.NoValue() }}{% endif -%}
+      {%- endset -%}
+      {{ gpa.Fact({ label: 'Triggered by', html: triggeredBy }) }}
+    {%- endcall -%}
+  {%- endcall -%}{%- endcall -%}
+{%- endmacro %}

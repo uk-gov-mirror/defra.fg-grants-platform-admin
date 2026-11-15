@@ -1,3 +1,4 @@
+import { toValueCell } from './mapping-rows.ts'
 import { toMappingValue } from './mapping-table.ts'
 import { toPaymentDefinition } from './payment-definition.ts'
 import type { PaymentContext } from './payment-definition.ts'
@@ -81,7 +82,23 @@ const context: PaymentContext = {
 const viewOf = (definition: Record<string, unknown>) =>
   toPaymentDefinition(definition, context)
 
-const value = toMappingValue
+const value = (mapped: unknown) => toValueCell(toMappingValue(mapped))
+
+const cells = (line: Record<string, unknown>) =>
+  lineLabels.map(([key, label]) => ({
+    label,
+    cell: Object.hasOwn(line, key) ? value(line[key]) : null
+  }))
+
+const lineLabels = [
+  ['schemeCode', 'Scheme'],
+  ['description', 'Description'],
+  ['amountPence', 'Amount (pence)'],
+  ['accountCode', 'Account'],
+  ['fundCode', 'Fund'],
+  ['deliveryBody', 'Delivery body'],
+  ['marketingYear', 'Marketing year']
+]
 
 const duePayment = (overrides: object = {}) => ({
   dueDate: '@.dueDate',
@@ -92,16 +109,6 @@ const duePayment = (overrides: object = {}) => ({
 
 const withPayments = (payments: unknown) =>
   viewOf({ code: 'woodland', payments })
-
-const noLine = {
-  schemeCode: null,
-  description: null,
-  amountPence: null,
-  accountCode: null,
-  fundCode: null,
-  deliveryBody: null,
-  marketingYear: null
-}
 
 describe('toPaymentDefinition: when GAS requests it', () => {
   test('says a claim payment is requested when a claim is submitted, reading the claim and when GAS ran it', () => {
@@ -161,41 +168,49 @@ describe('toPaymentDefinition', () => {
     ])
     expect(request[0]).toEqual({
       field: 'sbi',
-      depth: 0,
-      kind: 'value',
-      value: value('$.claim.sbi')
+      how: 'From',
+      value: '$.claim.sbi',
+      calculated: false
     })
   })
 
-  test('titles the one due payment of an array, with its invoice lines and the fields GAS calculates', () => {
+  test('titles the one due payment of an array, with its invoice lines', () => {
     expect(viewOf(woodland).duePayments).toEqual([
       {
         kind: 'due',
         title: { text: 'Due payment', forEach: null },
-        forEach: null,
         dueDate: value('jsonata:$substring($.execution.executedAt, 0, 10)'),
         totalAmountPence: value('$.claim.totalAmountPence'),
         lines: {
           kind: 'lines',
           forEach: null,
           rows: [
-            {
-              kind: 'line',
-              schemeCode: value('WMP'),
-              description: value('Woodland Management Plan Payment'),
-              amountPence: value('$.claim.totalAmountPence'),
-              accountCode: value('SOS710'),
-              fundCode: value('DRD10'),
-              deliveryBody: value('RP10'),
-              marketingYear: value(
-                'jsonata:$substring($.execution.executedAt, 0, 4)'
-              ),
-              calculated: ['marketingYear']
-            }
+            { kind: 'line', cells: cells(woodland.payments[0].invoiceLines[0]) }
           ]
         }
       }
     ])
+  })
+
+  test('lists every value GAS calculates once, by where it is', () => {
+    expect(viewOf(woodland).calculated).toEqual([
+      {
+        field: 'marketingYear',
+        expression: '$substring($.execution.executedAt, 0, 4)'
+      },
+      {
+        field: 'Due date',
+        expression: '$substring($.execution.executedAt, 0, 10)'
+      },
+      {
+        field: 'Marketing year (invoice line)',
+        expression: '$substring($.execution.executedAt, 0, 4)'
+      }
+    ])
+  })
+
+  test('gives the stored definition as Raw shows it', () => {
+    expect(viewOf(woodland).raw).toBe(JSON.stringify(woodland, null, 2))
   })
 
   test('numbers each due payment of an array out of how many there are', () => {
@@ -219,17 +234,14 @@ describe('toPaymentDefinition', () => {
         text: 'Due payments',
         forEach: '$.agreement.paymentSchedule.instalments'
       },
-      forEach: value('$.agreement.paymentSchedule.instalments'),
       dueDate: value('@.dueDate'),
-      lines: { kind: 'lines', forEach: value('@.lineItems') }
+      lines: { kind: 'lines', forEach: '@.lineItems' }
     })
     expect(due).toHaveProperty('lines.rows', [
-      expect.objectContaining({
+      {
         kind: 'line',
-        schemeCode: value('CMOR1'),
-        description: value(pmfDescription),
-        calculated: ['description', 'marketingYear']
-      })
+        cells: cells(pigsMightFly.payments.items.invoiceLines.items)
+      }
     ])
   })
 
@@ -275,7 +287,7 @@ describe('toPaymentDefinition', () => {
 
     expect(due).toMatchObject({ kind: 'due', dueDate: null })
     expect(due).toHaveProperty('lines.rows', [
-      { kind: 'line', ...noLine, schemeCode: value('WMP'), calculated: [] }
+      { kind: 'line', cells: cells({ schemeCode: 'WMP' }) }
     ])
   })
 

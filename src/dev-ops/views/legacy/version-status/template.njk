@@ -1,7 +1,0 @@
-{% from "filter-menu/macro.njk" import filterMenu %}
-{% from "status-badge/macro.njk" import statusBadge %}
-
-<div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm" data-testid="{{ params.testId }}-version">
-  {{ statusBadge(params.header.status) }}
-  {{ filterMenu(params.header.switcher) }}
-</div>

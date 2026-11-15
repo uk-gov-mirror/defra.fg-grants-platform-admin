@@ -10,7 +10,7 @@ import {
   findEndpoint,
   findExternalAction,
   toActionCall,
-  toActionHref,
+  toCallCell,
   toBannerButtons,
   toCaseTabs
 } from './workflow-external-actions.ts'
@@ -361,10 +361,38 @@ describe('toActionCall', () => {
   })
 })
 
-describe('toActionHref', () => {
-  test("points at the action's Integrations card, escaping the fragment", () => {
+describe('toCallCell', () => {
+  test("shows the method and CW's resolved address", () => {
     expect(
-      toActionHref('/dev-ops/workflows/w/1.0.0?tab=integrations', 'A B#C')
-    ).toBe('/dev-ops/workflows/w/1.0.0?tab=integrations#action-A%20B%23C')
+      toCallCell(toActionCall(woodlandDefinition, 'REFRESH_PARCELS'))
+    ).toEqual({
+      kind: 'call',
+      method: 'GET',
+      url: 'https://land-data.example/api/v2/parcels/{sbi}',
+      service: 'LAND_DATA',
+      hasUrl: true
+    })
+  })
+
+  test('shows the path when the service has no usable URL', () => {
+    expect(toCallCell(toActionCall(woodlandDefinition, 'RECALCULATE'))).toEqual(
+      {
+        kind: 'call',
+        method: 'POST',
+        url: '/api/v1/calculate',
+        service: 'PAYMENT_CALC',
+        hasUrl: false
+      }
+    )
+  })
+
+  test('says an action is not defined, or has no endpoint', () => {
+    expect(toCallCell(toActionCall(woodlandDefinition, 'MISSING'))).toEqual({
+      kind: 'not-defined',
+      code: 'MISSING'
+    })
+    expect(
+      toCallCell({ kind: 'no-endpoint', action: action('A', {}) })
+    ).toEqual({ kind: 'no-endpoint' })
   })
 })

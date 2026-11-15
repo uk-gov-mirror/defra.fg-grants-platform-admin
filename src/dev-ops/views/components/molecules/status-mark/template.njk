@@ -1,0 +1,4 @@
+{%- from "../../core/macros.njk" import attrs, cls, vh -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+{%- set icons = { success: 'check', neutral: 'minus', info: 'info', warning: 'triangle-alert', danger: 'circle-x' } -%}
+  <span class="{{ cls('gpa-mark gpa-mark-' ~ (p.tone or 'neutral'), p) }}"{% if p.label %} title="{{ p.label }}"{% endif %}{{ attrs(p) }}>{{ Icon({ name: p.icon or icons[p.tone or 'neutral'], size: 'md', strokeWidth: 2.5 }) }}{% if p.label %}{{ vh(p.label) }}{% endif %}</span>

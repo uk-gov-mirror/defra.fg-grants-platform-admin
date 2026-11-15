@@ -1,5 +1,0 @@
-<form class="inline" method="post" action="/dev-ops/events/{{ params.service | lower }}/inbox" data-testid="{{ params.testId }}">
-  <input type="hidden" name="ref-kind" value="ref">
-  <input type="hidden" name="ref-value" value="{{ params.code }}">
-  <button class="link" type="submit" data-testid="{{ params.testId }}-link">{{ caller() if caller else params.text }}</button>
-</form>

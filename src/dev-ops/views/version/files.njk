@@ -1,0 +1,20 @@
+{% import "components/macros.njk" as gpa %}
+
+{#- The version's definition files: where each is kept and whether it is stored. -#}
+{% macro versionFiles(files) -%}
+  {%- call gpa.Section({ title: 'Files', testId: 'version-files' }) -%}
+    {%- call gpa.DataTable({ styleNonce: styleNonce, label: 'Files', columns: [
+      { key: 'file', label: 'File', width: 'auto' },
+      { key: 'location', label: 'Location', width: 'auto', mono: true },
+      { key: 'stored', label: 'Stored', width: 'auto' }
+    ] }) -%}
+      {%- for file in files -%}
+        {%- call gpa.TableRow({ testId: 'version-file' }) -%}
+          <td role="cell">{{ file.name }}</td>
+          <td role="cell" class="gpa-cell-mono">{% if file.location %}{{ file.location }}{% else %}{{ gpa.NoValue() }}{% endif %}</td>
+          <td role="cell">{{ gpa.StatusDot({ text: file.stored.text, tone: file.stored.tone }) }}</td>
+        {%- endcall -%}
+      {%- endfor -%}
+    {%- endcall -%}
+  {%- endcall -%}
+{%- endmacro %}

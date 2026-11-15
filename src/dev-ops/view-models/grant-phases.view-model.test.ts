@@ -126,28 +126,34 @@ const lifecycle: GrantLifecycle = {
   }
 }
 
+type MapTab = Extract<ReturnType<typeof toGrantPhases>, { kind: 'map' }>
+
 const phasesOf = (
   status: string | undefined,
   workflowHref: ((code: string, back: string) => string) | null = null,
   read: GrantLifecycle = lifecycle
-) => {
-  const tab = toGrantPhases(
+): MapTab =>
+  toGrantPhases(
     { lifecycle: read, problem: null },
     { status, href, from, workflowHref }
+  ) as MapTab
+
+const panelOf = (
+  position: string,
+  read: GrantLifecycle = lifecycle,
+  workflowHref: ((code: string, back: string) => string) | null = null
+) =>
+  phasesOf(position, workflowHref, read).panels.find(
+    ({ id }) => id === position
   )
-
-  expect(tab?.kind).toBe('graph')
-
-  return tab as Extract<NonNullable<typeof tab>, { kind: 'graph' }>
-}
-
-const panelOf = (...args: Parameters<typeof phasesOf>) =>
-  phasesOf(...args).panel
 
 const statusHref = (position: string) =>
   `${href}?tab=phases&back=%2Fdev-ops%2Fgrants&status=${encodeURIComponent(position)}`
 
-const panelHref = (position: string) => `${statusHref(position)}#panel`
+const stateOf = (tab: MapTab, position: string) =>
+  tab.phases
+    .flatMap(({ stages }) => stages.flatMap(({ states }) => states))
+    .find(({ id }) => id === position)
 
 /** GAS-16's read: what each process does, and that the claim move tells CW. */
 const withEffects: GrantLifecycle = {
@@ -191,304 +197,186 @@ describe('toGrantPhases', () => {
   test("says why GAS cannot read the grant's lifecycle", () => {
     expect(
       toGrantPhases(
-        { lifecycle: null, problem: 'Grant "x" has no initial position' },
+        { lifecycle: null, problem: '"phases" must contain at least 1 items' },
         { status: undefined, href, from, workflowHref: null }
       )
     ).toStrictEqual({
       kind: 'unreadable',
-      problem: 'Grant "x" has no initial position'
+      problem: '"phases" must contain at least 1 items'
     })
   })
 
-  test('shows even an empty problem rather than nothing', () => {
-    expect(
-      toGrantPhases(
-        { lifecycle: null, problem: '' },
-        { status: undefined, href, from, workflowHref: null }
-      )
-    ).toStrictEqual({ kind: 'unreadable', problem: '' })
+  test('maps each status by phase and stage, by name, with no tone of its own', () => {
+    const { phases } = phasesOf(undefined)
+
+    expect(phases[0]).toMatchObject({
+      id: 'PRE_AWARD',
+      label: 'Pre award',
+      stages: [
+        {
+          id: 'PRE_AWARD:APPLICATION',
+          label: 'Application',
+          states: [
+            {
+              id: 'PRE_AWARD:APPLICATION:RECEIVED',
+              label: 'Application received',
+              tone: 'neutral',
+              badge: 'initial'
+            },
+            { id: 'PRE_AWARD:APPLICATION:AMEND', label: 'Amend' }
+          ]
+        },
+        { id: 'PRE_AWARD:REVIEW', label: 'Review' }
+      ]
+    })
+    expect(phases[1].label).toBe('Post award')
   })
 
-  test('draws every move, strong where it runs a GAS process, dashed where it only moves', () => {
-    const edges = phasesOf(undefined).graphs.phases.flatMap(({ edges }) =>
-      edges.map(({ kind, title }) => [kind, title])
+  test('marks a status entered by a GAS process with its cog, and one entered by a move alone', () => {
+    const tab = phasesOf(undefined)
+
+    expect(stateOf(tab, 'PRE_AWARD:REVIEW:APPROVED')).toMatchObject({
+      kind: 'process',
+      icon: 'cog',
+      iconLabel: 'Runs GENERATE_AGREEMENT'
+    })
+    expect(stateOf(tab, 'PRE_AWARD:REVIEW:IN_REVIEW')).toMatchObject({
+      kind: 'move'
+    })
+    expect(stateOf(tab, 'PRE_AWARD:REVIEW:IN_REVIEW')?.icon).toBeUndefined()
+  })
+
+  test('picks the initial status when none is asked for, and the asked one by position or bare code', () => {
+    expect(phasesOf(undefined).selected).toBe('PRE_AWARD:APPLICATION:RECEIVED')
+    expect(phasesOf('PRE_AWARD:REVIEW:IN_REVIEW').selected).toBe(
+      'PRE_AWARD:REVIEW:IN_REVIEW'
     )
-
-    expect(edges).toContainEqual([
-      'strong',
-      'PRE_AWARD:REVIEW:IN_REVIEW → PRE_AWARD:REVIEW:APPROVED: GENERATE_AGREEMENT'
-    ])
-    expect(edges).toContainEqual([
-      'dashed',
-      'PRE_AWARD:APPLICATION:RECEIVED → PRE_AWARD:APPLICATION:AMEND'
-    ])
-    expect(new Set(edges.map(([, title]) => title)).size).toBe(5)
+    expect(phasesOf('APPROVED').selected).toBe('PRE_AWARD:REVIEW:APPROVED')
+    expect(phasesOf('NOPE').selected).toBe('PRE_AWARD:APPLICATION:RECEIVED')
   })
 
-  test("names each node by the definition's name, else its code made readable", () => {
-    const [preAward] = phasesOf(undefined).graphs.phases
-
-    expect(
-      preAward.nodes
-        .filter((node) => node.kind === 'status')
-        .map(({ name }) => name)
-    ).toStrictEqual(['Application received', 'Amend', 'In review', 'Approved'])
-  })
-
-  test('draws statuses with no tone, under named stages', () => {
-    const [preAward] = phasesOf(undefined).graphs.phases
-
-    expect(preAward.name).toBe('Pre award')
-    expect(preAward.bands.map(({ code, name }) => [code, name])).toStrictEqual([
-      ['APPLICATION', 'Application'],
-      ['REVIEW', null]
-    ])
-    expect(
-      preAward.nodes
-        .filter((node) => node.kind === 'status')
-        .map((node) => [node.tone, node.state])
-    ).toStrictEqual([
-      [null, 'selected'],
-      [null, 'plain'],
-      [null, 'plain'],
-      [null, 'plain']
+  test('draws a panel for every status, so a pick shows its own in place', () => {
+    expect(phasesOf(undefined).panels.map(({ id }) => id)).toStrictEqual([
+      'PRE_AWARD:APPLICATION:RECEIVED',
+      'PRE_AWARD:APPLICATION:AMEND',
+      'PRE_AWARD:REVIEW:IN_REVIEW',
+      'PRE_AWARD:REVIEW:APPROVED',
+      'POST_AWARD:AGREEMENT:OFFERED',
+      'POST_AWARD:AGREEMENT:CLAIMS_COMPLETE'
     ])
   })
 
-  test('chips a status GAS accepts from any status', () => {
-    const nodes = phasesOf(undefined).graphs.phases.flatMap(({ nodes }) =>
-      nodes.flatMap((node) =>
-        node.kind === 'status' && node.chip ? [[node.position, node.chip]] : []
-      )
-    )
-
-    expect(nodes).toStrictEqual([
-      ['PRE_AWARD:APPLICATION:RECEIVED', 'any status'],
-      ['POST_AWARD:AGREEMENT:CLAIMS_COMPLETE', 'any status']
-    ])
-  })
-
-  test('links each node to the tab with its status and the panel, keeping back', () => {
-    const [preAward] = phasesOf(undefined).graphs.phases
-
-    expect(preAward.nodes[0].href).toBe(
-      panelHref('PRE_AWARD:APPLICATION:RECEIVED')
-    )
-  })
-
-  test('keys the legend on GAS processes, moves only and other phases', () => {
-    expect(phasesOf(undefined).legend).toStrictEqual([
-      { kind: 'strong', label: 'Runs a GAS process on the move' },
-      { kind: 'dashed', label: 'Move only' },
-      { kind: 'other-phase', label: 'Other phase' }
-    ])
-  })
-
-  test('describes the first status when none is asked for, naming its phase and stage', () => {
-    expect(panelOf(undefined)).toMatchObject({
-      badges: [{ label: 'initial', title: 'New applications start here' }],
-      phase: { code: 'PRE_AWARD', name: 'Pre award' },
-      stage: { code: 'APPLICATION', name: 'Application' },
-      waysIn: [{ kind: 'any', processes: [] }]
+  test('submits a pick to this tab, keeping back', () => {
+    expect(phasesOf(undefined).form).toStrictEqual({
+      id: 'phases-pick',
+      action: href,
+      hidden: [
+        { name: 'tab', value: 'phases' },
+        { name: 'back', value: from }
+      ]
     })
   })
 
-  test('names a stage with no name by its code made readable', () => {
-    expect(panelOf('APPROVED')?.stage).toStrictEqual({
-      code: 'REVIEW',
-      name: 'Review'
+  test('names the phase and stage, badges the initial and amendable statuses', () => {
+    expect(panelOf('PRE_AWARD:APPLICATION:RECEIVED')).toMatchObject({
+      name: 'Application received',
+      badges: ['initial'],
+      phase: 'Pre award',
+      stage: 'Application'
     })
-  })
-
-  test('badges an amendable status, saying what it means', () => {
     expect(panelOf('PRE_AWARD:APPLICATION:AMEND')?.badges).toStrictEqual([
-      {
-        label: 'amendable',
-        title:
-          'The applicant can submit an amended application from here (amendablePositions)'
-      }
+      'amendable'
     ])
   })
 
-  test("lists the ways in by name, the stage named only outside the status's own, the code beneath", () => {
-    expect(panelOf('PRE_AWARD:APPLICATION:AMEND')?.waysIn).toStrictEqual([
+  test('says what a status runs, or that it is a move only', () => {
+    expect(panelOf('PRE_AWARD:APPLICATION:AMEND')?.runs).toStrictEqual({
+      kind: 'processes',
+      processes: ['NOTIFY']
+    })
+    expect(panelOf('PRE_AWARD:REVIEW:IN_REVIEW')?.runs).toStrictEqual({
+      kind: 'move-only'
+    })
+  })
+
+  test('lists the ways in by link, a code nothing matches, and from any status', () => {
+    expect(panelOf('PRE_AWARD:APPLICATION:AMEND')?.waysIn).toMatchObject([
       {
         kind: 'move',
         from: {
           name: 'Application received',
-          stageName: null,
-          code: 'RECEIVED',
-          position: 'PRE_AWARD:APPLICATION:RECEIVED',
-          href: panelHref('PRE_AWARD:APPLICATION:RECEIVED')
-        },
-        processes: [],
-        bareCode: null
-      },
-      {
-        kind: 'move',
-        from: {
-          name: 'In review',
-          stageName: 'Review',
-          code: 'PRE_AWARD:REVIEW:IN_REVIEW',
-          position: 'PRE_AWARD:REVIEW:IN_REVIEW',
-          href: panelHref('PRE_AWARD:REVIEW:IN_REVIEW')
-        },
-        processes: ['NOTIFY'],
-        bareCode: null
-      },
-      {
-        kind: 'code',
-        code: 'PRE_AWARD:REVIEW:ON_HOLD',
-        processes: ['HOLD', 'NOTIFY'],
-        bareCode: null
-      }
-    ])
-  })
-
-  test('says what triggers each way out, keyed on the selected status’s stage', () => {
-    const [toAmend, toApproved] = panelOf('PRE_AWARD:REVIEW:IN_REVIEW')!.waysOut
-
-    expect(toAmend).toMatchObject({
-      to: { name: 'Amend', stageName: 'Application' },
-      processes: ['NOTIFY'],
-      triggers: [
-        {
-          kind: 'sends',
-          source: 'CW',
-          code: 'PRE_AWARD:REVIEW_APPLICATION:RFI_SENT'
+          href: statusHref('PRE_AWARD:APPLICATION:RECEIVED')
         }
-      ],
-      untriggered: false
-    })
-    expect(toApproved).toMatchObject({ triggers: [], untriggered: false })
-  })
-
-  test('says the last claim triggers its move', () => {
-    const waysOut = panelOf('POST_AWARD:AGREEMENT:OFFERED')!.waysOut
-
-    expect(waysOut).toStrictEqual([])
-    expect(
-      panelOf('POST_AWARD:AGREEMENT:CLAIMS_COMPLETE')!.triggeredBy
-    ).toStrictEqual([
-      {
-        kind: 'claim',
-        at: {
-          name: 'Offered',
-          stageName: null,
-          code: 'OFFERED',
-          position: 'POST_AWARD:AGREEMENT:OFFERED',
-          href: `${href}?tab=phases&back=${encodeURIComponent(from)}&status=${encodeURIComponent('POST_AWARD:AGREEMENT:OFFERED')}#panel`
-        },
-        href: `${href}?tab=entitlements&back=${encodeURIComponent(from)}`
-      }
+      },
+      { kind: 'move', from: { name: 'In review' } },
+      { kind: 'code', code: 'PRE_AWARD:REVIEW:ON_HOLD' }
+    ])
+    expect(panelOf('PRE_AWARD:APPLICATION:RECEIVED')?.waysIn).toStrictEqual([
+      { kind: 'any' }
     ])
   })
 
-  test('names each trigger by its source and the stage it is keyed on', () => {
-    expect(panelOf('POST_AWARD:AGREEMENT:OFFERED')?.triggeredBy).toStrictEqual([
+  test('lists the ways out by link', () => {
+    expect(
+      panelOf('PRE_AWARD:APPLICATION:RECEIVED')?.waysOut.map(({ name }) => name)
+    ).toStrictEqual(['Amend', 'In review'])
+  })
+
+  test('names each trigger by its source and the stage it is keyed on, warning of a source GAS does not name', () => {
+    expect(panelOf('POST_AWARD:AGREEMENT:OFFERED')?.triggeredBy).toMatchObject([
       {
         kind: 'external',
         source: 'Agreements',
+        unknown: false,
         code: 'offered',
-        href: null,
-        stageName: 'Agreement',
-        missingStage: null
+        stageName: 'Agreement'
       },
       {
         kind: 'external',
         source: 'unknown source XX',
-        code: 'odd',
-        href: null,
-        stageName: 'Agreement',
-        missingStage: null
+        unknown: true,
+        code: 'odd'
       }
     ])
   })
 
   test("links a CW trigger to the workflow's status, coming back to this one", () => {
-    const workflowHref = (code: string, back: string) =>
-      `/workflow?status=${code}&back=${back}`
+    const [trigger] =
+      panelOf(
+        'PRE_AWARD:APPLICATION:AMEND',
+        lifecycle,
+        (code, back) => `/wf?status=${code}&back=${back}`
+      )?.triggeredBy ?? []
 
-    expect(
-      panelOf('PRE_AWARD:APPLICATION:AMEND', workflowHref)?.triggeredBy[0]
-    ).toMatchObject({
-      href: `/workflow?status=PRE_AWARD:REVIEW_APPLICATION:RFI_SENT&back=${statusHref('PRE_AWARD:APPLICATION:AMEND')}`
+    expect(trigger).toMatchObject({
+      kind: 'external',
+      source: 'CW',
+      href: `/wf?status=PRE_AWARD:REVIEW_APPLICATION:RFI_SENT&back=${statusHref('PRE_AWARD:APPLICATION:AMEND')}`,
+      missingStage: null
     })
   })
 
-  test('marks a mapping keyed on a stage this version has not got', () => {
-    const legacy: GrantLifecycle = {
-      ...lifecycle,
-      externalMappings: [
-        {
-          source: 'CW',
-          code: 'TRIAGED',
-          whileIn: 'PRE_AWARD:LEGACY_TRIAGE',
-          mappedTo: '::AMEND',
-          to: 'PRE_AWARD:APPLICATION:AMEND'
-        }
-      ]
-    }
-
+  test('says the last claim triggers its move, linking Entitlements', () => {
     expect(
-      panelOf('PRE_AWARD:APPLICATION:AMEND', null, legacy)?.triggeredBy
+      panelOf('POST_AWARD:AGREEMENT:CLAIMS_COMPLETE')?.triggeredBy
     ).toMatchObject([
-      { stageName: 'Legacy triage', missingStage: 'LEGACY_TRIAGE' }
+      {
+        kind: 'claim',
+        at: { name: 'Offered' },
+        href: `${href}?tab=entitlements&back=%2Fdev-ops%2Fgrants`
+      }
     ])
   })
 
-  test('sets nothing from a mapping GAS cannot read or that lands off the map', () => {
-    const setters = lifecycle.phases
-      .flatMap((phase) =>
-        phase.stages.flatMap((stage) =>
-          stage.statuses.map(
-            (status) => `${phase.code}:${stage.code}:${status.code}`
-          )
-        )
-      )
-      .map((position) => JSON.stringify(panelOf(position)?.triggeredBy))
-      .join()
-
-    expect(setters).not.toContain('BROKEN')
-    expect(setters).not.toContain('OFF_MAP')
-  })
-
   test('says the initial status is set on submission when nothing else sets it', () => {
-    const initialOnly: GrantLifecycle = {
-      ...lifecycle,
-      externalMappings: []
-    }
-
-    expect(panelOf(undefined, null, initialOnly)).toMatchObject({
-      triggeredBy: [],
-      noTrigger: 'initial'
-    })
-  })
-})
-
-describe('toGrantPhases without what GAS processes do, as from an older GAS', () => {
-  test('never says a move or a status has no trigger, nor flags a node', () => {
-    const panel = panelOf('PRE_AWARD:REVIEW:APPROVED')
-
-    expect(panel).toMatchObject({
-      badges: [],
-      triggeredBy: [],
-      noTrigger: null,
-      undefinedTargets: []
-    })
-    expect(panel?.waysOut.every(({ untriggered }) => !untriggered)).toBe(true)
-    expect(
-      phasesOf(undefined)
-        .graphs.phases.flatMap(({ nodes }) => nodes)
-        .some(({ state }) => state === 'flagged')
-    ).toBe(false)
+    expect(panelOf('PRE_AWARD:APPLICATION:RECEIVED')?.noTrigger).toBe('initial')
   })
 })
 
 describe('toGrantPhases with what GAS processes do', () => {
   test('lists a status a GAS process sets itself under Triggered by', () => {
     expect(
-      panelOf('PRE_AWARD:REVIEW:APPROVED', null, withEffects)?.triggeredBy
+      panelOf('PRE_AWARD:REVIEW:APPROVED', withEffects)?.triggeredBy
     ).toStrictEqual([
       {
         kind: 'gas',
@@ -499,38 +387,24 @@ describe('toGrantPhases with what GAS processes do', () => {
     ])
   })
 
-  test('says the process triggers the move from the status it runs on to the one it sets', () => {
-    const waysOut = panelOf(
-      'PRE_AWARD:REVIEW:IN_REVIEW',
-      null,
-      withEffects
-    )?.waysOut
-
-    expect(waysOut?.[1]).toMatchObject({
-      to: { position: 'PRE_AWARD:REVIEW:APPROVED' },
-      triggers: [{ kind: 'gas', process: 'REQUEST_APPLICATION_WITHDRAWAL' }],
-      untriggered: false
-    })
-  })
-
-  test('warns of a status GAS sets that the grant does not define, on the move target', () => {
+  test('warns of a status GAS sets that the grant does not define', () => {
     expect(
-      panelOf('PRE_AWARD:REVIEW:IN_REVIEW', null, withEffects)?.undefinedTargets
+      panelOf('PRE_AWARD:REVIEW:IN_REVIEW', withEffects)?.undefinedTargets
     ).toStrictEqual([
       { position: 'PRE_AWARD:REVIEW:WITHDRAWN', onlyWhen: null }
     ])
   })
 
-  test('warns of a way out nothing in this version triggers', () => {
+  test('counts only the processes GAS has a handler for', () => {
     expect(
-      panelOf('PRE_AWARD:APPLICATION:RECEIVED', null, withEffects)?.waysOut
-    ).toMatchObject([
-      { to: { position: 'PRE_AWARD:APPLICATION:AMEND' }, untriggered: true },
-      { to: { position: 'PRE_AWARD:REVIEW:IN_REVIEW' }, untriggered: true }
-    ])
+      panelOf('PRE_AWARD:REVIEW:IN_REVIEW', withEffects)?.runs
+    ).toStrictEqual({
+      kind: 'processes',
+      processes: ['REQUEST_APPLICATION_WITHDRAWAL']
+    })
   })
 
-  test('says nothing sets a status nothing triggers, and flags its node', () => {
+  test('says nothing sets a status nothing triggers, and marks it on the map', () => {
     const withClosure: GrantLifecycle = {
       ...withEffects,
       phases: [
@@ -542,211 +416,27 @@ describe('toGrantPhases with what GAS processes do', () => {
         }
       ]
     }
-    const tab = phasesOf('CLOSED', null, withClosure)
 
-    expect(tab.graphs.phases[2].nodes[0].state).toBe('selected')
-    expect(tab.panel?.noTrigger).toBe('nothing')
-    expect(
-      phasesOf(undefined, null, withClosure).graphs.phases[2].nodes[0].state
-    ).toBe('flagged')
-  })
-})
-
-describe('toGrantPhases: what a way runs, once GAS says what its processes do', () => {
-  test('counts only the processes GAS has a handler for', () => {
-    const tab = phasesOf('PRE_AWARD:APPLICATION:AMEND', null, withEffects)
-    const edge = tab.graphs.phases[0].edges.find(({ title }) =>
-      title.startsWith(
-        'PRE_AWARD:REVIEW:IN_REVIEW → PRE_AWARD:APPLICATION:AMEND'
-      )
+    expect(panelOf('CLOSURE:END:CLOSED', withClosure)?.noTrigger).toBe(
+      'nothing'
     )
-
-    expect(tab.panel?.waysIn).toMatchObject([
-      { kind: 'move', processes: [] },
-      { kind: 'move', processes: [] },
-      { kind: 'code', processes: [] }
-    ])
-    expect(edge?.kind).toBe('dashed')
-  })
-
-  test('sets a status from a GAS process run on a way from any status', () => {
-    const fromAny: GrantLifecycle = {
-      ...withEffects,
-      waysIn: [
-        ...withEffects.waysIn,
-        {
-          to: 'POST_AWARD:AGREEMENT:OFFERED',
-          kind: 'any',
-          processes: ['WITHDRAW'],
-          processEffects: [
-            {
-              process: 'WITHDRAW',
-              setsStatus: 'CLAIMS_COMPLETE',
-              tellsCw: true,
-              onlyWhen: null
-            }
-          ]
-        }
-      ]
-    }
-
     expect(
-      panelOf('POST_AWARD:AGREEMENT:CLAIMS_COMPLETE', null, fromAny)
-        ?.triggeredBy
-    ).toContainEqual({
-      kind: 'gas',
-      process: 'WITHDRAW',
-      onEntering: 'Offered',
-      onlyWhen: null
+      stateOf(phasesOf(undefined, null, withClosure), 'CLOSURE:END:CLOSED')
+    ).toMatchObject({
+      icon: 'triangle-alert',
+      iconTone: 'warning',
+      iconLabel: 'Nothing in this version sets it'
     })
   })
 
-  test('names the finding on a flagged node, and keys it in the legend', () => {
-    const tab = phasesOf(undefined, null, withEffects)
-    const flagged = tab.graphs.phases
-      .flatMap(({ nodes }) => nodes)
-      .filter(({ state }) => state === 'flagged')
-
-    expect(flagged.length).toBeGreaterThan(0)
-    expect(
-      flagged.every(({ label }) =>
-        label.endsWith(', finding: nothing in this version sets it')
-      )
-    ).toBe(true)
-    expect(tab.legend).toContainEqual({
-      kind: 'flagged',
-      label: 'Nothing in this version sets it'
-    })
-    expect(phasesOf(undefined).legend.map(({ kind }) => kind)).not.toContain(
-      'flagged'
-    )
-  })
-})
-
-const isBareMove = (wayIn: GrantLifecycle['waysIn'][number]) =>
-  wayIn.kind === 'move' &&
-  wayIn.from === 'PRE_AWARD:REVIEW:IN_REVIEW' &&
-  wayIn.to === 'PRE_AWARD:APPLICATION:AMEND'
-
-const matchedBy = (wayIn: GrantLifecycle['waysIn'][number]) =>
-  isBareMove(wayIn) ? 'status' : 'position'
-
-/** GAS-16's read, which says how each `validFrom` entry matched. */
-const bare: GrantLifecycle = {
-  ...lifecycle,
-  waysIn: lifecycle.waysIn.map((wayIn) =>
-    wayIn.kind === 'any' ? wayIn : { ...wayIn, matchedBy: matchedBy(wayIn) }
-  )
-}
-
-describe('a way matched by a bare status code', () => {
-  test('names the code in Ways in and Ways out', () => {
-    expect(
-      panelOf('PRE_AWARD:APPLICATION:AMEND', null, bare)?.waysIn.map(
-        (way) => way.kind !== 'any' && way.bareCode
-      )
-    ).toEqual([null, { code: 'IN_REVIEW', said: false }, null])
-    expect(
-      panelOf('PRE_AWARD:REVIEW:IN_REVIEW', null, bare)?.waysOut.map(
-        ({ bareCode }) => bareCode
-      )
-    ).toEqual([{ code: 'IN_REVIEW', said: false }, null])
-  })
-
-  test('says it aloud only where the code is in more than one stage of this version', () => {
-    const repeated: GrantLifecycle = {
-      ...bare,
-      phases: bare.phases.map((phase) =>
-        phase.code === 'POST_AWARD'
-          ? {
-              ...phase,
-              stages: phase.stages.map((stage) => ({
-                ...stage,
-                statuses: [...stage.statuses, { code: 'IN_REVIEW' }]
-              }))
-            }
-          : phase
-      )
-    }
-
-    expect(
-      panelOf('PRE_AWARD:REVIEW:IN_REVIEW', null, repeated)?.waysOut[0].bareCode
-    ).toEqual({ code: 'IN_REVIEW', said: true })
-  })
-
-  const bareEdge = (read: GrantLifecycle) =>
-    phasesOf(undefined, null, read)
-      .graphs.phases.flatMap(({ edges }) => edges)
-      .find(({ title }) =>
-        title.startsWith(
-          'PRE_AWARD:REVIEW:IN_REVIEW → PRE_AWARD:APPLICATION:AMEND'
-        )
-      )
-
-  test('draws its edge dotted when it runs no process, and adds its legend item', () => {
-    const quiet: GrantLifecycle = {
-      ...bare,
-      waysIn: bare.waysIn.map((wayIn) =>
-        isBareMove(wayIn) ? { ...wayIn, processes: [] } : wayIn
-      )
-    }
-
-    expect(bareEdge(quiet)?.kind).toBe('dotted')
-    expect(phasesOf(undefined, null, quiet).legend.at(-1)).toEqual({
-      kind: 'dotted',
-      label: 'Matched by status code only, in any stage'
-    })
-  })
-
-  test('draws its edge in the process colour and dotted when it runs a process, and keys that line in the legend', () => {
-    const tab = phasesOf(undefined, null, bare)
-
-    expect(bareEdge(bare)).toEqual(
-      expect.objectContaining({
-        kind: 'strong-dotted',
-        title:
-          'PRE_AWARD:REVIEW:IN_REVIEW → PRE_AWARD:APPLICATION:AMEND: NOTIFY'
-      })
-    )
-    expect(tab.legend.at(-1)).toEqual({
-      kind: 'strong-dotted',
-      label: 'Matched by status code only, in any stage, and runs a GAS process'
-    })
-    expect(tab.legend.map(({ kind }) => kind)).not.toContain('dotted')
-  })
-
-  test('reads the processes GAS-16 names when it knows them', () => {
-    const effects: GrantLifecycle = {
-      ...bare,
-      waysIn: bare.waysIn.map((wayIn) => ({
-        ...wayIn,
-        processEffects: isBareMove(wayIn)
-          ? [
-              {
-                process: 'NOTIFY',
-                setsStatus: null,
-                tellsCw: false,
-                onlyWhen: null
-              }
-            ]
-          : []
-      }))
-    }
-
-    expect(bareEdge(effects)?.kind).toBe('strong-dotted')
-  })
-
-  test('says nothing of how a way matched when GAS does not say', () => {
+  test('never flags a status or says nothing sets it while GAS does not say what its processes do', () => {
     const tab = phasesOf(undefined)
 
+    expect(panelOf('PRE_AWARD:REVIEW:APPROVED')?.noTrigger).toBeNull()
     expect(
-      tab.graphs.phases.flatMap(({ edges }) => edges).map(({ kind }) => kind)
-    ).not.toContain('dotted')
-    expect(tab.legend.map(({ kind }) => kind)).not.toContain('dotted')
-    expect(
-      panelOf('PRE_AWARD:REVIEW:IN_REVIEW')?.waysOut.map(
-        ({ bareCode }) => bareCode
-      )
-    ).toEqual([null, null])
+      tab.phases
+        .flatMap(({ stages }) => stages.flatMap(({ states }) => states))
+        .some(({ iconTone }) => iconTone === 'warning')
+    ).toBe(false)
   })
 })

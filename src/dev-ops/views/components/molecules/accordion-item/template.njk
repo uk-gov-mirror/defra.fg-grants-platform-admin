@@ -1,0 +1,6 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+<details class="{{ cls('gpa-accordion-item' ~ (' is-open' if p.open else ''), p) }}"{% if p.open %} open{% endif %}{% if p.disabled %} data-disabled{% endif %}{% if p.id %} id="{{ p.id }}"{% endif %}{{ attrs(p) }}>
+    <summary class="gpa-accordion-trigger"{% if p.summaryTestId %} data-testid="{{ p.summaryTestId }}"{% endif %}>{{ Icon({ name: 'chevron-right', size: 'sm', classes: 'gpa-accordion-chevron' }) }}{% if p.leading %}<span class="gpa-accordion-leading">{{ p.leading | safe }}</span>{% endif %}<span class="gpa-accordion-title">{{ p.titleHtml | safe if p.titleHtml else p.title }}</span>{% if p.metaHtml %}<span class="gpa-accordion-meta">{{ p.metaHtml | safe }}</span>{% elif p.meta is defined and p.meta !== null %}<span class="gpa-accordion-meta">{{ p.meta }}</span>{% endif %}</summary>
+    <div class="gpa-accordion-panel"{% if p.panelTestId %} data-testid="{{ p.panelTestId }}"{% endif %}>{{ caller() if caller }}</div>
+  </details>

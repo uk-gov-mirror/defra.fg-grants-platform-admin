@@ -43,15 +43,6 @@ export const partsOf = (
       .map((part) => [part.type, part.value])
   )
 
-/** `1 Sep 08:18`: day-first from parts, with `en-US` months because `en-GB` writes `Sept`. */
-const dayClockOptions: Intl.DateTimeFormatOptions = {
-  day: 'numeric',
-  month: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
-  hourCycle: 'h23'
-}
-
 /** `2026-09-16T09:00:00`: the digits a `datetime-local` box carries. */
 const inputOptions: Intl.DateTimeFormatOptions = {
   year: 'numeric',
@@ -68,13 +59,6 @@ export const toZonedInput = (date: Date, zone: Zone): string => {
   const parts = partsOf(formatIn(zone, 'en-CA', inputOptions), date)
 
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`
-}
-
-/** `15 Oct 10:04`. */
-export const toDayClock = (date: Date, zone: Zone): string => {
-  const parts = partsOf(formatIn(zone, 'en-US', dayClockOptions), date)
-
-  return `${parts.day} ${parts.month} ${parts.hour}:${parts.minute}`
 }
 
 /**

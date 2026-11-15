@@ -3,15 +3,20 @@ import type {
   BucketFact,
   Catalogue
 } from './get-catalogue.use-case.ts'
-import type { AgreementDefinition } from './get-grant-page.use-case.ts'
+import type {
+  AgreementDefinition,
+  GrantVersionPage
+} from './get-grant-page.use-case.ts'
 import type {
   StoredAction,
   StoredTransition,
   StoredValueOption,
   StoredWorkflowPhase,
   StoredWorkflowStatus,
-  WorkflowDefinition
+  WorkflowDefinition,
+  WorkflowVersionPage
 } from './get-workflow-page.use-case.ts'
+import type { EventRow } from '../repositories/events.repository.ts'
 
 /** A bucket of events and a bucket of records, shaped as GAS's catalogue describes them. */
 export const outboxBucket: BucketEntry = {
@@ -884,3 +889,95 @@ export const fullCatalogue: Catalogue = {
   ],
   sourceErrors: []
 }
+
+/** A grant version and a workflow version, every file stored and loaded, for their pages' tests. */
+export const fetchedFile = { stored: true, fetchStatus: 'fetched' } as const
+export const pendingFile = { stored: false, fetchStatus: 'pending' } as const
+
+export const grantVersionHeader: GrantVersionPage['header'] = {
+  code: 'woodland-creation',
+  version: '1.2.0',
+  status: 'active',
+  receivedAt: '2026-09-10T15:25:00.000Z',
+  s3Bucket: 'grants-config-dev',
+  files: {
+    grant: { ...fetchedFile, s3Key: 'woodland-creation/1.2.0/grant.json' },
+    agreement: {
+      ...fetchedFile,
+      s3Key: 'woodland-creation/1.2.0/agreement.json'
+    },
+    payment: { ...fetchedFile, s3Key: 'woodland-creation/1.2.0/payment.json' }
+  },
+  versions: [
+    {
+      version: '2.0.0',
+      status: 'draft',
+      receivedAt: '2026-09-15T09:04:00.000Z'
+    },
+    {
+      version: '1.2.0',
+      status: 'active',
+      receivedAt: '2026-09-10T15:25:00.000Z'
+    }
+  ],
+  counterpart: { exists: true }
+}
+
+export const grantVersionOverview: NonNullable<GrantVersionPage['overview']> = {
+  description: 'Funding to plant new woodland on agricultural land.',
+  startDate: '2026-04-01T00:00:00.000Z',
+  adminRole: 'FCP.GrantApplicationsAdmin',
+  storedBytes: 10035
+}
+
+export const workflowVersionHeader: WorkflowVersionPage['header'] = {
+  code: 'woodland-creation',
+  version: '1.2.0',
+  status: 'active',
+  receivedAt: '2026-10-10T16:25:00.000Z',
+  s3Bucket: 'cw-config-dev',
+  files: {
+    workflow: { ...fetchedFile, s3Key: 'woodland-creation/1.2.0/workflow.json' }
+  },
+  versions: [
+    {
+      version: '2.0.0',
+      status: 'draft',
+      receivedAt: '2026-10-15T10:04:00.000Z'
+    },
+    {
+      version: '1.2.0',
+      status: 'active',
+      receivedAt: '2026-10-10T16:25:00.000Z'
+    }
+  ],
+  counterpart: { exists: true }
+}
+
+export const workflowVersionOverview: NonNullable<
+  WorkflowVersionPage['overview']
+> = {
+  schemeName: 'Woodland Creation Offer',
+  requiredRoles: { allOf: ['ROLE_SFI_REFORM'], anyOf: [] },
+  storedBytes: 14540
+}
+
+/** The ConfigVersionUpdated event a version arrived as, as its inbox lists it. */
+export const configEvent = (
+  service: 'gas' | 'caseworking',
+  overrides: Partial<EventRow> = {}
+): EventRow => ({
+  service,
+  box: 'inbox',
+  id: '6716a9c2e4b0a1f2c3d4e5f6',
+  eventId: '5208709c-e2d5-4870-b6ae-ff168bf65726',
+  type: 'ConfigVersionUpdated',
+  status: 'COMPLETED',
+  statusLabel: 'Completed',
+  statusRole: 'success',
+  statusRetrying: false,
+  createdAt: '2026-09-10T15:24:58.000Z',
+  latency: 'took 371ms',
+  latencyTitle: 'Received to completed',
+  ...overrides
+})

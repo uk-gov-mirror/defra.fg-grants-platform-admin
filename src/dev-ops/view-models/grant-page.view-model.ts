@@ -1,19 +1,13 @@
 import type {
   GrantVersionHeader,
-  GrantVersionOverview,
-  GrantVersionPage,
-  GrantVersionRef
+  GrantVersionPage
 } from '../use-cases/get-grant-page.use-case.ts'
-import type { Catalogue } from '../use-cases/get-catalogue.use-case.ts'
-import type { Zone } from './zoned-clock.ts'
 import { grantTabs, offersTab } from '../use-cases/grant-tabs.ts'
 import type { GrantTabId } from '../use-cases/grant-tabs.ts'
-import { toAdminHref } from '../../grant-ops/view-models/allow-list-page.view-model.ts'
-import { toVersionListHref } from './bucket-links.ts'
 import type { DefinitionFetchFlash } from './definition-fetch.ts'
-import { toUnavailableSources } from './event-row.ts'
 import { toGrantQuestions } from './grant-questions.ts'
-import type { GrantQuestionsTab } from './grant-questions.ts'
+import { toQuestionsView } from './grant-questions-table.ts'
+import type { QuestionsView } from './grant-questions-table.ts'
 import { toGrantActions } from './grant-actions.ts'
 import type { GrantActionsTab } from './grant-actions.ts'
 import { toAgreementTab } from './grant-agreement.view-model.ts'
@@ -25,36 +19,29 @@ import type { GrantPhasesTab } from './grant-phases.view-model.ts'
 import { grantType, toGrantHref } from './grants-page.view-model.ts'
 import { toPaymentDefinition } from './payment-definition.ts'
 import type { PaymentDefinitionView } from './payment-definition.ts'
-import {
-  toDateFact,
-  toDayFact,
-  toEvents,
-  toLinkFact,
-  toMonoFact,
-  toRaw,
-  toReleaseCounterpartFacts,
-  toSizeFact,
-  toTabHref,
-  toTabSection,
-  toTabs,
-  toTextFact
-} from './record-page.view-model.ts'
-import type { Fact, RawTab, RecordPageModel } from './record-page.view-model.ts'
-import type { RecordType } from './record-type.ts'
-import { toFileLines } from './version-banner.ts'
-import { toNotStored, toVersionShell } from './version-page.ts'
-import type { NotStored, VersionShell } from './version-page.ts'
-import { toWorkflowHref, workflowType } from './workflows-page.view-model.ts'
-import { roles } from '../../common/roles.ts'
+import { toTabHref } from './record-page.view-model.ts'
+import type { Times } from './times.ts'
+import type { VersionAlert } from './version-alerts.ts'
+import { toVersionEvent } from './version-event.ts'
+import type { VersionEvent } from './version-event.ts'
+import { toFileRows } from './version-files.ts'
+import type { FileRow } from './version-files.ts'
+import { toVersionShell } from './version-page.ts'
+import type { VersionPageShell, VersionTab } from './version-page.ts'
+import { toWorkflowHref } from './workflows-page.view-model.ts'
 
-export interface GrantPageModel extends RecordPageModel, VersionShell {
-  notStored: NotStored | null
-  questions: GrantQuestionsTab | null
-  actions: GrantActionsTab | null
-  agreement: AgreementTab | null
+export interface GrantPageModel extends VersionPageShell {
+  /** Overview's: the event the version arrived as, and its files. */
+  event: VersionEvent | null
+  files: FileRow[] | null
   phases: GrantPhasesTab | null
+  questions: QuestionsView | null
+  actions: GrantActionsTab | null
   entitlements: EntitlementsTab | null
-  payment: { view: PaymentDefinitionView | null; raw: RawTab } | null
+  agreement: AgreementTab | null
+  payment: PaymentDefinitionView | null
+  /** The stored grant definition, as Raw shows it. */
+  raw: string | null
 }
 
 /** Query params the grant's tabs read. */
@@ -63,115 +50,42 @@ export interface GrantPageQuery {
   status?: string
 }
 
-const toAllowListHref = (code: string): string =>
-  `${toAdminHref(code)}#who-can-apply`
+interface GrantPageOptions {
+  notice?: DefinitionFetchFlash
+  query: GrantPageQuery
+  times: Times
+}
 
 /** The version GAS administers the grant by: its newest active one. */
 const isCurrent = ({ version, versions }: GrantVersionHeader): boolean =>
   versions.find(({ status }) => status === 'active')?.version === version
 
-/** A role not stored is unknown, never blank. */
-const isStoredBlank = (
-  { files }: GrantVersionHeader,
-  { adminRole }: GrantVersionOverview
-): boolean => files.grant?.stored === true && !adminRole?.trim()
+/** Only the Overview reads the role, and a role not stored is unknown, never blank. */
+const isBlankRole = (overview: GrantVersionPage['overview']): boolean =>
+  overview ? !overview.adminRole?.trim() : false
 
-/** GAS refuses administration to everyone while that version's grant has no admin role. */
-const hasNoAdminRole = (
-  header: GrantVersionHeader,
-  overview: GrantVersionOverview
-): boolean => isCurrent(header) && isStoredBlank(header, overview)
+/** GAS refuses administration to everyone while its current version's stored grant has no admin role. */
+const hasNoAdminRole = ({ header, overview }: GrantVersionPage): boolean =>
+  isCurrent(header) && header.files.grant.stored && isBlankRole(overview)
 
-const toAllowListText = (note: string): Fact => ({
-  id: 'who-can-apply',
-  label: 'Who can apply',
-  kind: 'text',
-  text: 'Allow list',
-  note
-})
-
-/** The allow list's link, or why it would refuse when that is known before the click. */
-const toAllowListFact = (
-  header: GrantVersionHeader,
-  overview: GrantVersionOverview,
-  canAdministerGrants: boolean
-): Fact => {
-  if (hasNoAdminRole(header, overview)) {
-    return toAllowListText(
-      'the grant has no admin role, so GAS refuses administration to everyone'
-    )
-  }
-
-  return canAdministerGrants
-    ? toLinkFact(
-        'who-can-apply',
-        'Who can apply',
-        'Allow list',
-        toAllowListHref(header.code)
-      )
-    : toAllowListText(`needs the ${roles.grantApplicationsAdmin} role`)
+const noAdminRole: VersionAlert = {
+  tone: 'warning',
+  title:
+    'This grant has no admin role, so GAS refuses administration to everyone.',
+  text: [
+    'Administration needs an admin role in the grant definition (',
+    { code: 'admin.role' },
+    ', such as ',
+    { code: 'ROLE_WMP_ADMIN' },
+    '). Publish a version that sets one.'
+  ],
+  action: null
 }
 
-const applicationsBucket = 'gas.applications'
-
-const toApplicationsHref = (
-  catalogue: Catalogue | null,
-  { code, version }: GrantVersionRef
-): string | null =>
-  toVersionListHref(
-    catalogue,
-    applicationsBucket,
-    { codeFact: 'code', versionFact: 'currentConfigVersion' },
-    { code, version }
-  )
-
-const toFacts = (
-  header: GrantVersionHeader,
-  overview: GrantVersionOverview,
-  catalogue: Catalogue | null,
-  canAdministerGrants: boolean,
-  zone: Zone
-): Fact[][] => [
-  [
-    toTextFact('description', 'Name', overview.description),
-    toDayFact(
-      'start-date',
-      'Start date (metadata)',
-      overview.startDate,
-      'not used by GAS',
-      zone
-    ),
-    toDateFact('received', 'Received', header.receivedAt, zone),
-    toMonoFact('admin-role', 'Admin role', overview.adminRole),
-    {
-      id: 'definitions',
-      label: 'Definitions',
-      kind: 'lines',
-      lines: toFileLines(grantType, header, catalogue)
-    }
-  ],
-  [
-    ...toReleaseCounterpartFacts(
-      workflowType,
-      header.counterpart,
-      toWorkflowHref(header)
-    ),
-    toLinkFact(
-      'applications',
-      'Applications',
-      'View applications',
-      toApplicationsHref(catalogue, header)
-    ),
-    toAllowListFact(header, overview, canAdministerGrants),
-    toTextFact('versions', 'Versions', String(header.versions.length)),
-    toSizeFact(overview.storedBytes, 'Definition size')
-  ]
-]
-
-const toOfferedGrantType = (header: GrantVersionHeader): RecordType => ({
-  ...grantType,
-  tabs: grantType.tabs.filter(({ id }) => offersTab(header, id as GrantTabId))
-})
+const toVersionTabs = (header: GrantVersionHeader): VersionTab[] =>
+  grantType.tabs
+    .filter(({ id }) => offersTab(header, id as GrantTabId))
+    .map(({ id, label }) => ({ id, label, ...grantTabs[id as GrantTabId] }))
 
 const toEntitlementsHrefs = (href: string, from: string) => ({
   phases: (status: string | null) =>
@@ -200,22 +114,6 @@ const toPaymentFileState = ({
   return files.payment.stored ? 'stored' : 'not-stored'
 }
 
-const toEntitlements = (
-  { header, entitlements }: GrantVersionPage,
-  tab: GrantTabId,
-  href: string,
-  from: string
-): EntitlementsTab | null =>
-  tab === 'entitlements' && entitlements
-    ? toEntitlementsTab(
-        {
-          entitlements,
-          payment: toPaymentFileState(header)
-        },
-        toEntitlementsHrefs(href, from)
-      )
-    : null
-
 /** A tab's link, or null when the version has no file for that tab, so it is not offered. */
 const toFileTabHref = (
   { files }: GrantVersionHeader,
@@ -224,129 +122,122 @@ const toFileTabHref = (
   from: string
 ): string | null => (files[file] ? toTabHref(href, file, from) : null)
 
-const toPaymentTab = (
-  { header, payment, sectionErrors }: GrantVersionPage,
-  tab: GrantTabId,
-  href: string,
+interface TabInput {
+  page: GrantVersionPage
+  href: string
   from: string
-): GrantPageModel['payment'] =>
-  tab === 'payment'
-    ? {
-        view: payment
-          ? toPaymentDefinition(payment, {
-              version: header.version,
-              hrefs: {
-                entitlements: toTabHref(href, 'entitlements', from),
-                agreement: toFileTabHref(header, 'agreement', href, from)
-              }
-            })
-          : null,
-        raw: toRaw(payment, sectionErrors, 'payment')
-      }
+  query: GrantPageQuery
+}
+
+const toPhases = ({ page, href, from, query }: TabInput) =>
+  toGrantPhases(page, {
+    status: query.status,
+    href,
+    from,
+    workflowHref: toWorkflowPhasesHref(page.header)
+  })
+
+const toQuestions = ({ page }: TabInput) =>
+  page.definition ? toQuestionsView(toGrantQuestions(page.definition)) : null
+
+const toActions = ({ page }: TabInput) =>
+  page.definition ? toGrantActions(page.definition.actions) : null
+
+const toEntitlements = ({ page, href, from }: TabInput) =>
+  page.entitlements
+    ? toEntitlementsTab(
+        {
+          entitlements: page.entitlements,
+          payment: toPaymentFileState(page.header)
+        },
+        toEntitlementsHrefs(href, from)
+      )
     : null
 
-const agreementFetchStatus = ({ files }: GrantVersionHeader) =>
-  files.agreement?.fetchStatus ?? null
-
-const toAgreement = (
-  { header, agreement }: GrantVersionPage,
-  tab: GrantTabId,
-  href: string,
-  from: string
-): AgreementTab | null =>
-  tab === 'agreement' && agreement
-    ? toAgreementTab(agreement, {
-        version: header.version,
-        fetchStatus: agreementFetchStatus(header),
+const toAgreement = ({ page, href, from }: TabInput) =>
+  page.agreement
+    ? toAgreementTab(page.agreement, {
+        version: page.header.version,
+        fetchStatus: page.header.files.agreement?.fetchStatus ?? null,
         hrefs: {
           phases: toTabHref(href, 'phases', from),
-          payment: toFileTabHref(header, 'payment', href, from)
+          payment: toFileTabHref(page.header, 'payment', href, from)
         }
       })
     : null
 
-const toQuestions = (
-  { definition }: GrantVersionPage,
-  tab: GrantTabId
-): GrantQuestionsTab | null =>
-  tab === 'questions' && definition ? toGrantQuestions(definition) : null
-
-const toActions = (
-  { definition }: GrantVersionPage,
-  tab: GrantTabId
-): GrantActionsTab | null =>
-  tab === 'actions' && definition ? toGrantActions(definition.actions) : null
-
-const toPhases = (
-  page: GrantVersionPage,
-  tab: GrantTabId,
-  { status }: GrantPageQuery,
-  href: string,
-  from: string
-): GrantPhasesTab | null =>
-  tab === 'phases'
-    ? toGrantPhases(page, {
-        status,
-        href,
-        from,
-        workflowHref: toWorkflowPhasesHref(page.header)
+const toPayment = ({ page, href, from }: TabInput) =>
+  page.payment
+    ? toPaymentDefinition(page.payment, {
+        version: page.header.version,
+        hrefs: {
+          entitlements: toTabHref(href, 'entitlements', from),
+          agreement: toFileTabHref(page.header, 'agreement', href, from)
+        }
       })
     : null
 
-const toOverviewFacts = (
-  { header, overview }: GrantVersionPage,
-  catalogue: Catalogue | null,
-  canAdministerGrants: boolean,
-  zone: Zone
-): Fact[][] | null =>
-  overview
-    ? toFacts(header, overview, catalogue, canAdministerGrants, zone)
-    : null
+const toRaw = ({ page }: TabInput) =>
+  page.definition ? JSON.stringify(page.definition, null, 2) : null
+
+/** Each tab's own model, built only on its own tab. */
+const tabModels = {
+  phases: toPhases,
+  questions: toQuestions,
+  actions: toActions,
+  entitlements: toEntitlements,
+  agreement: toAgreement,
+  payment: toPayment,
+  raw: toRaw
+}
+
+type TabModels = {
+  [K in keyof typeof tabModels]: ReturnType<(typeof tabModels)[K]> | null
+}
+
+const toTabModels = (tab: GrantTabId, input: TabInput): TabModels => {
+  const models = Object.fromEntries(
+    Object.keys(tabModels).map((id) => [id, null])
+  ) as TabModels
+  const build = tabModels[tab as keyof typeof tabModels] as
+    | ((input: TabInput) => unknown)
+    | undefined
+
+  return build ? { ...models, [tab]: build(input) } : models
+}
+
+const toOverview = (page: GrantVersionPage, tab: GrantTabId, href: string) =>
+  tab === 'overview'
+    ? {
+        event: toVersionEvent(page.events, 'GAS', href),
+        files: toFileRows(page.header)
+      }
+    : { event: null, files: null }
 
 export const toGrantPage = (
   page: GrantVersionPage,
   tab: GrantTabId,
   from: string,
-  {
-    notice,
-    query,
-    catalogue,
-    canAdministerGrants,
-    zone
-  }: {
-    notice?: DefinitionFetchFlash
-    query: GrantPageQuery
-    catalogue: Catalogue | null
-    /** The session holds the role every Grant Ops page needs. */
-    canAdministerGrants: boolean
-    zone: Zone
-  },
-  now: Date = new Date()
+  { notice, query, times }: GrantPageOptions
 ): GrantPageModel => {
   const href = toGrantHref(page.header)
-  const { read } = grantTabs[tab]
+  const tabs = toVersionTabs(page.header)
 
   return {
-    record: grantType,
-    ref: page.header.code,
-    tabs: toTabs(toOfferedGrantType(page.header), href, tab, from),
-    tab,
-    facts: toOverviewFacts(page, catalogue, canAdministerGrants, zone),
-    events: toEvents(page.events, now, zone, toTabHref(href, 'events', from)),
-    ...toTabSection(page.definition, page.sectionErrors, tab, read),
-    unavailableSources: toUnavailableSources(page.sourceErrors),
-    ...toVersionShell(grantType, page.header, tab, from, {
+    ...toVersionShell({
+      kind: 'grant',
+      record: grantType,
+      header: page.header,
+      tabs,
+      tab: tabs.find(({ id }) => id === tab) ?? tabs[0],
+      from,
+      sectionErrors: page.sectionErrors,
       notice,
-      catalogue,
-      now,
-      zone
+      times,
+      extraAlerts:
+        tab === 'overview' && hasNoAdminRole(page) ? [noAdminRole] : []
     }),
-    notStored: toNotStored(page.header, tab, grantTabs[tab].file),
-    phases: toPhases(page, tab, query, href, from),
-    questions: toQuestions(page, tab),
-    actions: toActions(page, tab),
-    entitlements: toEntitlements(page, tab, href, from),
-    agreement: toAgreement(page, tab, href, from),
-    payment: toPaymentTab(page, tab, href, from)
+    ...toOverview(page, tab, toTabHref(href, 'overview', from)),
+    ...toTabModels(tab, { page, href, from, query })
   }
 }

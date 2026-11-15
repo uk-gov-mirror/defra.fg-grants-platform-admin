@@ -1,6 +1,0 @@
-{%- if params.instant -%}
-  <time class="ml-auto block w-fit font-mono text-sm tabular-nums" datetime="{{ params.instant }}" title="{{ params.precise }}" data-testid="{{ params.testId }}-at">{{ params.text }}<span class="sr-only" data-testid="{{ params.testId }}-absolute"> ({{ params.precise }})</span></time>
-{%- else -%}
-  {# No instant to name, so no `time`: its text would not be machine-readable. #}
-  <span class="ml-auto block w-fit font-mono text-sm tabular-nums" data-testid="{{ params.testId }}-at">{{ params.text }}</span>
-{%- endif -%}

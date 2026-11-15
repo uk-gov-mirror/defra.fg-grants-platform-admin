@@ -80,8 +80,6 @@ export interface EntitlementsTab {
   claims: {
     move: Move | null
     paymentHref: string | null
-    /** The payment file's state, said as the link to its tab. */
-    paymentLink: string | null
     roles: { allOf: string[]; anyOf: string[] } | null
   }
   templates: TemplateCard[]
@@ -92,15 +90,6 @@ interface EntitlementsSource {
   /** Null when the version names no payment file. */
   payment: PaymentFileState | null
 }
-
-const paymentLinkWords: Record<PaymentFileState, string> = {
-  stored: 'Stored',
-  'not-stored': 'Not stored yet',
-  failed: 'Failed'
-}
-
-const toPaymentLink = ({ payment }: EntitlementsSource): string | null =>
-  payment ? `${paymentLinkWords[payment]} · Payment tab ›` : null
 
 interface EntitlementsHrefs {
   /** The Phases tab, with that status selected. */
@@ -377,7 +366,6 @@ export const toEntitlementsTab = (
     claims: {
       move,
       paymentHref: source.payment ? hrefs.payment : null,
-      paymentLink: toPaymentLink(source),
       roles: toRoles(claims.requiredRoles)
     },
     templates: entitlementTemplates.map(toCard)

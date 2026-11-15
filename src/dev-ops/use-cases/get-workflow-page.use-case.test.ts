@@ -1,3 +1,4 @@
+import { logger } from '../../common/logger.ts'
 import { findWorkflowVersionPage } from '../repositories/workflows.repository.ts'
 import type { WorkflowVersionPage } from '../repositories/workflows.repository.ts'
 import { getWorkflowPageUseCase } from './get-workflow-page.use-case.ts'
@@ -31,10 +32,8 @@ describe('getWorkflowPageUseCase', () => {
   })
 
   test.each([
-    ['overview', 'overview'],
     ['phases', 'definition'],
     ['pages', 'definition'],
-    ['events', 'events'],
     ['raw', 'raw']
   ] as const)("reads the %s tab from GAS's %s read", async (tab, read) => {
     const found = {
@@ -47,6 +46,131 @@ describe('getWorkflowPageUseCase', () => {
       page: found
     })
     expect(findWorkflowVersionPage).toHaveBeenCalledWith(ref, read)
+  })
+
+  test("reads the version's events beside the Overview, for its Event row", async () => {
+    const events = { rows: [], more: false }
+    vi.mocked(findWorkflowVersionPage).mockImplementation(async (_ref, read) =>
+      read === 'events' ? { ...stored, events } : stored
+    )
+
+    await expect(getWorkflowPageUseCase(ref, 'overview')).resolves.toEqual({
+      outcome: 'found',
+      page: { ...stored, events }
+    })
+    expect(findWorkflowVersionPage).toHaveBeenCalledWith(ref, 'overview')
+    expect(findWorkflowVersionPage).toHaveBeenCalledWith(ref, 'events')
+  })
+
+  test('reads an inbox GAS answered for without reading it, CW-BE, as unread, not as empty', async () => {
+    const found = stored
+    vi.mocked(findWorkflowVersionPage)
+      .mockResolvedValueOnce(found)
+      .mockResolvedValueOnce({
+        ...found,
+        events: { rows: [], more: false },
+        sourceErrors: [{ hop: 'CW-BE' }]
+      })
+
+    await expect(getWorkflowPageUseCase(ref, 'overview')).resolves.toEqual({
+      outcome: 'found',
+      page: { ...found, events: null }
+    })
+  })
+
+  test('reads the events beside the version, not after it', async () => {
+    const found = stored
+    const events = { rows: [], more: false }
+    const answers: (() => void)[] = []
+    vi.mocked(findWorkflowVersionPage).mockImplementation(
+      (_ref, read) =>
+        new Promise((resolve) => {
+          answers.push(() =>
+            resolve(read === 'events' ? { ...found, events } : found)
+          )
+        })
+    )
+
+    const reading = getWorkflowPageUseCase(ref, 'overview')
+
+    expect(findWorkflowVersionPage).toHaveBeenCalledWith(ref, 'overview')
+    expect(findWorkflowVersionPage).toHaveBeenCalledWith(ref, 'events')
+    answers.forEach((answer) => answer())
+    await expect(reading).resolves.toEqual({
+      outcome: 'found',
+      page: { ...found, events }
+    })
+  })
+
+  test.each([
+    [
+      'not found',
+      responseError(404, { reason: 'WORKFLOW_VERSION_NOT_FOUND' }),
+      'not-found'
+    ],
+    ['failing', responseError(502), 'unavailable']
+  ])(
+    'answers a version that is %s at once, not waiting for its events',
+    async (_name, error, outcome) => {
+      vi.useFakeTimers()
+      vi.mocked(findWorkflowVersionPage).mockImplementation((_ref, read) =>
+        read === 'events' ? new Promise(() => {}) : Promise.reject(error)
+      )
+
+      const answered = vi.fn()
+      const reading = getWorkflowPageUseCase(ref, 'overview').then(answered)
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(answered).toHaveBeenCalledWith({ outcome, page: null })
+      await reading
+      vi.useRealTimers()
+    }
+  )
+
+  test('drops the events of a version that is not found, saying nothing of them', async () => {
+    vi.mocked(findWorkflowVersionPage).mockImplementation(
+      async (_ref, read) => {
+        throw read === 'events'
+          ? responseError(500)
+          : responseError(404, { reason: 'WORKFLOW_VERSION_NOT_FOUND' })
+      }
+    )
+
+    await expect(getWorkflowPageUseCase(ref, 'overview')).resolves.toEqual({
+      outcome: 'not-found',
+      page: null
+    })
+    expect(logger.warn).not.toHaveBeenCalled()
+  })
+
+  test("answers with the version's failure when its events fail too, saying nothing of them", async () => {
+    vi.mocked(findWorkflowVersionPage).mockRejectedValue(responseError(502))
+
+    await expect(getWorkflowPageUseCase(ref, 'overview')).resolves.toEqual({
+      outcome: 'unavailable',
+      page: null
+    })
+    expect(logger.warn).not.toHaveBeenCalled()
+  })
+
+  test('keeps the Overview when its events cannot be read', async () => {
+    vi.mocked(findWorkflowVersionPage).mockImplementation(
+      async (_ref, read) => {
+        if (read === 'events') {
+          throw responseError(500)
+        }
+
+        return stored
+      }
+    )
+
+    await expect(getWorkflowPageUseCase(ref, 'overview')).resolves.toEqual({
+      outcome: 'found',
+      page: { ...stored, events: null }
+    })
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("Could not read the workflow version's events")
+    )
   })
 
   test("is not found only on GAS's own miss of the version", async () => {

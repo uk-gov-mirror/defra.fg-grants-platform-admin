@@ -1,5 +1,6 @@
 import type { Server } from '@hapi/hapi'
 
+import { roles } from '../common/roles.ts'
 import { statusCodes } from '../common/status-codes.ts'
 import { plugins } from '../main.ts'
 import { createServer } from '../server/index.ts'
@@ -40,10 +41,11 @@ const devOpsRoutes = (): Route[] =>
     .map(({ method, path }) => ({ method, url: address(path) }))
 
 const answers = async <T extends object>(
-  inject: (route: Route) => Promise<T>
+  inject: (route: Route) => Promise<T>,
+  routes = devOpsRoutes()
 ) =>
   Promise.all(
-    devOpsRoutes().map(async (route) => ({
+    routes.map(async (route) => ({
       route: `${route.method.toUpperCase()} ${route.url}`,
       ...(await inject(route))
     }))
@@ -62,6 +64,19 @@ const anonymously = async (route: Route) => {
   const { statusCode, headers } = await server.inject(route)
 
   return { statusCode, location: headers.location }
+}
+
+const crossSite = async (route: Route) => {
+  const { statusCode } = await server.inject({
+    ...route,
+    headers: { 'sec-fetch-site': 'cross-site' },
+    auth: {
+      strategy: 'session',
+      credentials: { user, scope: [roles.grantOperationsAdmin] }
+    }
+  })
+
+  return { statusCode }
 }
 
 const sameFor = <T>(given: { route: string }[], answer: T) =>
@@ -118,4 +133,20 @@ describe('devOps', () => {
       })
     )
   })
+
+  test(
+    'refuses a cross-site POST to every route under /dev-ops',
+    async () => {
+      const given = await answers(
+        crossSite,
+        devOpsRoutes().filter(({ method }) => method === 'post')
+      )
+
+      expect(given).not.toHaveLength(0)
+      expect(given).toEqual(
+        sameFor(given, { statusCode: statusCodes.forbidden })
+      )
+    },
+    refusalSweepMs
+  )
 })

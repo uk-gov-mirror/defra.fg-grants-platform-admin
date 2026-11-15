@@ -1,0 +1,149 @@
+{% from "grant/payment-value.njk" import valueCell, valueTable with context %}
+
+{%- set view = agreement -%}
+{%- set major = view.major -%}
+
+{%- macro dash() %}{{ gpa.NoValue() }}{% endmacro -%}
+
+{%- macro callCell(c) -%}
+  {%- call gpa.Inline({ gap: 'xs' }) -%}
+    {{ gpa.Badge({ text: c.method, size: 'sm', mono: true }) }}
+    {{ gpa.Text({ text: c.url or (c.service ~ c.path), mono: true }) }}
+    {%- if not c.url %}{{ gpa.Badge({ text: 'No URL', tone: 'warning', size: 'sm' }) }}{% endif -%}
+  {%- endcall -%}
+{%- endmacro -%}
+
+{%- if view.problem !== null -%}
+  {%- call gpa.Stack({ gap: 'lg', testId: 'grant-agreement' }) -%}
+    {%- set reason %}Agreements that resolve to it can’t be created or progressed. Reason: {{ gpa.Code({ text: view.problem }) }}. Publish a corrected version.{% endset -%}
+    {{ gpa.Alert({ tone: 'danger', title: 'GAS can’t load this agreement definition.', html: reason, testId: 'agreement-problem' }) }}
+    {%- if view.failed -%}
+      {{ gpa.Text({ text: 'GAS has marked this file unusable. New agreements use the newest usable ' ~ major ~ '.x agreement definition at or below ' ~ view.version ~ '; actions before acceptance use the newest usable ' ~ major ~ '.x one, which may be later.', tone: 'muted', as: 'p', testId: 'agreement-fallback' }) }}
+    {%- endif -%}
+    {%- call gpa.Card({ title: 'Raw agreement definition (JSON)', testId: 'agreement-raw-card' }) -%}
+      {{ gpa.Code({ block: true, code: view.raw, label: 'Raw agreement definition' }) }}
+    {%- endcall -%}
+  {%- endcall -%}
+{%- else -%}
+  {%- call gpa.Stack({ gap: 'section', testId: 'grant-agreement' }) -%}
+    {%- if view.missingServices | length -%}
+      {%- set names = view.missingServices | join(' and ') -%}
+      {{ gpa.Alert({ tone: 'warning', title: names ~ (' have' if view.missingServices | length > 1 else ' has') ~ ' no URL in GAS here.', text: 'GAS won’t load this agreement definition while any service it names has no URL. On this environment, agreements that resolve to it can’t be created, and while it’s the newest usable ' ~ major ~ '.x definition, actions on ' ~ major ~ '.x agreements before acceptance fail too.', testId: 'agreement-missing-urls' }) }}
+    {%- endif -%}
+
+    {%- set facts = [] -%}
+    {%- for fact in view.facts -%}
+      {%- if fact.kind == 'mono' -%}
+        {%- set facts = (facts.push({ label: fact.label, text: fact.text, mono: true }), facts) -%}
+      {%- elif fact.kind == 'created-when' -%}
+        {# A GAS process code nothing names (HANDOVER step 3), set as code. #}
+        {# gpa-lint-disable-next-line code-in-text #}
+        {%- set html %}the grant runs {{ gpa.Code({ text: 'GENERATE_OFFER' }) }} on a Phases move. {{ gpa.Link({ text: 'See Phases', href: fact.href }) }}{% endset -%}
+        {%- set facts = (facts.push({ label: fact.label, html: html }), facts) -%}
+      {%- else -%}
+        {%- set html -%}
+          {%- call gpa.Stack({ gap: 'xs' }) -%}
+            {%- for endpoint in fact.endpoints -%}
+              {%- call gpa.Inline({ gap: 'xs', testId: 'agreement-endpoint' }) -%}
+                {{ gpa.Text({ text: endpoint.code, mono: true }) }}{{ callCell(endpoint) }}
+              {%- endcall -%}
+            {%- endfor -%}
+          {%- endcall -%}
+        {%- endset -%}
+        {%- set facts = (facts.push({ label: fact.label, html: html }), facts) -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ gpa.FactsCard({ title: 'Agreement definition', facts: facts, testId: 'agreement-facts' }) }}
+
+    {%- call gpa.Section({ title: 'States', description: 'Until an agreement is accepted, GAS runs its actions with the newest usable ' ~ major ~ '.x agreement definition, which may not be this one. From accepted on, it stays on the version it was accepted under.', testId: 'agreement-states' }) -%}
+      {%- call gpa.DataTable({ styleNonce: styleNonce, label: 'States', columns: [
+        { key: 'state', label: 'State', width: 'minmax(130px, 1fr)' },
+        { key: 'page', label: 'Shows page', width: 'minmax(110px, 0.8fr)', mono: true },
+        { key: 'action', label: 'Action', width: 'minmax(90px, 0.7fr)' },
+        { key: 'to', label: 'Moves to', width: 'minmax(90px, 0.7fr)' },
+        { key: 'req', label: 'Requires', width: 'minmax(160px, 1.4fr)' },
+        { key: 'runs', label: 'Runs', width: 'minmax(224px, 1.2fr)' }
+      ] }) -%}
+        {%- for row in view.states -%}
+          {%- call gpa.TableRow({ testId: 'agreement-state-row' }) -%}
+            <td role="cell">{% call gpa.Inline({ gap: 'xs' }) %}{{ gpa.Text({ text: row.state, mono: true }) }}{% for flag in row.flags %}{{ gpa.Badge({ text: flag, size: 'sm' }) }}{% endfor %}{% endcall %}</td>
+            <td role="cell" class="gpa-cell-mono">{% if row.page %}{{ row.page }}{% else %}{{ dash() }}{% endif %}</td>
+            <td role="cell">{% if row.action %}{{ gpa.Text({ text: row.action, mono: true }) }}{% else %}{{ gpa.Text({ text: 'No actions', tone: 'subtle' }) }}{% endif %}</td>
+            <td role="cell">{% if row.target %}{{ gpa.Text({ text: row.target, mono: true }) }}{% else %}{{ dash() }}{% endif %}</td>
+            <td role="cell">
+              {%- for rule in row.requires -%}
+                {%- call gpa.Stack({ gap: '2xs' }) -%}{{ gpa.Text({ text: rule.name ~ ' = ' ~ rule.value, mono: true }) }}{% if rule.message %}{{ gpa.Text({ text: rule.message, tone: 'subtle' }) }}{% endif %}{%- endcall -%}
+              {%- else -%}{{ dash() }}{%- endfor -%}
+            </td>
+            <td role="cell">
+              {%- for run in row.runs -%}
+                {%- if not loop.first %}, {% endif -%}
+                {%- if run.payment and view.paymentHref %}{{ gpa.Link({ text: run.process, href: view.paymentHref }) }}{% else %}{{ gpa.Text({ text: run.process, mono: true }) }}{% endif -%}
+              {%- else -%}{{ dash() }}{%- endfor -%}
+            </td>
+          {%- endcall -%}
+        {%- endfor -%}
+      {%- endcall -%}
+    {%- endcall -%}
+
+    {%- call gpa.Section({ title: 'Pages', testId: 'agreement-pages' }) -%}
+      {%- call gpa.DataTable({ styleNonce: styleNonce, label: 'Pages', columns: [
+        { key: 'page', label: 'Page', width: 'minmax(130px, 0.8fr)', mono: true },
+        { key: 'title', label: 'Title', width: 'minmax(180px, 1.2fr)' },
+        { key: 'shows', label: 'Shows', width: 'minmax(260px, 2fr)' },
+        { key: 'buttons', label: 'Buttons', width: 'minmax(200px, 1.4fr)' }
+      ] }) -%}
+        {%- for page in view.pages -%}
+          {%- call gpa.TableRow({ testId: 'agreement-page-row' }) -%}
+            <td role="cell" class="gpa-cell-mono">{{ page.id }}</td>
+            <td role="cell">{{ page.title }}</td>
+            <td role="cell">{% if page.shows %}{{ page.shows }}{% else %}{{ dash() }}{% endif %}</td>
+            <td role="cell">
+              {%- if page.buttons | length -%}
+                {%- call gpa.Stack({ gap: '2xs' }) -%}
+                  {%- for button in page.buttons -%}
+                    {%- if button.problem %}{{ gpa.Text({ text: button.problem, tone: 'warning', testId: 'agreement-button-problem' }) }}{% else %}{{ gpa.Text({ text: button.text ~ ' (' ~ button.action ~ ')' }) }}{% endif -%}
+                  {%- endfor -%}
+                {%- endcall -%}
+              {%- else -%}{{ dash() }}{%- endif -%}
+            </td>
+          {%- endcall -%}
+        {%- endfor -%}
+      {%- endcall -%}
+    {%- endcall -%}
+
+    {%- if view.createdWith | length -%}
+      {%- call gpa.Section({ title: 'Created with', testId: 'agreement-created-with' }) -%}
+        {{ valueTable('Created with', view.createdWith, false) }}
+      {%- endcall -%}
+    {%- endif -%}
+
+    {%- call gpa.Section({ title: 'Processes', testId: 'agreement-processes' }) -%}
+      {%- call gpa.DataTable({ styleNonce: styleNonce, label: 'Processes', empty: { title: 'No processes', text: 'This agreement definition defines no processes.' } if not view.processes | length, columns: [
+        { key: 'p', label: 'Process', width: 'minmax(180px, 1fr)', mono: true },
+        { key: 'type', label: 'Type', width: 'minmax(70px, 0.4fr)' },
+        { key: 'calls', label: 'Calls', width: 'minmax(260px, 1.8fr)' },
+        { key: 'out', label: 'Outputs', width: 'minmax(120px, 0.8fr)' }
+      ] }) -%}
+        {%- for process in view.processes -%}
+          {%- call gpa.TableRow({ testId: 'agreement-process-row' }) -%}
+            <td role="cell" class="gpa-cell-mono">{{ process.name }}</td>
+            <td role="cell">{% call gpa.Stack({ gap: '2xs' }) %}{{ gpa.Text({ text: process.type }) }}{% if process.requestsPayment %}{{ gpa.Text({ text: 'requests the agreement payment', tone: 'subtle' }) }}{% if view.paymentHref %}{{ gpa.Link({ text: 'See Payment', href: view.paymentHref }) }}{% endif %}{% endif %}{% endcall %}</td>
+            <td role="cell">{% if process.call %}{{ callCell(process.call) }}{% else %}{{ dash() }}{% endif %}</td>
+            <td role="cell">
+              {%- call gpa.Stack({ gap: '2xs' }) -%}
+                {%- for output in process.outputs -%}
+                  {%- call gpa.Inline({ gap: 'xs' }) -%}{{ gpa.Text({ text: output.field, mono: true }) }}{{ valueCell(output, false) }}{%- endcall -%}
+                {%- else -%}{{ dash() }}{%- endfor -%}
+              {%- endcall -%}
+            </td>
+          {%- endcall -%}
+        {%- endfor -%}
+      {%- endcall -%}
+    {%- endcall -%}
+
+    {%- call gpa.Disclosure({ text: 'Show raw agreement definition (JSON)', hideText: 'Hide raw agreement definition', testId: 'agreement-raw' }) -%}
+      {{ gpa.Code({ block: true, framed: true, code: view.raw, label: 'Raw agreement definition' }) }}
+    {%- endcall -%}
+  {%- endcall -%}
+{%- endif -%}

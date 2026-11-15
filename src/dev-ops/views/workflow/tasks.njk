@@ -1,0 +1,35 @@
+{%- if taskGroups | length -%}
+  {%- call gpa.Accordion({ framed: true, testId: 'workflow-tasks' }) -%}
+    {%- for group in taskGroups -%}
+      {%- call gpa.AccordionItem({ title: group.name, open: loop.first, id: group.anchor, testId: 'workflow-task-group' }) -%}
+        {%- call gpa.Stack({ gap: 'lg' }) -%}
+          {%- call gpa.FactsList() -%}
+            {{ gpa.Fact({ label: 'Stage', text: group.stageName }) }}
+            {{ gpa.Fact({ label: 'Completes with', text: group.completesWith | join(', ') }) }}
+          {%- endcall -%}
+          {%- call gpa.DataTable({ styleNonce: styleNonce, label: group.name ~ ' tasks', columns: [
+            { key: 'name', label: 'Task', width: 'auto' },
+            { key: 'mandatory', label: 'Required', width: 'auto' },
+            { key: 'answers', label: 'Answers', width: 'auto' }
+          ] }) -%}
+            {%- for task in group.tasks -%}
+              {%- call gpa.TableRow({ testId: 'workflow-task' }) -%}
+                <td role="cell">{{ task.name }}</td>
+                <td role="cell">{% if task.mandatory %}{{ gpa.Text({ text: 'Yes' }) }}{% else %}{{ gpa.Text({ text: 'No', tone: 'subtle' }) }}{% endif %}</td>
+                <td role="cell">
+                  {%- call gpa.Inline({ gap: 'xs' }) -%}
+                    {%- for answer in task.answers %}{{ gpa.Badge({ text: answer, size: 'sm', variant: 'outline' }) }}{% endfor -%}
+                  {%- endcall -%}
+                </td>
+              {%- endcall -%}
+            {%- endfor -%}
+          {%- endcall -%}
+        {%- endcall -%}
+      {%- endcall -%}
+    {%- endfor -%}
+  {%- endcall -%}
+{%- else -%}
+  {%- call gpa.Card({ testId: 'workflow-tasks-none' }) -%}
+    {{ gpa.EmptyState({ icon: 'list-checks', title: 'No tasks', text: 'This workflow version defines no task groups, so caseworkers have nothing to complete.' }) }}
+  {%- endcall -%}
+{%- endif -%}

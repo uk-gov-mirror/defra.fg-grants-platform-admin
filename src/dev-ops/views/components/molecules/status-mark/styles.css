@@ -1,0 +1,19 @@
+.gpa-mark {
+  display: inline-flex;
+  justify-content: center;
+}
+.gpa-mark-success {
+  color: var(--status-success);
+}
+.gpa-mark-neutral {
+  color: var(--status-neutral);
+}
+.gpa-mark-warning {
+  color: var(--status-warning);
+}
+.gpa-mark-danger {
+  color: var(--status-danger);
+}
+.gpa-mark-info {
+  color: var(--status-info);
+}

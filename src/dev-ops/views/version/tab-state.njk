@@ -1,0 +1,21 @@
+{% import "components/macros.njk" as gpa %}
+
+{#- What stands in for a tab with nothing of its own to show: its file not stored, failed, unreadable or too large. -#}
+{% macro tabState(state, fetchForm, selfHref) -%}
+  {%- if state.kind == 'waiting' -%}
+    {%- set actions -%}
+      {%- if state.action and fetchForm %}{{ gpa.Button({ text: state.action.text, variant: state.action.variant, iconStart: state.action.icon, type: 'submit', form: fetchForm.id, loadingOnSubmit: true, testId: 'tab-fetch' }) }}{% endif -%}
+    {%- endset -%}
+    {%- call gpa.Card({ testId: 'tab-waiting' }) -%}
+      {{ gpa.EmptyState({ icon: 'hourglass', title: 'Waiting for the definition', text: state.text, actions: actions if state.action and fetchForm }) }}
+    {%- endcall -%}
+  {%- elif state.kind == 'failed' -%}
+    {{ gpa.Alert({ tone: 'danger', title: state.title, text: state.text, testId: 'tab-failed' }) }}
+  {%- elif state.kind == 'error' -%}
+    {{ gpa.Alert({ tone: 'danger', title: state.title, text: state.text, actions: gpa.Button({ text: 'Try again', size: 'sm', iconStart: 'refresh-cw', href: selfHref }), testId: 'tab-error' }) }}
+  {%- elif state.kind == 'too-large' -%}
+    {%- call gpa.Card({ testId: 'tab-too-large' }) -%}
+      {{ gpa.EmptyState({ icon: 'file-exclamation-point', title: 'Too large to show', text: state.text }) }}
+    {%- endcall -%}
+  {%- endif -%}
+{%- endmacro %}

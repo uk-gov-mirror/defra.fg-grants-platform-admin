@@ -26,6 +26,9 @@ import { seeOther } from '../view-models/see-other.ts'
 import { toVersionPath } from '../view-models/record-type.ts'
 import { workflowType } from '../view-models/workflows-page.view-model.ts'
 
+/** A Fetch posted from a page loaded before its Events tab went lands on Overview. */
+const retiredTabs = ['events']
+
 interface FetchDefinitionsRoute {
   record: RecordType
   params: Record<keyof VersionRef, Joi.Schema>
@@ -50,7 +53,9 @@ export const fetchDefinitionsRoute = ({
       // A body-less POST is `null`, which a Joi `default` alone would refuse.
       payload: Joi.object({
         back: backSchema.default(''),
-        tab: recordTabSchema(record).default('overview')
+        tab: recordTabSchema(record)
+          .valid(...retiredTabs)
+          .default('overview')
       })
         .empty(null)
         .default({})
@@ -59,7 +64,11 @@ export const fetchDefinitionsRoute = ({
   async handler(request: Request, h: ResponseToolkit) {
     const { code, version } = request.params
     const ref = { code, version }
-    const { back, tab } = request.payload as { back: string; tab: string }
+    const { back, tab: asked } = request.payload as {
+      back: string
+      tab: string
+    }
+    const tab = retiredTabs.includes(asked) ? 'overview' : asked
     const page = toVersionPath(record, ref)
     const result = await fetch(ref, toActor(request))
     const notice: DefinitionFetchFlash = { ...result, page }

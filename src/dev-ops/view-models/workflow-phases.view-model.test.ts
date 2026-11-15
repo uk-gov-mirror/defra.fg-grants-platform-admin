@@ -105,14 +105,23 @@ const tabFor = (
   asked: string | undefined,
   grant: GrantStatusMap = found,
   phases: StoredWorkflowPhase[] = woodlandPhases
-) => toWorkflowPhases(phases, grant, asked, links, '1.2.0')
+) =>
+  toWorkflowPhases(
+    phases,
+    grant,
+    asked,
+    links,
+    { code: 'woodland-creation', version: '1.2.0' },
+    { href: '/dev-ops/workflows/woodland-creation/1.2.0', from: '' }
+  )
 
 const panelFor = (
   asked: string,
   grant?: GrantStatusMap,
   phases?: StoredWorkflowPhase[]
 ) => {
-  const { panel } = tabFor(asked, grant, phases)
+  const { panels, selected } = tabFor(asked, grant, phases)
+  const panel = panels.find(({ id }) => id === selected)
 
   if (!panel) {
     throw new Error('no panel')
@@ -120,6 +129,11 @@ const panelFor = (
 
   return panel
 }
+
+const statesOf = (asked?: string, phases?: StoredWorkflowPhase[]) =>
+  tabFor(asked, found, phases).phases.flatMap(({ stages }) =>
+    stages.flatMap(({ states }) => states)
+  )
 
 const status = (
   code: string,
@@ -181,18 +195,12 @@ const tasksOf = (mandatory: boolean): StoredTaskGroup[] => [
   }
 ]
 
-const flaggedNodes = (asked?: string, phases?: StoredWorkflowPhase[]) =>
-  tabFor(asked, found, phases)
-    .graphs.phases.flatMap(({ nodes }) => nodes)
-    .filter(({ kind, state }) => kind === 'status' && state === 'flagged')
-    .map(({ position }) => position)
-
 const ref = (
   name: string,
   position: string,
   code: string,
   stageName: string | null = null
-) => ({ name, stageName, code, position, href: `status:${position}#panel` })
+) => ({ name, stageName, code, position, href: `status:${position}` })
 
 /** GAS-16's read of the grant: what each process does on a move. */
 const withEffects = (
@@ -214,64 +222,44 @@ describe('toWorkflowPhases', () => {
     expect(panelFor('REJECTED').findings).toEqual([])
   })
 
-  test('outlines each status with a finding, names it for a screen reader, and keys the legend', () => {
-    const nodes = tabFor('IN_REVIEW').graphs.phases.flatMap(
-      ({ nodes }) => nodes
-    )
-
-    expect(flaggedNodes('IN_REVIEW')).toEqual([
+  test('marks each status with a finding on the map', () => {
+    expect(
+      statesOf('IN_REVIEW')
+        .filter(({ icon }) => icon === 'triangle-alert')
+        .map(({ id }) => id)
+    ).toEqual([
       'PRE_AWARD:REVIEW:WITHDRAWN',
       'POST_AWARD:AGREEMENT:AWAITING_ACCEPTANCE',
       'POST_AWARD:AGREEMENT:ACCEPTED'
     ])
-    expect(
-      nodes.find(({ position }) => position.endsWith('WITHDRAWN'))
-    ).toMatchObject({
-      name: 'Withdrawn',
-      label:
-        'Withdrawn (PRE_AWARD:REVIEW:WITHDRAWN), CW theme NEUTRAL, finding: unreachable'
-    })
-    expect(tabFor(undefined).legend).toEqual([
-      { kind: 'plain', label: 'Action' },
-      { kind: 'dashed', label: 'GAS may send' },
-      { kind: 'flagged', label: 'Finding' },
-      { kind: 'start', label: 'Start' },
+    expect(statesOf().find(({ id }) => id.endsWith('WITHDRAWN'))).toMatchObject(
       {
-        kind: 'colour',
-        label: 'colour = how CW shows the status to caseworkers'
-      },
-      { kind: 'other-phase', label: 'Other phase' }
-    ])
+        label: 'Withdrawn',
+        iconTone: 'warning',
+        iconLabel: 'Has findings',
+        badge: 'closes'
+      }
+    )
   })
 
-  test('sums up the findings, each linking to its status, and says nothing without one', () => {
+  test('sums up the findings, each status once by its first, linking to it, and says nothing without one', () => {
     expect(tabFor(undefined).findings).toEqual({
       count: 3,
-      groups: [
+      statuses: [
         {
-          kind: 'dead end',
-          statuses: [
-            {
-              code: 'AWAITING_ACCEPTANCE',
-              stageName: null,
-              href: 'status:POST_AWARD:AGREEMENT:AWAITING_ACCEPTANCE#panel'
-            }
-          ]
+          name: 'Withdrawn',
+          href: 'status:PRE_AWARD:REVIEW:WITHDRAWN',
+          lead: 'unreachable'
         },
         {
-          kind: 'unreachable',
-          statuses: [
-            {
-              code: 'WITHDRAWN',
-              stageName: null,
-              href: 'status:PRE_AWARD:REVIEW:WITHDRAWN#panel'
-            },
-            {
-              code: 'ACCEPTED',
-              stageName: null,
-              href: 'status:POST_AWARD:AGREEMENT:ACCEPTED#panel'
-            }
-          ]
+          name: 'Awaiting acceptance',
+          href: 'status:POST_AWARD:AGREEMENT:AWAITING_ACCEPTANCE',
+          lead: 'dead end'
+        },
+        {
+          name: 'Agreement accepted',
+          href: 'status:POST_AWARD:AGREEMENT:ACCEPTED',
+          lead: 'unreachable'
         }
       ]
     })
@@ -282,12 +270,9 @@ describe('toWorkflowPhases', () => {
     ])
 
     expect(tabFor(undefined, found, phases).findings).toBeNull()
-    expect(
-      tabFor(undefined, found, phases).legend.map(({ kind }) => kind)
-    ).not.toContain('flagged')
   })
 
-  test('counts each status with findings once, and names the stage of a code in more than one stage', () => {
+  test('counts each status with findings once', () => {
     const phases = onePhase(
       [
         'S1',
@@ -298,22 +283,14 @@ describe('toWorkflowPhases', () => {
       ],
       ['S2', [status('B')]]
     )
-    const summary = tabFor(undefined, found, phases).findings
 
-    expect(summary?.count).toBe(1)
-    expect(summary?.groups).toEqual([
-      {
-        kind: 'dead end',
-        statuses: [{ code: 'B', stageName: 'S2', href: 'status:P:S2:B#panel' }]
-      },
-      {
-        kind: 'unreachable',
-        statuses: [{ code: 'B', stageName: 'S2', href: 'status:P:S2:B#panel' }]
-      }
-    ])
+    expect(tabFor(undefined, found, phases).findings).toEqual({
+      count: 1,
+      statuses: [{ name: 'B', href: 'status:P:S2:B', lead: 'dead end' }]
+    })
   })
 
-  test("names each status's CW theme, so its colour is never the only cue", () => {
+  test('colours each status as CW shows it', () => {
     const phases = onePhase([
       'S',
       [
@@ -321,24 +298,18 @@ describe('toWorkflowPhases', () => {
         status('B', [], { closes: true, theme: 'NONE' })
       ]
     ])
-    const nodes = tabFor(undefined, found, phases).graphs.phases[0].nodes
 
-    expect(nodes.map(({ label }) => label)).toEqual([
-      'A (P:S:A), CW theme WARN',
-      'B (P:S:B), CW theme NONE'
+    expect(statesOf(undefined, phases).map(({ tone }) => tone)).toEqual([
+      'warning',
+      'neutral'
     ])
-    expect(panelFor('A', found, phases)).toMatchObject({
-      theme: 'WARN',
-      role: 'warning'
-    })
+    expect(panelFor('A', found, phases).tone).toBe('warning')
   })
 
   test('marks the starting status on the graph and in the panel, and leaves out the ways in of an unreachable one', () => {
-    const start = tabFor(undefined).graphs.phases[0].nodes[0]
-
-    expect(start).toMatchObject({
-      position: 'PRE_AWARD:REVIEW:AWAITING_REVIEW',
-      chip: 'start'
+    expect(statesOf()[0]).toMatchObject({
+      id: 'PRE_AWARD:REVIEW:AWAITING_REVIEW',
+      badge: 'start'
     })
     expect(panelFor('AWAITING_REVIEW')).toMatchObject({
       startsHere: true,
@@ -348,7 +319,7 @@ describe('toWorkflowPhases', () => {
         {
           label: 'tasks read-only',
           title:
-            "Caseworkers can't change tasks in this status (interactive: false)"
+            'Caseworkers can’t change tasks in this status (interactive: false)'
         }
       ],
       tellsGas: { kind: 'text', text: 'start' }
@@ -374,18 +345,7 @@ describe('toWorkflowPhases', () => {
     expect(panelFor('B', found, phases).findings).toEqual([])
   })
 
-  test('draws an action as a solid move and a move GAS may send as a dashed one', () => {
-    const edges = tabFor(undefined).graphs.phases[0].edges
-
-    expect(edges.find(({ title }) => title === 'Approve (APPROVE)')?.kind).toBe(
-      'plain'
-    )
-    expect(
-      edges.filter(({ kind }) => kind === 'dashed').map(({ title }) => title)
-    ).toEqual(['GAS may send', 'GAS may send'])
-  })
-
-  test('draws no move to a target not on the map, and lists it as it is stored', () => {
+  test('lists a target not on the map as it is stored, with no link', () => {
     const phases = onePhase([
       'S',
       [
@@ -393,10 +353,7 @@ describe('toWorkflowPhases', () => {
         status('B', [], { closes: true })
       ]
     ])
-    const tab = tabFor('A', found, phases)
-
-    expect(tab.graphs.phases[0].edges).toEqual([])
-    expect(tab.panel?.waysOut.map(({ to }) => to)).toEqual([
+    expect(panelFor('A', found, phases).waysOut.map(({ to }) => to)).toEqual([
       {
         name: 'P:S:GONE',
         stageName: null,
@@ -537,9 +494,9 @@ describe('toWorkflowPhases', () => {
 
   test('names the status, its theme and phase and stage, and its flags in order, each explained', () => {
     expect(panelFor('WITHDRAWN')).toMatchObject({
-      code: 'WITHDRAWN',
+      id: 'PRE_AWARD:REVIEW:WITHDRAWN',
       name: 'Withdrawn',
-      role: 'neutral',
+      tone: 'neutral',
       flags: [
         { label: 'tasks read-only' },
         { label: 'closes case', title: 'CW marks the case closed here' },
@@ -551,18 +508,7 @@ describe('toWorkflowPhases', () => {
       phase: { code: 'PRE_AWARD', name: 'Pre-award' },
       stage: { code: 'REVIEW', name: 'Review application' }
     })
-    expect(panelFor('ON_HOLD')).toMatchObject({ role: 'warning', flags: [] })
-  })
-
-  test('gives a status with no theme no colour in the panel, and a neutral dot on the graph', () => {
-    const phases = onePhase([
-      'S',
-      [status('A', [gas('P:S:A')], { theme: 'NONE', closes: true })]
-    ])
-    const tab = tabFor('A', found, phases)
-
-    expect(tab.panel?.role).toBeNull()
-    expect(tab.graphs.phases[0].nodes[0]).toMatchObject({ tone: 'neutral' })
+    expect(panelFor('ON_HOLD')).toMatchObject({ tone: 'warning', flags: [] })
   })
 
   test('Tells GAS what it does for an unreachable status too', () => {
@@ -576,23 +522,23 @@ describe('toWorkflowPhases', () => {
     })
   })
 
-  test.each(['no-grant', 'unreadable', 'unavailable', 'timed-out'] as const)(
-    'Tells GAS, for a grant read that is %s, so',
+  test.each([
+    'no-grant',
+    'not-stored',
+    'unreadable',
+    'unavailable',
+    'timed-out'
+  ] as const)(
+    'Tells GAS, for a grant read that is %s, so, naming and linking the grant version',
     (outcome) => {
       expect(panelFor('IN_REVIEW', { outcome }).tellsGas).toEqual({
-        kind: 'text',
-        text: outcome
+        kind: 'grant',
+        outcome,
+        name: 'woodland-creation@1.2.0',
+        href: 'grant-page<PRE_AWARD:REVIEW:IN_REVIEW'
       })
     }
   )
-
-  test('Tells GAS to open the grant version while its definition is not stored', () => {
-    expect(panelFor('IN_REVIEW', { outcome: 'not-stored' }).tellsGas).toEqual({
-      kind: 'not-stored',
-      version: '1.2.0',
-      href: 'grant-page<PRE_AWARD:REVIEW:IN_REVIEW'
-    })
-  })
 
   test('Tells GAS it ignores a status no CW mapping names by its full position', () => {
     expect(panelFor('REJECTED').tellsGas).toEqual({ kind: 'ignored' })
@@ -663,12 +609,13 @@ describe('toWorkflowPhases', () => {
         status('A', [action('P:S:B', 'SECOND')])
       ]
     ])
-    const tab = tabFor('A', found, phases)
-
-    expect(tab.graphs.duplicated).toEqual(['P:S:A'])
-    expect(tab.panel?.waysOut.map(({ move }) => move)).toMatchObject([
-      { code: 'FIRST' }
+    expect(statesOf('A', phases).map(({ id }) => id)).toEqual([
+      'P:S:A',
+      'P:S:B'
     ])
+    expect(
+      panelFor('A', found, phases).waysOut.map(({ move }) => move)
+    ).toMatchObject([{ code: 'FIRST' }])
     expect(panelFor('B', found, phases).waysIn).toEqual([
       {
         from: ref('A', 'P:S:A', 'A'),
@@ -678,19 +625,29 @@ describe('toWorkflowPhases', () => {
   })
 
   test('has no panel without statuses', () => {
-    expect(tabFor(undefined, found, onePhase(['S', []])).panel).toBeNull()
+    expect(tabFor(undefined, found, onePhase(['S', []]))).toMatchObject({
+      selected: '',
+      panels: []
+    })
   })
 
   test('selects by full position or bare code, and the first status otherwise', () => {
-    expect(panelFor('PRE_AWARD:REVIEW:ON_HOLD').code).toBe('ON_HOLD')
-    expect(panelFor('ON_HOLD').code).toBe('ON_HOLD')
-    expect(panelFor('junk').code).toBe('AWAITING_REVIEW')
+    expect(panelFor('PRE_AWARD:REVIEW:ON_HOLD').id).toBe(
+      'PRE_AWARD:REVIEW:ON_HOLD'
+    )
+    expect(panelFor('ON_HOLD').id).toBe('PRE_AWARD:REVIEW:ON_HOLD')
+    expect(panelFor('junk').id).toBe('PRE_AWARD:REVIEW:AWAITING_REVIEW')
   })
 
-  test('links each status by its full position, to the panel', () => {
-    expect(
-      tabFor(undefined).graphs.phases[1].nodes.map(({ href }) => href)
-    ).toContain('status:POST_AWARD:AGREEMENT:ACCEPTED#panel')
+  test('draws a panel for every status, and submits a pick to this tab', () => {
+    const tab = tabFor(undefined)
+
+    expect(tab.panels).toHaveLength(statesOf().length)
+    expect(tab.form).toStrictEqual({
+      id: 'phases-pick',
+      action: '/dev-ops/workflows/woodland-creation/1.2.0',
+      hidden: [{ name: 'tab', value: 'phases' }]
+    })
   })
 })
 
@@ -755,20 +712,10 @@ describe('toWorkflowPhases: a status GAS may send that CW has no move to', () =>
         { kind: 'sends', source: 'Agreements', code: 'offered' }
       )
     ])
-    expect(
-      tabFor(undefined, grant).graphs.phases[0].nodes.find(
-        ({ position }) => position === generating
-      )
-    ).toMatchObject({ flagged: true })
-    expect(tabFor(undefined, grant).findings?.groups).toContainEqual({
-      kind: 'mismatch',
-      statuses: [
-        {
-          code: 'APPROVED',
-          stageName: null,
-          href: 'status:PRE_AWARD:REVIEW:APPROVED#panel'
-        }
-      ]
+    expect(tabFor(undefined, grant).findings?.statuses).toContainEqual({
+      name: 'Approved',
+      href: 'status:PRE_AWARD:REVIEW:APPROVED',
+      lead: 'mismatch'
     })
   })
 

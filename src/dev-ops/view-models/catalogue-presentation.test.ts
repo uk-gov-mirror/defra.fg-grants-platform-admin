@@ -15,7 +15,8 @@ import {
   toListColumns,
   toTimeLabel,
   toTone,
-  toVersionColumn
+  toVersionColumn,
+  toChipOrder
 } from './catalogue-presentation.ts'
 
 const columns = (bucket: BucketEntry) =>
@@ -186,4 +187,24 @@ test('every entry is for a list GAS or CW declares', () => {
     'gas.inbox',
     'gas.outbox'
   ])
+})
+
+describe('toChipOrder', () => {
+  test.each([
+    [grantsBucket, ['grantCode', 'worstFetchStatus', 'status']],
+    [workflowsBucket, ['grantCode', 'fetchStatus', 'status']]
+  ])(
+    'puts Stored before Status on %s, as the prototype does',
+    (bucket, names) => {
+      expect(toChipOrder(bucket, bucket.facts).map(({ name }) => name)).toEqual(
+        names
+      )
+    }
+  )
+
+  test('keeps the catalogue’s order where GPA says none', () => {
+    expect(toChipOrder(casesBucket, casesBucket.facts)).toEqual(
+      casesBucket.facts
+    )
+  })
 })

@@ -7,6 +7,11 @@ import { readGrantStatusMap } from './grant-status-map.ts'
 import type { GrantStatusMap } from './grant-status-map.ts'
 import type { RecordResult } from './record-reads.ts'
 import { readRecord } from './record-reads.ts'
+import {
+  logUnreadEvents,
+  readOverviewEvents,
+  withEvents
+} from './version-events.ts'
 import { workflowTabs } from './workflow-tabs.ts'
 import type { WorkflowTabId } from './workflow-tabs.ts'
 
@@ -61,15 +66,33 @@ const withGrantStatusMap = async (
       }
     : result
 
+/**
+ * On Overview the version's events are read beside it, for its Event row. A
+ * version that is missing or failed answers at once, its events unawaited.
+ */
 export const getWorkflowPageUseCase = async (
   ref: WorkflowVersionRef,
   tab: WorkflowTabId
 ): Promise<RecordResult<WorkflowPage>> => {
-  const result = await readRecord(
+  const reading = readRecord(
     'workflow version',
     () => findWorkflowVersionPage(ref, workflowTabs[tab].read),
     'WORKFLOW_VERSION_NOT_FOUND'
   )
+  const events = readOverviewEvents(tab, 'workflow version', () =>
+    findWorkflowVersionPage(ref, 'events')
+  )
+  const result = await reading
 
-  return tab === 'phases' ? withGrantStatusMap(ref, result) : result
+  if (result.page === null) {
+    return result
+  }
+
+  const answer = await events
+  logUnreadEvents(answer)
+  const page = withEvents(result.page, answer)
+
+  return tab === 'phases'
+    ? withGrantStatusMap(ref, { ...result, page })
+    : { ...result, page }
 }

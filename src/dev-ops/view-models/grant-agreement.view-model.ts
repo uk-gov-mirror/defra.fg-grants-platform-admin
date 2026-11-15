@@ -5,33 +5,24 @@ import type {
   EndpointAddress,
   GrantAgreement
 } from '../repositories/grants.repository.ts'
-import { toJsonView } from './json-viewer.view-model.ts'
-import type { JsonView } from './json-viewer.view-model.ts'
+import { toValueRows } from './mapping-rows.ts'
+import type { ValueRow } from './mapping-rows.ts'
 import { toMappingRows, toMappingValue } from './mapping-table.ts'
-import type { MappingRow, MappingValue } from './mapping-table.ts'
-
-/** Each with what it reads as, where the definition says. */
-interface Code {
-  code: string
-  title: string | null
-}
 
 interface Call {
   method: string
   path: string
+  /** Null when GAS has no usable URL for the service here. */
   url: string | null
   service: string
-  /** Whether GAS lists the service's variable in `missingServiceUrls`; null from an older GAS, which does not say. */
-  unset: boolean | null
 }
 
-interface EndpointRow extends Call {
+export interface EndpointRow extends Call {
   code: string
 }
 
-export type AgreementFact = { id: string; label: string } & (
+export type AgreementFact = { label: string } & (
   | { kind: 'mono'; text: string }
-  | { kind: 'codes'; codes: Code[] }
   | { kind: 'created-when'; href: string }
   | { kind: 'endpoints'; endpoints: EndpointRow[] }
 )
@@ -42,67 +33,38 @@ interface Rule {
   message: string | null
 }
 
-interface ActionRow {
-  name: string
-  target: string
-  /** Moves to the state it is in. */
-  stays: boolean
+/** One action of a state, or the state alone when it has none; its name and flags on its first row only. */
+export interface StateRow {
+  state: string
+  flags: string[]
   page: string | null
+  action: string | null
+  target: string | null
   requires: Rule[]
-  runs: string[]
-  sets: string[]
+  runs: { process: string; payment: boolean }[]
 }
-
-interface StateGroup {
-  name: string
-  initial: boolean
-  locksVersion: boolean
-  page: string | null
-  pageProcesses: string[]
-  actions: ActionRow[]
-}
-
-type ButtonProblem = 'no-page' | 'not-in-state' | null
 
 interface ButtonRow {
   text: string
   action: string
-  form: boolean
-  /** The page the action prepares, for a standalone button. */
-  page: string | null
-  problem: ButtonProblem
-  /** The states the page is shown in, for a button whose action is in none of them. */
-  states: string[]
+  /** Why the button returns an error, in words; null when it works. */
+  problem: string | null
 }
 
-/** What changes what the customer sees, beyond the page's components. */
-type PageDetail =
-  | { kind: 'layout'; layout: string }
-  | { kind: 'watermark'; state: string; text: string }
-  | { kind: 'print' | 'contents' }
-  | { kind: 'back'; href: string }
-  | { kind: 'section'; id: string; condition: MappingValue | null }
-
-interface PageRow {
+export interface PageRow {
   id: string
   title: string
-  details: PageDetail[]
-  components: string[]
+  /** What the customer sees beyond the title, in words. */
+  shows: string
   buttons: ButtonRow[]
 }
-
-type Lands = 'saved' | 'page'
 
 interface ProcessRow {
   name: string
   type: string
   requestsPayment: boolean
   call: Call | null
-  sends: MappingRow[]
-  /** A body sent with a GET, which some servers drop. */
-  bodyOnGet: boolean
-  outputs: MappingRow[]
-  lands: Lands[]
+  outputs: ValueRow[]
 }
 
 /** A definition GAS cannot load gives its problem and nothing derived from it. */
@@ -113,21 +75,20 @@ export type AgreementTab =
       failed: boolean
       major: string
       version: string
-      raw: JsonView
+      raw: string
     }
   | {
       problem: null
       major: string
       paymentHref: string | null
-      facts: AgreementFact[][]
-      missingServiceUrls: string[]
-      states: StateGroup[]
-      /** No state runs any process on a page view, so the column is left out. */
-      pageProcesses: boolean
+      facts: AgreementFact[]
+      /** The services GAS has no URL for here, by name. */
+      missingServices: string[]
+      states: StateRow[]
       pages: PageRow[]
-      createdWith: MappingRow[]
+      createdWith: ValueRow[]
       processes: ProcessRow[]
-      raw: JsonView
+      raw: string
     }
 
 export interface AgreementContext {
@@ -145,102 +106,60 @@ type Process = NonNullable<AgreementDefinition['processDefinitions']>[string]
 /** GAS keeps an agreement on the definition it was accepted under from here on (`load-agreement-definition.js`). */
 const lockedState = 'accepted'
 
+/** GAS's handler that requests the agreement payment. */
+const paymentHandler = 'CREATE_AGREEMENT_PAYMENT'
+
 const toApplicationData = (application: unknown): string =>
   typeof application === 'string'
     ? application
     : (JSON.stringify(application) ?? '')
 
-const toTemplateText = (template: unknown): string | null => {
-  const content = (template as { content?: AgreementComponent[] })?.content
-
-  const texts = (Array.isArray(content) ? content : [])
-    .map(({ text }) => text)
-    .filter((text): text is string => typeof text === 'string')
-
-  return texts.length ? texts.join(' ') : null
-}
-
-const toTemplateCodes = (templates: AgreementDefinition['templates']): Code[] =>
+const toTemplateCodes = (
+  templates: AgreementDefinition['templates']
+): string[] =>
   Object.entries(templates ?? {}).flatMap(([group, keys]) =>
-    Object.entries(keys).map(([key, template]) => ({
-      code: `${group}.${key}`,
-      title: toTemplateText(template)
-    }))
+    Object.keys(keys).map((key) => `${group}.${key}`)
   )
-
-const toCodes = (codes: string[]): Code[] =>
-  codes.map((code) => ({ code, title: null }))
-
-/** GAS lists each missing variable by name, `{SERVICE}_URL`. */
-const toUnset = (
-  service: string,
-  missing: string[] | undefined
-): boolean | null => (missing ? missing.includes(`${service}_URL`) : null)
 
 const toEndpointRows = (
   { endpoints = [] }: AgreementDefinition,
-  addresses: EndpointAddress[] | undefined,
-  missing: string[] | undefined
+  addresses: EndpointAddress[] | undefined
 ): EndpointRow[] =>
   endpoints.map(({ code, method, path, service }) => ({
     code,
     method,
     path,
     service,
-    url: addresses?.find((address) => address.code === code)?.url ?? null,
-    unset: toUnset(service, missing)
+    url: addresses?.find((address) => address.code === code)?.url ?? null
   }))
 
 const toEndpointsFacts = (endpoints: EndpointRow[]): AgreementFact[] =>
-  endpoints.length
-    ? [{ id: 'endpoints', label: 'Endpoints', kind: 'endpoints', endpoints }]
-    : []
+  endpoints.length ? [{ label: 'Endpoints', kind: 'endpoints', endpoints }] : []
+
+const mono = (label: string, codes: string[]): AgreementFact => ({
+  label,
+  kind: 'mono',
+  text: codes.join(', ')
+})
 
 const toFacts = (
-  { definition, endpointAddresses, missingServiceUrls }: GrantAgreement,
+  { definition, endpointAddresses }: GrantAgreement,
   { hrefs }: AgreementContext
-): AgreementFact[][] => [
-  [
-    { id: 'code', label: 'Code', kind: 'mono', text: definition.code },
-    {
-      id: 'number-prefix',
-      label: 'Number prefix',
-      kind: 'mono',
-      text: definition.agreementNumberPrefix
-    },
-    {
-      id: 'application-data',
-      label: 'Reads application answers from',
-      kind: 'mono',
-      text: toApplicationData(definition.create.application)
-    },
-    {
-      id: 'created-when',
-      label: 'Created when',
-      kind: 'created-when',
-      href: hrefs.phases
-    }
-  ],
-  [
-    {
-      id: 'on-create',
-      label: 'Runs on create',
-      kind: 'codes',
-      codes: toCodes(definition.create.processes ?? [])
-    },
-    {
-      id: 'templates',
-      label: 'Text templates',
-      kind: 'codes',
-      codes: toTemplateCodes(definition.templates)
-    },
-    ...toEndpointsFacts(
-      toEndpointRows(definition, endpointAddresses, missingServiceUrls)
-    )
-  ]
+): AgreementFact[] => [
+  mono('Code', [definition.code]),
+  mono('Number prefix', [definition.agreementNumberPrefix]),
+  mono('Reads answers from', [
+    toApplicationData(definition.create.application)
+  ]),
+  { label: 'Created when', kind: 'created-when', href: hrefs.phases },
+  mono('Runs on create', definition.create.processes ?? []),
+  mono('Text templates', toTemplateCodes(definition.templates)),
+  ...toEndpointsFacts(toEndpointRows(definition, endpointAddresses))
 ]
 
-const orNone = <T>(value: T | undefined): T | null => value ?? null
+/** GAS names each missing variable `{SERVICE}_URL`; the page names the service. */
+const toMissingServices = ({ missingServiceUrls = [] }: GrantAgreement) =>
+  missingServiceUrls.map((name) => name.replace(/_URL$/, ''))
 
 const listOf = <T>(value: T[] | undefined): T[] => value ?? []
 
@@ -256,28 +175,36 @@ const toRule = ({ name, value, message }: Record<string, unknown>): Rule => ({
   message: typeof message === 'string' ? message : null
 })
 
-const toActionRow =
-  (state: string) =>
-  ([name, transition]: [string, Transition]): ActionRow => ({
-    name,
-    target: transition.target,
-    stays: transition.target === state,
-    page: orNone(transition.page),
-    requires: listOf(transition.validation?.required).map(toRule),
-    runs: listOf(transition.processes),
-    sets: entriesOf(transition.values).map(([field]) => field)
-  })
+const toRuns = (processes: string[] | undefined) =>
+  listOf(processes).map((process) => ({
+    process,
+    payment: process === paymentHandler
+  }))
 
-const toStateGroup =
-  (initialState: string) =>
-  ([name, state]: [string, State]): StateGroup => ({
-    name,
-    initial: name === initialState,
-    locksVersion: name === lockedState,
-    page: state.page ?? null,
-    pageProcesses: state.processes ?? [],
-    actions: Object.entries(state.on ?? {}).map(toActionRow(name))
-  })
+const toFlags = (name: string, initial: string): string[] => [
+  ...(name === initial ? ['initial'] : []),
+  ...(name === lockedState ? ['locks version'] : [])
+]
+
+const noAction = { action: null, target: null, requires: [], runs: [] }
+
+const toStateRows =
+  (initial: string) =>
+  ([name, state]: [string, State]): StateRow[] => {
+    const actions = entriesOf(state.on).map(([action, move]) => ({
+      action,
+      target: move.target,
+      requires: listOf(move.validation?.required).map(toRule),
+      runs: toRuns(move.processes)
+    }))
+
+    return (actions.length ? actions : [noAction]).map((row, at) => ({
+      state: name,
+      flags: at ? [] : toFlags(name, initial),
+      page: state.page ?? null,
+      ...row
+    }))
+  }
 
 /** The pages the states show, in state order, then any no state shows. */
 const toPageOrder = ({ states, pages }: AgreementDefinition): string[] => {
@@ -348,28 +275,31 @@ const needsPage = (
   transition: Transition
 ): boolean => control.component === 'button' && !transition.page
 
+const controlNoun = ({ component }: AgreementComponent): string =>
+  component === 'form' ? 'form' : 'button'
+
 const toProblem = (
   control: AgreementComponent,
   transition: Transition | undefined,
-  shown: boolean
-): ButtonProblem => {
+  showing: string[]
+): string | null => {
+  const action = String(control.action)
+
   if (!transition) {
-    return shown ? 'not-in-state' : null
+    return showing.length
+      ? `${action} is not an action of ${showing.join(', ')}: this ${controlNoun(control)} returns an error`
+      : null
   }
 
-  return needsPage(control, transition) ? 'no-page' : null
+  return needsPage(control, transition)
+    ? `${action} has no page: this button returns an error`
+    : null
 }
 
 const toControlText = (control: AgreementComponent, action: string): string =>
   control.component === 'form'
     ? (firstButtonText(control.components) ?? action)
     : String(control.text ?? action)
-
-const toPreparedPage = (
-  control: AgreementComponent,
-  transition: Transition | undefined
-): string | null =>
-  control.component === 'button' ? orNone(transition?.page) : null
 
 const toButtonRows = (
   { states }: AgreementDefinition,
@@ -380,6 +310,7 @@ const toButtonRows = (
   const moves = Object.fromEntries(
     showing.flatMap(([, state]) => entriesOf(state.on))
   )
+  const names = showing.map(([name]) => name)
 
   return toControls([page.components, page.sections]).map((control) => {
     const action = String(control.action)
@@ -387,10 +318,7 @@ const toButtonRows = (
     return {
       text: toControlText(control, action),
       action,
-      form: control.component === 'form',
-      page: toPreparedPage(control, moves[action]),
-      problem: toProblem(control, moves[action], showing.length > 0),
-      states: showing.map(([name]) => name)
+      problem: toProblem(control, moves[action], names)
     }
   })
 }
@@ -411,33 +339,35 @@ const toBackLink = (
 
 type Page = AgreementDefinition['pages'][string]
 
-const when = <T>(shown: boolean, detail: T): T[] => (shown ? [detail] : [])
+const when = (shown: boolean, text: string): string[] => (shown ? [text] : [])
 
-const toBackDetail = (page: Page): PageDetail[] => {
+const toBackText = (page: Page): string[] => {
   const href = toBackLink(page.backLink)
 
-  return href === null ? [] : [{ kind: 'back', href }]
+  return href === null ? [] : [`back link to ${href}`]
 }
 
-const toPageDetails = (page: Page): PageDetail[] => [
-  ...(page.layout ? [{ kind: 'layout', layout: page.layout } as const] : []),
-  ...entriesOf(page.watermarks).map(
-    ([state, text]): PageDetail => ({ kind: 'watermark', state, text })
-  ),
-  ...when<PageDetail>(page.print === true, { kind: 'print' }),
-  ...when<PageDetail>(page.contents === true, { kind: 'contents' }),
-  ...toBackDetail(page),
-  ...listOf(page.sections).map(
-    (section): PageDetail => ({
-      kind: 'section',
-      id: section.id,
-      condition:
-        section.condition === undefined
-          ? null
-          : toMappingValue(section.condition)
-    })
-  )
-]
+const toSectionText = ({
+  id,
+  condition
+}: NonNullable<Page['sections']>[number]): string =>
+  condition === undefined
+    ? id
+    : `${id} (shown when ${toMappingValue(condition).text})`
+
+/** Layout, watermarks and the rest, then the sections and the components, as one line. */
+const toShows = (page: Page): string =>
+  [
+    ...(page.layout ? [`${page.layout} layout`] : []),
+    ...entriesOf(page.watermarks).map(
+      ([state, text]) => `${text} watermark when ${state}`
+    ),
+    ...when(page.print === true, 'printable'),
+    ...when(page.contents === true, 'contents list'),
+    ...toBackText(page),
+    ...listOf(page.sections).map(toSectionText),
+    ...new Set(page.components.map(({ component }) => component))
+  ].join(', ')
 
 const toPageRow =
   (definition: AgreementDefinition) =>
@@ -447,8 +377,7 @@ const toPageRow =
     return {
       id,
       title: page.title,
-      details: toPageDetails(page),
-      components: [...new Set(page.components.map((c) => c.component))],
+      shows: toShows(page),
       buttons: toButtonRows(definition, id, page)
     }
   }
@@ -456,7 +385,7 @@ const toPageRow =
 const toCall = (
   name: string,
   process: Process,
-  { addresses, missingServiceUrls }: GrantAgreement
+  { addresses }: GrantAgreement
 ): Call | null => {
   if (process.type !== 'endpoint') {
     return null
@@ -464,34 +393,7 @@ const toCall = (
 
   const address = addresses.find((candidate) => candidate.process === name)
 
-  return {
-    ...process.endpoint,
-    url: address?.url ?? null,
-    unset: toUnset(process.endpoint.service, missingServiceUrls)
-  }
-}
-
-const runsOnPage = (name: string, states: States): boolean =>
-  Object.values(states).some((state) => listOf(state.processes).includes(name))
-
-const runsOnMove = (name: string, states: States): boolean =>
-  Object.values(states).some((state) =>
-    entriesOf(state.on).some(([, move]) =>
-      listOf(move.processes).includes(name)
-    )
-  )
-
-/** On create or on a move its outputs are saved; on a page view they are not (`runPageProcesses`). */
-const toLands = (
-  name: string,
-  { create, states }: AgreementDefinition
-): Lands[] => {
-  const saved: Lands[] =
-    listOf(create.processes).includes(name) || runsOnMove(name, states)
-      ? ['saved']
-      : []
-
-  return runsOnPage(name, states) ? [...saved, 'page'] : saved
+  return { ...process.endpoint, url: address?.url ?? null }
 }
 
 const processTypes: Record<string, string> = {
@@ -499,55 +401,39 @@ const processTypes: Record<string, string> = {
   handler: 'Built into GAS'
 }
 
-/** GAS's handler that requests the agreement payment. */
-const paymentHandler = 'CREATE_AGREEMENT_PAYMENT'
-
-const bodyOf = (process: Process): Record<string, unknown> | undefined =>
-  process.type === 'endpoint' ? process.request.body : undefined
-
 const outputsOf = (process: Process): Record<string, unknown> =>
   process.type === 'endpoint' ? (process.output ?? {}) : {}
 
-const isGet = (process: Process): boolean =>
-  process.type === 'endpoint' && process.endpoint.method.toUpperCase() === 'GET'
-
 const toProcessRow =
   (agreement: GrantAgreement) =>
-  ([name, process]: [string, Process]): ProcessRow => {
-    const body = bodyOf(process)
+  ([name, process]: [string, Process]): ProcessRow => ({
+    name,
+    type: processTypes[process.type] ?? process.type,
+    requestsPayment: name === paymentHandler,
+    call: toCall(name, process, agreement),
+    outputs: toValueRows(toMappingRows(outputsOf(process)))
+  })
 
-    return {
-      name,
-      type: processTypes[process.type] ?? process.type,
-      requestsPayment: name === paymentHandler,
-      call: toCall(name, process, agreement),
-      sends: toMappingRows(body ?? {}),
-      bodyOnGet: body !== undefined && isGet(process),
-      outputs: toMappingRows(outputsOf(process)),
-      lands: toLands(name, agreement.definition)
-    }
-  }
+const majorOf = (version: string): string => version.split('.')[0]
 
 const toLoadable = (
   agreement: GrantAgreement,
   context: AgreementContext,
-  raw: JsonView
+  raw: string
 ): AgreementTab => {
   const { definition } = agreement
-  const states = Object.entries(definition.states).map(
-    toStateGroup(definition.create.target)
-  )
 
   return {
     problem: null,
     major: majorOf(context.version),
     paymentHref: context.hrefs.payment,
     facts: toFacts(agreement, context),
-    missingServiceUrls: agreement.missingServiceUrls ?? [],
-    states,
-    pageProcesses: states.some(({ pageProcesses }) => pageProcesses.length),
+    missingServices: toMissingServices(agreement),
+    states: Object.entries(definition.states).flatMap(
+      toStateRows(definition.create.target)
+    ),
     pages: toPageOrder(definition).map(toPageRow(definition)),
-    createdWith: toMappingRows(definition.create.values ?? {}),
+    createdWith: toValueRows(toMappingRows(definition.create.values ?? {})),
     processes: Object.entries(definition.processDefinitions ?? {}).map(
       toProcessRow(agreement)
     ),
@@ -555,13 +441,11 @@ const toLoadable = (
   }
 }
 
-const majorOf = (version: string): string => version.split('.')[0]
-
 export const toAgreementTab = (
   agreement: GrantAgreement,
   context: AgreementContext
 ): AgreementTab => {
-  const raw = toJsonView(agreement.definition)
+  const raw = JSON.stringify(agreement.definition, null, 2)
 
   return agreement.problem === null
     ? toLoadable(agreement, context, raw)

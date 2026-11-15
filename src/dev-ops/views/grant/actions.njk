@@ -1,0 +1,25 @@
+{%- if actions.rows | length -%}
+  {%- call gpa.Stack({ gap: 'lg' }) -%}
+    {%- call gpa.DataTable({ styleNonce: styleNonce, label: 'Actions', columns: [
+      { key: 'name', label: 'Name', width: 'minmax(220px, 1.2fr)', mono: true },
+      { key: 'method', label: 'Method', width: 'minmax(80px, 0.3fr)' },
+      { key: 'url', label: 'URL', width: 'minmax(320px, 2.4fr)', mono: true }
+    ] }) -%}
+      {%- for action in actions.rows -%}
+        {%- call gpa.TableRow({ testId: 'actions-row' }) -%}
+          <td role="cell" class="gpa-cell-mono">{{ action.name }}</td>
+          <td role="cell">{{ gpa.Badge({ text: action.method, size: 'sm', mono: true }) }}</td>
+          <td role="cell" class="gpa-cell-mono">{{ action.url }}</td>
+        {%- endcall -%}
+      {%- endfor -%}
+    {%- endcall -%}
+    {%- if actions.usesEnvironment -%}
+      {%- set note %}When GAS calls an action, it replaces {{ gpa.Code({ text: '%ENVIRONMENT%' }) }} with its environment name.{% endset -%}
+      {{ gpa.Text({ html: note, tone: 'muted', testId: 'actions-environment' }) }}
+    {%- endif -%}
+  {%- endcall -%}
+{%- else -%}
+  {%- call gpa.Card() -%}
+    {{ gpa.EmptyState({ icon: 'plug', title: 'No actions', text: 'This version defines no actions for GAS to call.', testId: 'actions-none' }) }}
+  {%- endcall -%}
+{%- endif -%}

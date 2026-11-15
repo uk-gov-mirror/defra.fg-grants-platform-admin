@@ -1,0 +1,10 @@
+{% from "version/event.njk" import eventFact %}
+{% from "version/files.njk" import versionFiles with context %}
+
+{%- set receivedHtml %}{% if received %}{{ gpa.Time(received) }}{% endif %}{% endset -%}
+{{ gpa.FactsCard({ title: 'Details', testId: 'version-details', facts: [
+  { label: 'Received', html: receivedHtml if received },
+  { label: 'Event', html: eventFact(event) }
+] }) }}
+
+{{ versionFiles(files) }}

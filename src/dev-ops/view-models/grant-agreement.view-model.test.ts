@@ -8,8 +8,6 @@ import type {
   AgreementContext,
   AgreementTab
 } from './grant-agreement.view-model.ts'
-import { toJsonView } from './json-viewer.view-model.ts'
-import { toMappingValue } from './mapping-table.ts'
 
 const addresses = [
   {
@@ -53,8 +51,8 @@ const loadable = (
 const withDefinition = (changes: Partial<AgreementDefinition>): Loadable =>
   loadable({ definition: { ...agreementDefinition, ...changes } })
 
-const factOf = (tab: Loadable, id: string) =>
-  tab.facts.flat().find((fact) => fact.id === id)
+const factOf = (tab: Loadable, label: string) =>
+  tab.facts.find((fact) => fact.label === label)
 
 /** After qa-complex 1.1.0: a standalone button, a form, and a button whose action has no page. */
 const qaStates: AgreementDefinition['states'] = {
@@ -138,264 +136,159 @@ const qaComplex = (): Loadable =>
   withDefinition({ states: qaStates, pages: qaPages })
 
 describe('toAgreementTab: facts', () => {
-  test('names each fact in words, with what reads it from where', () => {
+  test('names each fact as the page does, codes as written', () => {
     expect(loadable().facts).toEqual([
-      [
-        { id: 'code', label: 'Code', kind: 'mono', text: 'woodland-creation' },
-        {
-          id: 'number-prefix',
-          label: 'Number prefix',
-          kind: 'mono',
-          text: 'WC'
-        },
-        {
-          id: 'application-data',
-          label: 'Reads application answers from',
-          kind: 'mono',
-          text: '$.input.answers'
-        },
-        {
-          id: 'created-when',
-          label: 'Created when',
-          kind: 'created-when',
-          href: '/phases'
-        }
-      ],
-      [
-        {
-          id: 'on-create',
-          label: 'Runs on create',
-          kind: 'codes',
-          codes: [{ code: 'GENERATE_OFFER', title: null }]
-        },
-        {
-          id: 'templates',
-          label: 'Text templates',
-          kind: 'codes',
-          codes: [
-            { code: 'terms.standard', title: null },
-            { code: 'terms.welsh', title: null }
-          ]
-        }
-      ]
+      { label: 'Code', kind: 'mono', text: 'woodland-creation' },
+      { label: 'Number prefix', kind: 'mono', text: 'WC' },
+      { label: 'Reads answers from', kind: 'mono', text: '$.input.answers' },
+      { label: 'Created when', kind: 'created-when', href: '/phases' },
+      { label: 'Runs on create', kind: 'mono', text: 'GENERATE_OFFER' },
+      {
+        label: 'Text templates',
+        kind: 'mono',
+        text: 'terms.standard, terms.welsh'
+      }
     ])
   })
 
   test('shows application data that is not a string as one line of JSON', () => {
     const tab = withDefinition({
-      create: { target: 'offered', application: { sbi: '$.input.sbi' } }
+      create: { target: 'offered', application: { answers: '$.input' } }
     })
 
-    expect(factOf(tab, 'application-data')).toMatchObject({
-      text: '{"sbi":"$.input.sbi"}'
-    })
-  })
-
-  test("gives each text template its template's words", () => {
-    const tab = withDefinition({
-      templates: {
-        capitalItems: {
-          'QA-HEDGE': {
-            content: [
-              { component: 'paragraph', text: 'Hedgerow: @.quantity @.unit' }
-            ]
-          },
-          'QA-POND': {}
-        }
-      }
-    })
-
-    expect(factOf(tab, 'templates')).toMatchObject({
-      codes: [
-        { code: 'capitalItems.QA-HEDGE', title: 'Hedgerow: @.quantity @.unit' },
-        { code: 'capitalItems.QA-POND', title: null }
-      ]
+    expect(factOf(tab, 'Reads answers from')).toMatchObject({
+      text: '{"answers":"$.input"}'
     })
   })
 
-  test('lists no processes on create and no templates as none', () => {
-    const tab = withDefinition({
-      create: { target: 'offered', application: '$.input.answers' },
-      templates: undefined
-    })
-
-    expect(factOf(tab, 'on-create')).toMatchObject({ codes: [] })
-    expect(factOf(tab, 'templates')).toMatchObject({ codes: [] })
-  })
-
-  test('lists the root endpoints with the address GAS has for each', () => {
+  test('lists the root endpoints with the URL GAS has for each, null where it has none', () => {
     const tab = loadable({
       definition: {
         ...agreementDefinition,
         endpoints: [
           {
-            code: 'qa-health',
-            method: 'GET',
-            path: '/health',
-            service: 'QA_HEALTH'
+            code: 'CALCULATE',
+            method: 'POST',
+            service: 'LAND_GRANTS',
+            path: '/payments/calculate'
           },
-          { code: 'qa-unset', method: 'POST', path: '/qa', service: 'QA_UNSET' }
+          {
+            code: 'TERMS',
+            method: 'GET',
+            service: 'AGREEMENT_DOCS',
+            path: '/terms'
+          }
         ]
       },
       endpointAddresses: [
-        { code: 'qa-health', service: 'QA_HEALTH', url: 'http://cw/health' },
-        { code: 'qa-unset', service: 'QA_UNSET', url: null }
-      ],
-      missingServiceUrls: ['QA_UNSET_URL']
+        {
+          code: 'CALCULATE',
+          service: 'LAND_GRANTS',
+          url: 'https://land-grants.example/payments/calculate'
+        },
+        { code: 'TERMS', service: 'AGREEMENT_DOCS', url: null }
+      ]
     })
 
-    expect(factOf(tab, 'endpoints')).toEqual({
-      id: 'endpoints',
+    expect(factOf(tab, 'Endpoints')).toEqual({
       label: 'Endpoints',
       kind: 'endpoints',
       endpoints: [
         {
-          code: 'qa-health',
-          method: 'GET',
-          path: '/health',
-          service: 'QA_HEALTH',
-          url: 'http://cw/health',
-          unset: false
+          code: 'CALCULATE',
+          method: 'POST',
+          service: 'LAND_GRANTS',
+          path: '/payments/calculate',
+          url: 'https://land-grants.example/payments/calculate'
         },
         {
-          code: 'qa-unset',
-          method: 'POST',
-          path: '/qa',
-          service: 'QA_UNSET',
-          url: null,
-          unset: true
+          code: 'TERMS',
+          method: 'GET',
+          service: 'AGREEMENT_DOCS',
+          path: '/terms',
+          url: null
         }
       ]
     })
   })
 
-  test('says nothing of whether an endpoint is configured when GAS does not say', () => {
-    const tab = withDefinition({
-      endpoints: [{ code: 'qa', method: 'GET', path: '/', service: 'QA' }]
-    })
-
-    expect(factOf(tab, 'endpoints')).toMatchObject({
-      endpoints: [{ url: null, unset: null }]
-    })
-  })
-
-  test("says a process call's service is unset only when GAS lists its variable", () => {
-    const [generate, terms] = loadable({
-      missingServiceUrls: ['AGREEMENT_DOCS_URL']
-    }).processes
-
-    expect(generate.call?.unset).toBe(false)
-    expect(terms.call?.unset).toBe(true)
-  })
-
   test('has no Endpoints fact for a definition with no root endpoints', () => {
-    expect(factOf(loadable(), 'endpoints')).toBeUndefined()
+    expect(factOf(loadable(), 'Endpoints')).toBeUndefined()
   })
 })
 
 describe('toAgreementTab: unset service URLs', () => {
-  test('passes on the URLs GAS says are unset', () => {
+  test('names the services GAS has no URL for', () => {
     expect(
-      loadable({ missingServiceUrls: ['QA_COMPLEX_UNSET_URL'] })
-        .missingServiceUrls
-    ).toEqual(['QA_COMPLEX_UNSET_URL'])
+      loadable({ missingServiceUrls: ['AGREEMENT_DOCS_URL', 'LAND_DATA_URL'] })
+        .missingServices
+    ).toEqual(['AGREEMENT_DOCS', 'LAND_DATA'])
   })
 
-  test('says none when an older GAS does not say, even with an address it has no URL for', () => {
-    expect(loadable().missingServiceUrls).toEqual([])
+  test('names none when an older GAS does not say', () => {
+    expect(loadable().missingServices).toEqual([])
   })
 })
 
 describe('toAgreementTab: states', () => {
-  test('groups each state with its actions, saying what each requires and runs', () => {
-    const [offered] = loadable().states
+  test('gives each action a row, naming the state and its flags on its first', () => {
+    const { states } = loadable()
 
-    expect(offered).toEqual({
-      name: 'offered',
-      initial: true,
-      locksVersion: false,
-      page: 'offered',
-      pageProcesses: [],
-      actions: [
-        {
-          name: 'accept',
-          target: 'accepted',
-          stays: false,
-          page: 'accept',
-          requires: [
-            {
-              name: 'confirm',
-              value: '$.form.confirm',
-              message: 'Confirm you have read the terms'
-            }
-          ],
-          runs: ['CREATE_AGREEMENT_PAYMENT'],
-          sets: []
-        },
-        {
-          name: 'withdraw',
-          target: 'withdrawn',
-          stays: false,
-          page: null,
-          requires: [],
-          runs: [],
-          sets: []
-        },
-        {
-          name: 'cancel',
-          target: 'cancelled',
-          stays: false,
-          page: null,
-          requires: [],
-          runs: [],
-          sets: []
-        }
-      ]
+    expect(states.slice(0, 3)).toEqual([
+      {
+        state: 'offered',
+        flags: ['initial'],
+        page: 'offered',
+        action: 'accept',
+        target: 'accepted',
+        requires: [
+          {
+            name: 'confirm',
+            value: '$.form.confirm',
+            message: 'Confirm you have read the terms'
+          }
+        ],
+        runs: [{ process: 'CREATE_AGREEMENT_PAYMENT', payment: true }]
+      },
+      {
+        state: 'offered',
+        flags: [],
+        page: 'offered',
+        action: 'withdraw',
+        target: 'withdrawn',
+        requires: [],
+        runs: []
+      },
+      {
+        state: 'offered',
+        flags: [],
+        page: 'offered',
+        action: 'cancel',
+        target: 'cancelled',
+        requires: [],
+        runs: []
+      }
+    ])
+  })
+
+  test('marks accepted as the state that locks the version', () => {
+    expect(loadable().states[3]).toMatchObject({
+      state: 'accepted',
+      flags: ['locks version'],
+      action: 'terminate'
     })
   })
 
-  test('marks accepted as the state that locks the version, with its page processes', () => {
-    const accepted = loadable().states[1]
-
-    expect(accepted).toMatchObject({
-      name: 'accepted',
-      initial: false,
-      locksVersion: true,
-      pageProcesses: ['GENERATE_OFFER']
-    })
-    expect(loadable().pageProcesses).toBe(true)
-  })
-
-  test('gives a state with no actions none, and no page as null', () => {
-    expect(loadable().states[3]).toEqual({
-      name: 'cancelled',
-      initial: false,
-      locksVersion: false,
+  test('gives a state with no actions one row of its own, and no page as null', () => {
+    expect(loadable().states.at(-2)).toEqual({
+      state: 'cancelled',
+      flags: [],
       page: null,
-      pageProcesses: [],
-      actions: []
+      action: null,
+      target: null,
+      requires: [],
+      runs: []
     })
-  })
-
-  test('says a move to its own state stays, and the fields a move sets', () => {
-    const refresh = qaComplex().states[0].actions[2]
-
-    expect(refresh).toMatchObject({
-      name: 'refresh',
-      stays: true,
-      sets: ['totalAmountPence']
-    })
-  })
-
-  test('leaves the page view column out when no state runs a process on a page view', () => {
-    const states = Object.fromEntries(
-      Object.entries(agreementDefinition.states).map(([name, state]) => [
-        name,
-        { ...state, processes: undefined }
-      ])
-    )
-
-    expect(withDefinition({ states }).pageProcesses).toBe(false)
   })
 })
 
@@ -411,117 +304,77 @@ describe('toAgreementTab: pages', () => {
     ])
   })
 
-  test('says what changes what the customer sees, beyond the components', () => {
+  test('says in one line what the customer sees beyond the title', () => {
     const document = qaComplex().pages.find(({ id }) => id === 'document')
 
     expect(document).toMatchObject({
       title: 'Agreement document',
-      details: [
-        { kind: 'layout', layout: 'document' },
-        { kind: 'watermark', state: 'offered', text: 'DRAFT - TEST DATA' },
-        { kind: 'print' },
-        { kind: 'contents' },
-        { kind: 'back', href: '/agreements/{agreementNumber}' },
-        { kind: 'section', id: 'parties', condition: null },
-        {
-          kind: 'section',
-          id: 'acceptance',
-          condition: toMappingValue('$.agreement.acceptedAt')
-        }
-      ],
-      components: ['heading'],
+      shows:
+        'document layout, DRAFT - TEST DATA watermark when offered, printable, contents list, back link to /agreements/{agreementNumber}, parties, acceptance (shown when $.agreement.acceptedAt), heading',
       buttons: []
     })
   })
 
-  test('lists the buttons nested anywhere on a page, flagging one whose action has no page or is not an action there', () => {
-    const offered = qaComplex().pages[0]
-
-    expect(offered.details).toEqual([
-      { kind: 'back', href: '/agreements/current' }
-    ])
-    expect(offered.buttons).toEqual([
-      {
-        text: 'Review and accept',
-        action: 'accept',
-        form: false,
-        page: 'accept',
-        problem: null,
-        states: ['offered']
-      },
+  test('lists the buttons nested anywhere on a page, saying why one returns an error', () => {
+    expect(qaComplex().pages[0].buttons).toEqual([
+      { text: 'Review and accept', action: 'accept', problem: null },
       {
         text: 'Withdraw this offer',
         action: 'withdraw',
-        form: false,
-        page: null,
-        problem: 'no-page',
-        states: ['offered']
+        problem: 'withdraw has no page: this button returns an error'
       },
       {
         text: 'Archive',
         action: 'archive',
-        form: false,
-        page: null,
-        problem: 'not-in-state',
-        states: ['offered']
+        problem:
+          'archive is not an action of offered: this button returns an error'
       }
     ])
   })
 
   test("names a form's button by its text, needing no page of its action", () => {
-    const accept = qaComplex().pages[1]
-
-    expect(accept.buttons).toEqual([
-      {
-        text: 'Accept offer',
-        action: 'accept',
-        form: true,
-        page: null,
-        problem: null,
-        states: ['offered']
-      }
-    ])
-  })
-
-  test('flags a standalone button on the accepted page whose action has no page', () => {
-    const accepted = qaComplex().pages.find(({ id }) => id === 'accepted')
-
-    expect(accepted?.buttons).toMatchObject([
-      { text: 'End this agreement', action: 'terminate', problem: 'no-page' }
+    expect(qaComplex().pages[1].buttons).toEqual([
+      { text: 'Accept offer', action: 'accept', problem: null }
     ])
   })
 })
 
 describe('toAgreementTab: created with', () => {
-  test('lists what the agreement is created with, nested as written', () => {
+  test('lists each value by its whole path and where it comes from', () => {
     const tab = withDefinition({
       create: {
         target: 'offered',
         application: '$.input.answers',
         values: {
-          schemeCode: 'QA-COMPLEX',
-          actions: {
-            itemsRef: '$.application.annualActions',
-            items: { ref: '@.ref' }
-          }
+          sbi: '$.application.identifiers.sbi',
+          currency: 'GBP',
+          total: 'jsonata:$sum($.parcels.amount)',
+          parcels: { itemsRef: '$.answers.parcels', items: { id: '@.id' } }
         }
       }
     })
 
     expect(tab.createdWith).toEqual([
       {
-        field: 'schemeCode',
-        depth: 0,
-        kind: 'value',
-        value: toMappingValue('QA-COMPLEX')
+        field: 'sbi',
+        how: 'From',
+        value: '$.application.identifiers.sbi',
+        calculated: false
+      },
+      { field: 'currency', how: 'Fixed', value: 'GBP', calculated: false },
+      {
+        field: 'total',
+        how: 'Calculated',
+        value: '$sum($.parcels.amount)',
+        calculated: true
       },
       {
-        field: 'actions',
-        depth: 0,
-        kind: 'each',
-        forEach: '$.application.annualActions'
+        field: 'parcels',
+        how: 'For each',
+        value: '$.answers.parcels',
+        calculated: false
       },
-      { field: 'ref', depth: 1, kind: 'value', value: toMappingValue('@.ref') }
+      { field: 'parcels.id', how: 'From', value: '@.id', calculated: false }
     ])
   })
 
@@ -531,133 +384,59 @@ describe('toAgreementTab: created with', () => {
 })
 
 describe('toAgreementTab: processes', () => {
-  test("gives an endpoint process its type in words, GAS's address and where its outputs land", () => {
-    const [generate, terms, payment] = loadable().processes
-
-    expect(generate).toEqual({
-      name: 'GENERATE_OFFER',
-      type: 'HTTP call',
-      requestsPayment: false,
-      call: {
-        method: 'POST',
-        service: 'LAND_DATA',
-        path: '/api/v2/parcels/{sbi}',
-        url: 'https://land-data.example/api/v2/parcels/{sbi}',
-        unset: null
-      },
-      sends: [
-        {
-          depth: 0,
-          field: 'sbi',
-          kind: 'value',
-          value: toMappingValue('$.application.sbi')
-        }
-      ],
-      bodyOnGet: false,
-      outputs: [
-        {
-          field: 'offer',
-          depth: 0,
-          kind: 'value',
-          value: toMappingValue('$.response.offer')
+  test("gives each process its type in words, GAS's URL and its outputs", () => {
+    expect(loadable().processes).toEqual([
+      {
+        name: 'GENERATE_OFFER',
+        type: 'HTTP call',
+        requestsPayment: false,
+        call: {
+          method: 'POST',
+          service: 'LAND_DATA',
+          path: '/api/v2/parcels/{sbi}',
+          url: 'https://land-data.example/api/v2/parcels/{sbi}'
         },
-        {
-          field: 'totalAmountPence',
-          depth: 0,
-          kind: 'value',
-          value: toMappingValue('$.response.totalAmountPence')
-        }
-      ],
-      lands: ['saved', 'page']
-    })
-    expect(terms).toMatchObject({
-      name: 'FETCH_TERMS',
-      call: { url: null, path: '/terms', unset: null },
-      lands: []
-    })
-    expect(payment).toMatchObject({
-      name: 'CREATE_AGREEMENT_PAYMENT',
-      type: 'Built into GAS',
-      requestsPayment: true,
-      call: null,
-      lands: ['saved']
-    })
-    expect(loadable().paymentHref).toBe('/payment')
-  })
-
-  test('says what a process sends, and when a body goes with a GET', () => {
-    const [lookUp] = withDefinition({
-      processDefinitions: {
-        LOOK_UP_SCHEME_NAME: {
-          type: 'endpoint',
-          endpoint: { method: 'GET', path: '/health', service: 'QA_HEALTH' },
-          request: {
-            body: { probe: 'qa-complex', farmType: '$.application.farmType' }
+        outputs: [
+          {
+            field: 'offer',
+            how: 'From',
+            value: '$.response.offer',
+            calculated: false
           },
-          output: {}
-        }
-      }
-    }).processes
-
-    expect(lookUp).toMatchObject({
-      sends: [
-        { field: 'probe', value: toMappingValue('qa-complex') },
-        { field: 'farmType', value: toMappingValue('$.application.farmType') }
-      ],
-      bodyOnGet: true
-    })
-  })
-
-  test('says the outputs of a process run only on page views are for the page only', () => {
-    const tab = withDefinition({
-      states: qaStates,
-      pages: qaPages,
-      processDefinitions: {
-        CHECK_TOTALS_ON_VIEW: {
-          type: 'endpoint',
-          endpoint: { method: 'GET', path: '/health', service: 'QA_HEALTH' },
-          request: { body: {} },
-          output: { totalAmountPence: 'jsonata:$.agreement.totalAmountPence' }
-        }
-      }
-    })
-
-    expect(tab.processes[0].lands).toEqual(['page'])
-  })
-
-  test('gives the fields of a nested output, walking a collection as GAS does', () => {
-    const [generate] = withDefinition({
-      processDefinitions: {
-        GENERATE_OFFER: {
-          type: 'endpoint',
-          endpoint: { method: 'POST', path: '/offer', service: 'LAND_DATA' },
-          request: { body: {} },
-          output: {
-            actions: {
-              itemsRef:
-                'jsonata:$.response.payment.payments[0].invoiceLines[quantity > 0]',
-              items: { ref: '@.pigType' }
-            },
-            items: []
+          {
+            field: 'totalAmountPence',
+            how: 'From',
+            value: '$.response.totalAmountPence',
+            calculated: false
           }
-        }
+        ]
+      },
+      {
+        name: 'FETCH_TERMS',
+        type: 'HTTP call',
+        requestsPayment: false,
+        call: {
+          method: 'GET',
+          service: 'AGREEMENT_DOCS',
+          path: '/terms',
+          url: null
+        },
+        outputs: [
+          {
+            field: 'terms',
+            how: 'From',
+            value: '$.response.terms',
+            calculated: false
+          }
+        ]
+      },
+      {
+        name: 'CREATE_AGREEMENT_PAYMENT',
+        type: 'Built into GAS',
+        requestsPayment: true,
+        call: null,
+        outputs: []
       }
-    }).processes
-
-    expect(generate.outputs).toEqual([
-      {
-        field: 'actions',
-        depth: 0,
-        kind: 'each',
-        forEach: '$.response.payment.payments[0].invoiceLines[quantity > 0]'
-      },
-      {
-        field: 'ref',
-        depth: 1,
-        kind: 'value',
-        value: toMappingValue('@.pigType')
-      },
-      { field: 'items', depth: 0, kind: 'list', empty: true }
     ])
   })
 
@@ -669,28 +448,28 @@ describe('toAgreementTab: processes', () => {
 })
 
 describe('toAgreementTab: a definition GAS cannot load', () => {
-  test('views the definition as stored', () => {
-    expect(loadable().raw).toEqual(toJsonView(agreementDefinition))
-  })
-
-  test('gives only the problem, the major and the definition as stored', () => {
+  test('gives the problem, the major and the definition as stored', () => {
     expect(
-      toAgreementTab(agreement({ problem: 'bad mapping' }), context)
+      toAgreementTab(agreement({ problem: 'states.x: unknown state' }), context)
     ).toEqual({
-      problem: 'bad mapping',
+      problem: 'states.x: unknown state',
       failed: false,
       major: '3',
       version: '3.16.3',
-      raw: toJsonView(agreementDefinition)
+      raw: JSON.stringify(agreementDefinition, null, 2)
     })
   })
 
   test('says GAS has marked the file unusable when its fetch failed for good', () => {
-    expect(
-      toAgreementTab(agreement({ problem: 'bad mapping' }), {
-        ...context,
-        fetchStatus: 'permanent_error'
-      })
-    ).toMatchObject({ failed: true })
+    const tab = toAgreementTab(agreement({ problem: 'bad' }), {
+      ...context,
+      fetchStatus: 'permanent_error'
+    })
+
+    expect(tab).toMatchObject({ failed: true })
+  })
+
+  test('gives a loadable definition its raw JSON too', () => {
+    expect(loadable().raw).toBe(JSON.stringify(agreementDefinition, null, 2))
   })
 })

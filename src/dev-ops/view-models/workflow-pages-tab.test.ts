@@ -1,6 +1,5 @@
 import type { WorkflowDefinition } from '../use-cases/get-workflow-page.use-case.ts'
 import { woodlandDefinition } from '../use-cases/test-fixtures.ts'
-import { toMappingValue } from './mapping-table.ts'
 import { toWorkflowPagesTab } from './workflow-pages-tab.ts'
 
 const withWorkflow = (
@@ -10,56 +9,54 @@ const withWorkflow = (
   addresses: []
 })
 
-const integrationsHref =
-  '/dev-ops/workflows/woodland-creation/1.2.0?tab=integrations&back=%2Fdev-ops%2Fworkflows'
-
-const woodland = toWorkflowPagesTab(woodlandDefinition, integrationsHref)
+const woodland = toWorkflowPagesTab(woodlandDefinition)
 
 describe('toWorkflowPagesTab', () => {
-  test('says what CW calls for each button and each action a tab fires, linked to its Integrations card', () => {
+  test('says what CW calls for each button and each action a tab fires', () => {
     expect(woodland.banner.buttons).toEqual([
-      expect.objectContaining({
-        kind: 'call',
-        action: expect.objectContaining({ code: 'RECALCULATE' }),
-        href: `${integrationsHref}#action-RECALCULATE`
-      })
+      {
+        name: 'Recalculate payment',
+        call: {
+          kind: 'call',
+          method: 'POST',
+          url: '/api/v1/calculate',
+          service: 'PAYMENT_CALC',
+          hasUrl: false
+        }
+      }
     ])
-    expect(
-      woodland.tabs.find(({ key }) => key === 'land-parcels')?.fires
-    ).toEqual([
-      expect.objectContaining({
+    expect(woodland.tabs.find(({ label }) => label === 'Land')?.calls).toEqual([
+      {
         kind: 'call',
-        action: expect.objectContaining({ code: 'REFRESH_PARCELS' }),
-        href: `${integrationsHref}#action-REFRESH_PARCELS`
-      })
+        method: 'GET',
+        url: 'https://land-data.example/api/v2/parcels/{sbi}',
+        service: 'LAND_DATA',
+        hasUrl: true
+      }
     ])
   })
 
   test('keeps each shown action when two share a code', () => {
     const [action] = woodlandDefinition.workflow.externalActions ?? []
-    const twin = { ...action, name: 'Recalculate again' }
 
-    const tab = toWorkflowPagesTab(
-      {
-        ...woodlandDefinition,
-        workflow: {
-          ...woodlandDefinition.workflow,
-          externalActions: [
-            { ...action, display: true },
-            { ...twin, display: true }
-          ]
-        }
-      },
-      integrationsHref
-    )
+    const tab = toWorkflowPagesTab({
+      ...woodlandDefinition,
+      workflow: {
+        ...woodlandDefinition.workflow,
+        externalActions: [
+          { ...action, display: true },
+          { ...action, name: 'Recalculate again', display: true }
+        ]
+      }
+    })
 
-    expect(tab.banner.buttons).toEqual([
-      expect.objectContaining({ action: { ...action, display: true } }),
-      expect.objectContaining({ action: { ...twin, display: true } })
+    expect(tab.banner.buttons.map(({ name }) => name)).toEqual([
+      'Recalculate payment',
+      'Recalculate again'
     ])
   })
 
-  test('links an action with no endpoint, but not one that is not defined', () => {
+  test('says a tab calls an action that is not defined, or one with no endpoint', () => {
     const tab = toWorkflowPagesTab(
       withWorkflow({
         externalActions: [
@@ -73,51 +70,49 @@ describe('toWorkflowPagesTab', () => {
         ],
         pages: {
           cases: {
-            details: { tabs: { land: { action: { a: 'MISSING', b: 'BARE' } } } }
+            details: {
+              tabs: {
+                land: {
+                  link: { text: 'Land', index: 2 },
+                  action: { a: 'MISSING', b: 'BARE' }
+                }
+              }
+            }
           }
         }
-      }),
-      integrationsHref
+      })
     )
 
-    expect(
-      tab.tabs
-        .find(({ key }) => key === 'land')
-        ?.fires.map(({ kind, href }) => ({ kind, href }))
-    ).toEqual([
-      { kind: 'not-defined', href: null },
-      { kind: 'no-endpoint', href: `${integrationsHref}#action-BARE` }
+    expect(tab.tabs.find(({ label }) => label === 'Land')?.calls).toEqual([
+      { kind: 'not-defined', code: 'MISSING' },
+      { kind: 'no-endpoint' }
     ])
   })
 
-  test('reads the banner title and summary fields in key order', () => {
-    expect(woodland.banner.title).toEqual({
-      kind: 'value',
-      text: '$.payload.answers.businessName'
+  test('reads the banner heading and summary fields in key order', () => {
+    expect(woodland.banner.heading).toEqual({
+      text: '$.payload.answers.businessName',
+      calculated: false
     })
     expect(woodland.banner.summary).toEqual([
       {
-        key: 'sbi',
         label: 'SBI',
-        valueFrom: { kind: 'value', text: '$.payload.identifiers.sbi' },
+        valueFrom: { text: '$.payload.identifiers.sbi', calculated: false },
         type: 'string'
       },
       {
-        key: 'reference',
         label: 'Reference',
-        valueFrom: { kind: 'value', text: '$.caseRef' },
+        valueFrom: { text: '$.caseRef', calculated: false },
         type: 'string'
       },
       {
-        key: 'hectares',
         label: 'Area (ha)',
-        valueFrom: { kind: 'value', text: '$.payload.answers.hectares' },
+        valueFrom: { text: '$.payload.answers.hectares', calculated: false },
         type: 'number'
       },
       {
-        key: 'submitted',
         label: 'Submitted',
-        valueFrom: { kind: 'value', text: '$.payload.submittedAt' },
+        valueFrom: { text: '$.payload.submittedAt', calculated: false },
         type: 'date (dd MMM yyyy)'
       }
     ])
@@ -136,22 +131,20 @@ describe('toWorkflowPagesTab', () => {
             }
           }
         }
-      }),
-      integrationsHref
+      })
     )
 
-    expect(tab.banner.title).toEqual({ kind: 'empty', text: '""' })
-    expect(tab.banner.summary[0].valueFrom).toEqual({ kind: 'none' })
+    expect(tab.banner.heading).toEqual({ text: '""', calculated: false })
+    expect(tab.banner.summary[0].valueFrom).toBeNull()
   })
 
-  test('reads a jsonata: path as an expression, and any other path as CW stores it', () => {
+  test('marks a jsonata: path as calculated, without its prefix', () => {
     const tab = toWorkflowPagesTab(
       withWorkflow({
         pages: {
           cases: {
             details: {
               banner: {
-                title: { text: 'jsonata:$.payload.name', type: 'string' },
                 summary: {
                   id: {
                     label: 'ID',
@@ -164,87 +157,73 @@ describe('toWorkflowPagesTab', () => {
             }
           }
         }
-      }),
-      integrationsHref
+      })
     )
 
-    expect(tab.banner.title).toEqual({
-      kind: 'expression',
-      value: toMappingValue('jsonata:$.payload.name')
-    })
     expect(tab.banner.summary.map(({ valueFrom }) => valueFrom)).toEqual([
-      { kind: 'expression', value: toMappingValue('jsonata:$.a & $.b') },
-      { kind: 'value', text: '$.a $.b' }
+      { text: '$.a & $.b', calculated: true },
+      { text: '$.a $.b', calculated: false }
     ])
   })
 
-  test('has no title, buttons or fields without a banner', () => {
+  test('has no heading, buttons or fields without a banner', () => {
     const tab = toWorkflowPagesTab(
       withWorkflow({
         externalActions: woodlandDefinition.workflow.externalActions
-      }),
-      integrationsHref
+      })
     )
 
-    expect(tab.banner).toEqual({
-      title: { kind: 'none' },
-      buttons: [],
-      summary: []
-    })
+    expect(tab.banner).toEqual({ heading: null, buttons: [], summary: [] })
   })
 
-  test('numbers the case tabs from one', () => {
+  test('numbers the case tabs from one, with when each shows and where its link goes', () => {
     expect(
-      woodland.tabs.map(({ order, label, builtIn, shownWhen, components }) => ({
+      woodland.tabs.map(({ order, label, builtIn, shownWhen, link }) => ({
         order,
         label,
         builtIn,
         shownWhen,
-        components
+        link
       }))
     ).toEqual([
-      {
-        order: 1,
-        label: 'Tasks',
-        builtIn: true,
-        shownWhen: null,
-        components: []
-      },
+      { order: 1, label: 'Tasks', builtIn: true, shownWhen: null, link: null },
       {
         order: 2,
         label: 'Application',
         builtIn: true,
         shownWhen: null,
-        components: ['summary-list']
+        link: null
       },
-      {
-        order: 3,
-        label: 'Land',
-        builtIn: false,
-        shownWhen: null,
-        components: ['table']
-      },
+      { order: 3, label: 'Land', builtIn: false, shownWhen: null, link: null },
       {
         order: 4,
         label: 'Timeline',
         builtIn: true,
         shownWhen: null,
-        components: []
+        link: null
       },
-      {
-        order: 5,
-        label: 'Notes',
-        builtIn: true,
-        shownWhen: null,
-        components: []
-      },
+      { order: 5, label: 'Notes', builtIn: true, shownWhen: null, link: null },
       {
         order: 6,
         label: 'Agreement',
         builtIn: false,
-        shownWhen: { kind: 'value', text: '$.supplementaryData.agreements' },
-        components: ['table']
+        shownWhen: {
+          text: '$.supplementaryData.agreements',
+          calculated: false
+        },
+        link: null
       }
+    ])
+  })
+
+  test('lists the components each tab draws', () => {
+    expect(woodland.tabs.map(({ components }) => components)).toEqual([
+      [],
+      ['summary-list'],
+      ['table'],
+      [],
+      [],
+      ['table']
     ])
   })
 })

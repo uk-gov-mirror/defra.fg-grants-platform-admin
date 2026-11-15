@@ -8,11 +8,11 @@ describe('toBackLabel', () => {
     ['/dev-ops/cases/woodland/abc-123?tab=events', 'Back to case'],
     [
       '/dev-ops/grants/qa-complex/1.1.0?tab=phases&back=%2Fdev-ops%2Fgrants',
-      'Back to grant qa-complex 1.1.0'
+      'Back to grant qa-complex@1.1.0'
     ],
     [
       '/dev-ops/workflows/qa-complex/1.1.0',
-      'Back to workflow qa-complex 1.1.0'
+      'Back to workflow qa-complex@1.1.0'
     ],
     ['/dev-ops/events/gas/inbox/6ad9086d1650ab8312898a92', 'Back to event']
   ])('names the page %s leads to', (back, label) => {
@@ -21,7 +21,7 @@ describe('toBackLabel', () => {
 
   test('names a version whose code is not valid percent-encoding as written', () => {
     expect(toBackLabel('/dev-ops/grants/%E0/1.0.0', lists)).toBe(
-      'Back to grant %E0 1.0.0'
+      'Back to grant %E0@1.0.0'
     )
   })
 

@@ -1,7 +1,0 @@
-{% from "no-value/macro.njk" import noValue %}
-{# Not lifted over a row's stretched link, so a click on it still opens the row; the whole position is spoken, the label is not. #}
-{%- if params.statusLabel -%}
-<span class="inline-flex max-w-full"><span class="truncate text-base-content/80" title="{{ params.statusLabel }}" aria-hidden="true" data-testid="{{ params.testId }}">{{ params.statusLabel }}</span><span class="sr-only">{{ params.positionLabel }}</span></span>
-{%- else -%}
-{{ noValue({ testId: params.testId }) }}
-{%- endif -%}

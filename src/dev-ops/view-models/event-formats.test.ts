@@ -1,12 +1,5 @@
 import { ukZone } from './zoned-clock.ts'
-import {
-  isIsoInstant,
-  fromZonedInput,
-  toClock,
-  toPreciseInstant,
-  toTimestamp,
-  toZonedInput
-} from './event-formats.ts'
+import { isIsoInstant, fromZonedInput, toZonedInput } from './event-formats.ts'
 
 /**
  * The clocks these tests turn on: BST began 2026-03-29T01:00Z and ended
@@ -127,62 +120,5 @@ describe('isIsoInstant', () => {
     '2026-06-16T24:00:00Z'
   ])('does not read %j as an instant', (value) => {
     expect(isIsoInstant(value)).toBe(false)
-  })
-})
-
-describe('toPreciseInstant', () => {
-  test('states the UK wall clock to the millisecond, with no zone suffix', () => {
-    expect(toPreciseInstant(at('2026-06-16T10:10:00.000Z'), ukZone)).toBe(
-      '16 Jun 2026 11:10:00.000'
-    )
-    expect(toPreciseInstant(at('2026-01-16T10:10:00.000Z'), ukZone)).toBe(
-      '16 Jan 2026 10:10:00.000'
-    )
-  })
-
-  test('keeps the milliseconds of the instant, which the zone does not move', () => {
-    expect(toPreciseInstant(at('2026-06-16T10:10:00.007Z'), ukZone)).toBe(
-      '16 Jun 2026 11:10:00.007'
-    )
-  })
-})
-
-describe('toClock', () => {
-  const now = at('2026-06-16T12:00:00.000Z')
-
-  test('says the UK wall clock alone within a day', () => {
-    expect(toClock(at('2026-06-16T10:10:05.000Z'), now, ukZone)).toBe(
-      '11:10:05'
-    )
-  })
-
-  test('replaces the seconds with the date past a day', () => {
-    expect(toClock(at('2026-06-14T10:10:05.000Z'), now, ukZone)).toBe(
-      '14 Jun 11:10'
-    )
-  })
-})
-
-describe('toTimestamp', () => {
-  test('carries the instant in UTC and the precise clock in UK time', () => {
-    expect(
-      toTimestamp(
-        '2026-06-16T10:10:00.000Z',
-        at('2026-06-16T10:12:00.000Z'),
-        ukZone
-      )
-    ).toEqual({
-      text: '2m ago',
-      instant: '2026-06-16T10:10:00Z',
-      precise: '16 Jun 2026 11:10:00.000'
-    })
-  })
-
-  test.each([[null], ['not a date']])('says nothing of %j', (value) => {
-    expect(toTimestamp(value, at('2026-06-16T10:12:00.000Z'), ukZone)).toEqual({
-      text: '-',
-      instant: '',
-      precise: ''
-    })
   })
 })

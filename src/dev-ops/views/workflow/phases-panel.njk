@@ -1,0 +1,117 @@
+{% import "components/macros.njk" as gpa %}
+
+{% macro statusLink(ref) -%}
+  {%- if ref.href %}{{ gpa.Link({ text: ref.name, href: ref.href }) }}{% else %}{{ gpa.Code({ text: ref.position }) }}{% endif -%}
+{%- endmacro %}
+
+{% macro via(move) -%}
+  {%- if move.kind == 'gas' -%}
+    {{ gpa.Badge({ text: 'GAS message', tone: 'info', size: 'sm' }) }}
+  {%- else -%}
+    {%- call gpa.Inline({ gap: 'xs' }) %}{{ gpa.Text({ text: 'by', tone: 'subtle' }) }}{{ gpa.Text({ text: move.name }) }}{% endcall -%}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro sendTrigger(when) -%}
+  {%- if when.kind == 'sends' %}when {{ when.source }} sends {{ gpa.Code({ text: when.code }) }}
+  {%- elif when.kind == 'claim' %}when the last claim is submitted
+  {%- else %}when it makes that move{% endif -%}
+{%- endmacro %}
+
+{% macro finding(item) -%}
+  {%- if item.kind == 'dead end' -%}
+    {{ gpa.Alert({ tone: 'warning', title: 'Dead end:', text: 'no action or GAS message moves a case out of this status, and it doesn’t close the case. Cases here stay open.', testId: 'workflow-status-finding' }) }}
+  {%- elif item.kind == 'unreachable' -%}
+    {{ gpa.Alert({ tone: 'warning', title: 'Unreachable:', text: 'no action or GAS move leads here, and it isn’t the starting status. A case can only be here if a data fix or migration moved it.', testId: 'workflow-status-finding' }) }}
+  {%- else -%}
+    {%- set body %}If GAS is on grant {{ item.version }} too, after this message GAS is at {{ item.at.name }} and will next send {{ item.sends.name }} ({{ gpa.Code({ text: item.sends.position }) }}) {{ sendTrigger(item.when) }}. This status has no move to it, so CW would dead-letter that message.{% endset -%}
+    {{ gpa.Alert({ tone: 'warning', title: 'Finding', html: body, testId: 'workflow-status-finding' }) }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro tellsGas(tells) -%}
+  {%- if tells.kind == 'mapped' -%}
+    {%- call gpa.Stack({ gap: 'sm' }) -%}
+      {{ gpa.Text({ text: 'CW tells GAS. If the application is in a status that move allows:', tone: 'subtle' }) }}
+      {%- call gpa.Stack({ gap: 'xs' }) -%}
+        {%- for line in tells.lines -%}
+          {%- call gpa.Inline({ gap: 'xs', align: 'center' }) -%}
+            {{ gpa.Text({ text: line.phase.name ~ ', ' ~ line.stage.name }) }}
+            {%- if line.to -%}
+              {{ gpa.Icon({ name: 'arrow-right', size: 'sm', classes: 'gpa-dir-icon', label: 'moves to' }) }}
+              {%- if line.to.href %}{{ gpa.Link({ text: line.to.name, href: line.to.href }) }}{% else %}{{ gpa.Text({ text: line.to.name }) }}{% endif -%}
+            {%- else -%}
+              {%- set ignored %}GAS ignores it: {{ gpa.Code({ text: line.mappedTo }) }} isn’t a status.{% endset -%}
+              {{ gpa.Text({ html: ignored, tone: 'subtle' }) }}
+            {%- endif -%}
+          {%- endcall -%}
+        {%- endfor -%}
+      {%- endcall -%}
+      {{ gpa.Text({ text: 'Otherwise GAS ignores it.', tone: 'subtle' }) }}
+    {%- endcall -%}
+  {%- elif tells.kind == 'ignored' -%}
+    {{ gpa.Text({ text: 'GAS ignores this.' }) }}
+  {%- elif tells.kind == 'grant' and tells.outcome in ['not-stored', 'unreadable'] -%}
+    {%- set body %}What GAS does with this message can’t be shown. {{ gpa.Link({ text: 'Open ' ~ tells.name, href: tells.href }) }}{% endset -%}
+    {{ gpa.Alert({ tone: 'info' if tells.outcome == 'not-stored' else 'warning', title: 'Grant definition not stored.' if tells.outcome == 'not-stored' else 'GAS can’t read the grant definition.', html: body, testId: 'workflow-status-grant' }) }}
+  {%- elif tells.kind == 'grant' and tells.outcome == 'no-grant' -%}
+    {{ gpa.Text({ text: 'No GAS grant has the version ' ~ tells.name ~ '.', tone: 'subtle', testId: 'workflow-status-grant' }) }}
+  {%- elif tells.kind == 'grant' -%}
+    {{ gpa.Alert({ tone: 'warning', title: 'What GAS does with this message can’t be shown: GAS didn’t answer.', testId: 'workflow-status-grant' }) }}
+  {%- elif tells.text == 'start' -%}
+    {{ gpa.Text({ text: 'Not sent (cases start here)', tone: 'subtle' }) }}
+  {%- else -%}
+    {{ gpa.Text({ text: 'Not sent. Cases only arrive here when GAS moves them, and CW tells GAS only about caseworker actions.', tone: 'subtle' }) }}
+  {%- endif -%}
+{%- endmacro %}
+
+{#- One status's aside: shown while it is the pick, hidden otherwise. -#}
+{% macro workflowStatusPanel(panel, hidden) -%}
+  {%- call gpa.Card({ padded: true, title: 'Status', testId: 'workflow-status-panel', attributes: { 'data-state': panel.id, hidden: hidden } }) -%}{%- call gpa.Stack({ gap: 'lg' }) -%}
+    {{ gpa.Heading({ level: 3, text: panel.name }) }}
+    {%- if panel.flags | length -%}
+      {%- call gpa.Inline({ gap: 'xs' }) -%}
+        {%- for flag in panel.flags -%}
+          {%- call gpa.Tooltip({ text: flag.title, focusable: true }) %}{{ gpa.Badge({ text: flag.label, size: 'sm', tone: 'warning' if flag.label == 'closes case' else 'neutral' }) }}{% endcall -%}
+        {%- endfor -%}
+      {%- endcall -%}
+    {%- endif -%}
+    {%- for item in panel.findings %}{{ finding(item) }}{% endfor -%}
+    {%- for item in panel.maySend -%}
+      {%- set body %}If {{ item.onlyWhen }}, GAS may also send {{ item.sends.name }} ({{ gpa.Code({ text: item.sends.position }) }}){% if not item.sends.defined %}, which the grant doesn’t define{% endif %}; no move from this status takes that message.{% endset -%}
+      {{ gpa.Alert({ tone: 'info', title: 'GAS may send', html: body, testId: 'workflow-status-may-send' }) }}
+    {%- endfor -%}
+    {%- call gpa.FactsList({ stacked: true }) -%}
+      {{ gpa.Fact({ label: 'CW shows', html: gpa.StatusDot({ text: panel.name, tone: panel.tone }) }) }}
+      {{ gpa.Fact({ label: 'Phase', text: panel.phase.name }) }}
+      {{ gpa.Fact({ label: 'Stage', text: panel.stage.name }) }}
+      {%- set waysIn -%}
+        {%- if panel.startsHere %}{{ gpa.Badge({ text: 'New cases start here', tone: 'info', size: 'sm' }) }}{% endif -%}
+        {%- if panel.waysIn | length -%}
+          {%- call gpa.Stack({ gap: 'xs' }) -%}
+            {%- for way in panel.waysIn -%}
+              {%- call gpa.Inline({ gap: 'sm', align: 'center' }) %}{{ gpa.Icon({ name: 'arrow-left', size: 'sm', classes: 'gpa-dir-icon' }) }}{{ statusLink(way.from) }}{{ via(way.via) }}{% endcall -%}
+            {%- endfor -%}
+          {%- endcall -%}
+        {%- elif not panel.startsHere %}{{ gpa.NoValue() }}{% endif -%}
+      {%- endset -%}
+      {{ gpa.Fact({ label: 'Ways in', html: waysIn }) }}
+      {%- set waysOut -%}
+        {%- if panel.closes %}{{ gpa.Badge({ text: 'Closes case', tone: 'warning', size: 'sm' }) }}{% endif -%}
+        {%- if panel.waysOut | length -%}
+          {%- call gpa.Stack({ gap: 'xs' }) -%}
+            {%- for way in panel.waysOut -%}
+              {%- call gpa.Inline({ gap: 'sm', align: 'center' }) -%}
+                {{ gpa.Icon({ name: 'arrow-right', size: 'sm', classes: 'gpa-dir-icon' }) }}{{ statusLink(way.to) }}{{ via(way.move) }}
+                {%- for badge in way.move.badges %}{{ gpa.Badge({ text: badge, size: 'sm', variant: 'outline' }) }}{% endfor -%}
+                {%- if way.tasks and way.tasks.kind != 'none-in-stage' %}{{ gpa.Badge({ text: 'needs tasks', tone: 'warning', size: 'sm' }) }}{% endif -%}
+              {%- endcall -%}
+            {%- endfor -%}
+          {%- endcall -%}
+        {%- elif not panel.closes %}{{ gpa.NoValue() }}{% endif -%}
+      {%- endset -%}
+      {{ gpa.Fact({ label: 'Ways out', html: waysOut }) }}
+      {{ gpa.Fact({ label: 'Tells GAS', html: tellsGas(panel.tellsGas) }) }}
+    {%- endcall -%}
+  {%- endcall -%}{%- endcall -%}
+{%- endmacro %}

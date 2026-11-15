@@ -7,13 +7,11 @@ import type {
 } from '../use-cases/get-workflow-page.use-case.ts'
 import { woodlandDefinition } from '../use-cases/test-fixtures.ts'
 import { toWorkflowIntegrations } from './workflow-integrations.ts'
+import type { Words } from './words.ts'
 
 // The tab never reads phases, so a fixture may leave them out.
 type AnyWorkflow = Omit<StoredWorkflow, 'phases'> &
   Partial<Pick<StoredWorkflow, 'phases'>>
-
-const pagesHref =
-  '/dev-ops/workflows/woodland-creation/1.2.0?tab=pages&back=%2Fdev-ops%2Fworkflows'
 
 const action = (
   code: string,
@@ -57,108 +55,81 @@ const definitionOf = (
 })
 
 const integrationsOf = (workflow: AnyWorkflow, urls: (string | null)[] = []) =>
-  toWorkflowIntegrations(definitionOf(workflow, urls), pagesHref)
+  toWorkflowIntegrations(definitionOf(workflow, urls))
 
 const cardOf = (workflow: AnyWorkflow, index = 0) =>
   integrationsOf(workflow).cards[index]
 
-/** Every write, whatever triggers it. */
-const writesOf = ({ writes }: { writes: { writes: object[] }[] }) =>
-  writes.flatMap((group) => group.writes)
+/** Every write's words, as one line each. */
+const writesOf = ({ writes }: { writes: Words[] }) =>
+  writes.map((line) =>
+    line
+      .map((word) =>
+        typeof word === 'string'
+          ? word
+          : `\`${'code' in word ? word.code : ''}\``
+      )
+      .join('')
+  )
 
 describe('toWorkflowIntegrations', () => {
   test("shows the prototype's two actions, each from its trigger to what it writes", () => {
-    expect(toWorkflowIntegrations(woodlandDefinition, pagesHref)).toEqual({
-      cards: [
-        {
-          code: 'RECALCULATE',
-          name: 'Recalculate payment',
-          description: 'Ask the land service for a new payment figure.',
-          anchor: 'action-RECALCULATE',
-          problems: [],
-          apiOnly: false,
-          triggers: [
-            {
-              kind: 'button',
-              label: 'Recalculate payment',
-              href: `${pagesHref}#banner`,
-              customLink: null
-            }
-          ],
-          call: {
-            method: 'POST',
-            path: '/api/v1/calculate',
-            endpointCode: 'recalculate',
-            address: { code: 'recalculate', service: 'PAYMENT_CALC', url: null }
-          },
-          sends: [],
-          headersService: null,
-          writes: [
-            {
-              trigger: null,
-              writes: [
-                {
-                  kind: 'target',
-                  path: 'supplementaryData.payment',
-                  shape: 'object-unkeyed',
-                  key: null,
-                  whenRun: false
-                },
-                { kind: 'timeline' }
-              ]
-            }
-          ]
+    const { cards } = toWorkflowIntegrations(woodlandDefinition)
+
+    expect(cards.map(({ writes, ...card }) => card)).toEqual([
+      {
+        name: 'Recalculate payment',
+        description: 'Ask the land service for a new payment figure.',
+        problems: [],
+        apiOnly: false,
+        triggers: [
+          { kind: 'button', label: 'Recalculate payment', customLink: null }
+        ],
+        call: {
+          kind: 'call',
+          method: 'POST',
+          url: '/api/v1/calculate',
+          service: 'PAYMENT_CALC',
+          hasUrl: false,
+          endpoint: 'recalculate'
         },
-        {
-          code: 'REFRESH_PARCELS',
-          name: 'Refresh land parcels',
-          description: null,
-          anchor: 'action-REFRESH_PARCELS',
-          problems: [],
-          apiOnly: false,
-          triggers: [
-            {
-              kind: 'tab',
-              label: 'Land',
-              href: `${pagesHref}#tab-land-parcels`,
-              customLink: null
-            }
-          ],
-          call: {
-            method: 'GET',
-            path: '/api/v2/parcels/{sbi}',
-            endpointCode: 'land-parcels',
-            address: {
-              code: 'land-parcels',
-              service: 'LAND_DATA',
-              url: 'https://land-data.example/api/v2/parcels/{sbi}'
-            }
-          },
-          sends: [
-            {
-              kind: 'PATH',
-              name: 'sbi',
-              source: 'case',
-              text: '$.payload.identifiers.sbi'
-            }
-          ],
-          headersService: null,
-          writes: [
-            {
-              trigger: null,
-              writes: [
-                {
-                  kind: 'actionData',
-                  path: 'actionData.parcels',
-                  tabs: ['Land']
-                }
-              ]
-            }
-          ]
-        }
+        sends: [],
+        headersService: null
+      },
+      {
+        name: 'Refresh land parcels',
+        description: null,
+        problems: [],
+        apiOnly: false,
+        triggers: [{ kind: 'tab', label: 'Land', customLink: null }],
+        call: {
+          kind: 'call',
+          method: 'GET',
+          url: 'https://land-data.example/api/v2/parcels/{sbi}',
+          service: 'LAND_DATA',
+          hasUrl: true,
+          endpoint: 'land-parcels'
+        },
+        sends: [
+          {
+            kind: 'PATH',
+            name: 'sbi',
+            source: 'case',
+            text: '$.payload.identifiers.sbi'
+          }
+        ],
+        headersService: null
+      }
+    ])
+    expect(cards.map(writesOf)).toEqual([
+      [
+        'Writes to `supplementaryData.payment`: object with no key, which CW refuses to write',
+        'Adds a timeline entry'
       ],
-      unusedEndpoints: []
-    })
+      [
+        'Nothing stored. The result is shown on the Land tab as `actionData.parcels`.'
+      ]
+    ])
   })
 })
 
@@ -213,7 +184,6 @@ describe('toWorkflowIntegrations triggers', () => {
       {
         kind: 'button',
         label: 'Action A',
-        href: `${pagesHref}#banner`,
         customLink: null
       }
     ])
@@ -255,7 +225,6 @@ describe('toWorkflowIntegrations triggers', () => {
       {
         kind: 'tab',
         label: 'Application',
-        href: `${pagesHref}#tab-case-details`,
         customLink: null
       }
     ])
@@ -277,7 +246,6 @@ describe('toWorkflowIntegrations triggers', () => {
       {
         kind: 'tab',
         label: 'Land',
-        href: `${pagesHref}#tab-land`,
         customLink: { address: '/cases/{caseId}/notes' }
       }
     ])
@@ -294,7 +262,6 @@ describe('toWorkflowIntegrations triggers', () => {
       {
         kind: 'tab',
         label: 'Land Parcels',
-        href: `${pagesHref}#tab-land-parcels`,
         customLink: null
       }
     ])
@@ -316,9 +283,9 @@ describe('toWorkflowIntegrations triggers', () => {
       'Later'
     ])
     expect(writesOf(card)).toEqual([
-      { kind: 'timeline' },
-      { kind: 'actionData', path: 'actionData.soon', tabs: ['Sooner'] },
-      { kind: 'actionData', path: 'actionData.late', tabs: ['Later'] }
+      'When pressed: adds a timeline entry',
+      'When a tab opens: nothing stored. The result is shown on the Sooner tab as `actionData.soon`.',
+      'When a tab opens: nothing stored. The result is shown on the Later tab as `actionData.late`.'
     ])
   })
 
@@ -333,8 +300,8 @@ describe('toWorkflowIntegrations triggers', () => {
 
     expect(card.triggers.map(({ label }) => label)).toEqual(['Land', 'Land'])
     expect(writesOf(card)).toEqual([
-      { kind: 'actionData', path: 'actionData.first', tabs: ['Land'] },
-      { kind: 'actionData', path: 'actionData.second', tabs: ['Land'] }
+      'Nothing stored. The result is shown on the Land tab as `actionData.first`.',
+      'Nothing stored. The result is shown on the Land tab as `actionData.second`.'
     ])
   })
 
@@ -349,22 +316,8 @@ describe('toWorkflowIntegrations triggers', () => {
     })
 
     expect(writesOf(card)).toEqual([
-      {
-        kind: 'actionData',
-        path: 'actionData.ping',
-        tabs: ['Service check', 'Ping history']
-      }
+      'Nothing stored. The result is shown on the Service check and Ping history tabs as `actionData.ping`.'
     ])
-  })
-
-  test('escapes a tab key in its link', () => {
-    expect(
-      cardOf({
-        endpoints: [parcels],
-        externalActions: [action('A')],
-        pages: withBanner({ 'a b': { action: { a: 'A' } } })
-      }).triggers[0].href
-    ).toBe(`${pagesHref}#tab-a%20b`)
   })
 })
 
@@ -390,94 +343,73 @@ describe('toWorkflowIntegrations writes', () => {
             }
           })
         ]
-      }),
-      pagesHref
+      })
     )
 
-    expect(integrations.cards[0].writes).toEqual([
-      {
-        trigger: 'pressed',
-        writes: [
-          {
-            kind: 'target',
-            path: 'supplementaryData.qaPings',
-            shape: 'list',
-            key: null,
-            whenRun: false
-          },
-          { kind: 'timeline' }
-        ]
-      },
-      {
-        trigger: 'tab',
-        writes: [
-          {
-            kind: 'actionData',
-            path: 'actionData.ping',
-            tabs: ['Ping history']
-          }
-        ]
-      }
+    expect(writesOf(integrations.cards[0])).toEqual([
+      'When pressed: appends to `supplementaryData.qaPings` (list)',
+      'When pressed: adds a timeline entry',
+      'When a tab opens: nothing stored. The result is shown on the Ping history tab as `actionData.ping`.'
     ])
   })
 
   test('the target, when run, for an action reached only from a tab', () => {
     expect(
+      writesOf(
+        cardOf({
+          endpoints: [parcels],
+          externalActions: [
+            action('A', {
+              target: {
+                targetNode: 'parcels',
+                dataType: 'ARRAY',
+                position: null,
+                place: 'append'
+              }
+            })
+          ],
+          pages: withBanner({ land: { action: { got: 'A' } } })
+        })
+      )
+    ).toEqual([
+      'Appends to `supplementaryData.parcels` (list) when run',
+      'Nothing stored. The result is shown on the Land tab as `actionData.got`.'
+    ])
+  })
+
+  test.each([
+    ['ARRAY', undefined, 'Appends to `supplementaryData.qaPings` (list)'],
+    [
+      'ARRAY',
+      'message',
+      'Writes to `supplementaryData.qaPings`: list, replaces the item with the same `message`, else appends'
+    ],
+    [
+      'OBJECT',
+      'message',
+      'Writes to `supplementaryData.qaPings`: object, keyed by `message`'
+    ]
+  ] as const)('a %s target keyed by %s: %s', (dataType, key, words) => {
+    const [write] = writesOf(
       cardOf({
         endpoints: [parcels],
         externalActions: [
           action('A', {
+            display: true,
             target: {
-              targetNode: 'parcels',
-              dataType: 'ARRAY',
+              targetNode: 'qaPings',
+              dataType,
+              key,
               position: null,
               place: 'append'
             }
           })
         ],
-        pages: withBanner({ land: { action: { got: 'A' } } })
-      }).writes.flatMap(({ writes }) => writes)
-    ).toEqual([
-      {
-        kind: 'target',
-        path: 'supplementaryData.parcels',
-        shape: 'list',
-        key: null,
-        whenRun: true
-      },
-      { kind: 'actionData', path: 'actionData.got', tabs: ['Land'] }
-    ])
-  })
+        pages: withBanner()
+      })
+    )
 
-  test.each([
-    ['ARRAY', undefined, 'list'],
-    ['ARRAY', 'message', 'list-keyed'],
-    ['OBJECT', 'message', 'object-keyed']
-  ] as const)('a %s target keyed by %s as a %s', (dataType, key, shape) => {
-    const [write] = cardOf({
-      endpoints: [parcels],
-      externalActions: [
-        action('A', {
-          display: true,
-          target: {
-            targetNode: 'qaPings',
-            dataType,
-            key,
-            position: null,
-            place: 'append'
-          }
-        })
-      ],
-      pages: withBanner()
-    }).writes.flatMap(({ writes }) => writes)
-
-    expect(write).toEqual({
-      kind: 'target',
-      path: 'supplementaryData.qaPings',
-      shape,
-      key: key ?? null,
-      whenRun: false
-    })
+    expect(write).toBe(words)
   })
 
   test('only a timeline event for a banner button with no target', () => {
@@ -486,8 +418,8 @@ describe('toWorkflowIntegrations writes', () => {
         endpoints: [parcels],
         externalActions: [action('A', { display: true })],
         pages: withBanner()
-      }).writes.flatMap(({ writes }) => writes)
-    ).toEqual([{ kind: 'timeline' }])
+      }).writes
+    ).toEqual([['Adds a timeline entry']])
   })
 
   test('a timeline entry for a shown action, whatever runs it', () => {
@@ -495,8 +427,8 @@ describe('toWorkflowIntegrations writes', () => {
       cardOf({
         endpoints: [parcels],
         externalActions: [action('A', { display: true })]
-      }).writes.flatMap(({ writes }) => writes)
-    ).toEqual([{ kind: 'timeline' }])
+      }).writes
+    ).toEqual([['Adds a timeline entry']])
   })
 
   test('nothing for an action with no target, not shown, that no tab runs', () => {
@@ -588,7 +520,7 @@ describe('toWorkflowIntegrations sends', () => {
 })
 
 describe('toWorkflowIntegrations duplicate codes', () => {
-  test('only the first action with a code runs, so a later one has no trigger, writes or anchor', () => {
+  test('only the first action with a code runs, so a later one has no trigger or writes', () => {
     const integrations = integrationsOf({
       endpoints: [parcels],
       externalActions: [
@@ -598,10 +530,8 @@ describe('toWorkflowIntegrations duplicate codes', () => {
       pages: withBanner({ land: { action: { a: 'A' } } })
     })
 
-    expect(integrations.cards[0].anchor).toBe('action-A')
     expect(integrations.cards[1]).toEqual(
       expect.objectContaining({
-        anchor: null,
         triggers: [],
         writes: [],
         apiOnly: false,
@@ -635,25 +565,18 @@ describe('toWorkflowIntegrations duplicate codes', () => {
       {
         kind: 'button',
         label: 'Action A',
-        href: `${pagesHref}#banner`,
         customLink: null
       }
     ])
     expect(writesOf(integrations.cards[0])).toEqual([
-      {
-        kind: 'target',
-        path: 'supplementaryData.payment',
-        shape: 'object-keyed',
-        key: 'id',
-        whenRun: false
-      }
+      'Writes to `supplementaryData.payment`: object, keyed by `id`'
     ])
     expect(integrations.cards[1].problems).toEqual([
       'CW runs only the first action with code A, so this one never runs'
     ])
   })
 
-  test('a later duplicate still shows its own endpoint, which counts as used by nothing', () => {
+  test('a later duplicate still shows its own endpoint', () => {
     const other = endpoint('other', { service: 'OTHER', method: 'PUT' })
     const integrations = integrationsOf(
       {
@@ -668,54 +591,13 @@ describe('toWorkflowIntegrations duplicate codes', () => {
     )
 
     expect(integrations.cards[1].call).toEqual({
+      kind: 'call',
       method: 'PUT',
-      path: '/parcels',
-      endpointCode: 'other',
-      address: {
-        code: 'other',
-        service: 'OTHER',
-        url: 'https://other.example/parcels'
-      }
+      url: 'https://other.example/parcels',
+      service: 'OTHER',
+      hasUrl: true,
+      endpoint: 'other'
     })
-    expect(integrations.unusedEndpoints).toEqual([
-      {
-        endpointCode: 'other',
-        method: 'PUT',
-        path: '/parcels',
-        address: {
-          code: 'other',
-          service: 'OTHER',
-          url: 'https://other.example/parcels'
-        }
-      }
-    ])
-  })
-
-  test('a second endpoint with a used code is used by nothing, at its own address', () => {
-    const integrations = integrationsOf(
-      {
-        endpoints: [parcels, endpoint('parcels', { path: '/v2/parcels' })],
-        externalActions: [action('A', { display: true })],
-        pages: withBanner()
-      },
-      ['https://land.example/parcels', 'https://land.example/v2/parcels']
-    )
-
-    expect(integrations.cards[0].call?.address.url).toBe(
-      'https://land.example/parcels'
-    )
-    expect(integrations.unusedEndpoints).toEqual([
-      {
-        endpointCode: 'parcels',
-        method: 'GET',
-        path: '/v2/parcels',
-        address: {
-          code: 'parcels',
-          service: 'LAND_DATA',
-          url: 'https://land.example/v2/parcels'
-        }
-      }
-    ])
   })
 })
 
@@ -723,21 +605,9 @@ describe('toWorkflowIntegrations with no external actions', () => {
   test.each([
     ['absent', undefined],
     ['empty', []]
-  ])('%s, every endpoint is used by nothing', (_, externalActions) => {
+  ])('%s, there is nothing to show', (_, externalActions) => {
     expect(integrationsOf({ endpoints: [parcels], externalActions })).toEqual({
-      cards: [],
-      unusedEndpoints: [
-        {
-          endpointCode: 'parcels',
-          method: 'GET',
-          path: '/parcels',
-          address: { code: 'parcels', service: 'LAND_DATA', url: null }
-        }
-      ]
+      cards: []
     })
-  })
-
-  test('and no endpoints, there is nothing to show', () => {
-    expect(integrationsOf({})).toEqual({ cards: [], unusedEndpoints: [] })
   })
 })

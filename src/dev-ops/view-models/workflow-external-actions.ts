@@ -237,7 +237,35 @@ export const toCaseTabs = (workflow: StoredWorkflow): CaseTab[] => {
     .map(({ index: _index, ...tab }) => tab)
 }
 
-export const toActionAnchor = (code: string): string => `action-${code}`
+/** What a call cell shows: CW's resolved address, or the endpoint's path when CW has no usable URL for its service. */
+export type CallCell =
+  | { kind: 'not-defined'; code: string }
+  | { kind: 'no-endpoint' }
+  | {
+      kind: 'call'
+      method: string
+      url: string
+      service: string | null
+      hasUrl: boolean
+    }
 
-export const toActionHref = (integrationsHref: string, code: string): string =>
-  `${integrationsHref}#${encodeURIComponent(toActionAnchor(code))}`
+const toCalled = ({
+  endpoint,
+  address
+}: Extract<ActionCall, { kind: 'call' }>): CallCell => ({
+  kind: 'call',
+  method: endpoint.method,
+  url: address.url ?? endpoint.path,
+  service: address.service ?? endpoint.service,
+  hasUrl: address.url !== null
+})
+
+export const toCallCell = (call: ActionCall): CallCell => {
+  if (call.kind === 'call') {
+    return toCalled(call)
+  }
+
+  return call.kind === 'not-defined'
+    ? { kind: 'not-defined', code: call.code }
+    : { kind: 'no-endpoint' }
+}

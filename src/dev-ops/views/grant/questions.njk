@@ -1,0 +1,51 @@
+{%- if questions.kind == 'no-phases' -%}
+  {{ gpa.Alert({ tone: 'danger', title: 'The grant definition has no phases: every submission throws.', text: 'GAS checks submissions against the first phase’s questions, and there is none. Publish a version with at least one phase.', testId: 'questions-no-phases' }) }}
+{%- else -%}
+  {%- set notChecked -%}
+    {%- call gpa.Tooltip({ text: 'GAS validates submissions against the first phase only. Later phases are kept for reference.', focusable: true }) -%}
+      {{ gpa.Badge({ text: 'Not checked on submission', tone: 'warning', size: 'sm', testId: 'questions-not-checked' }) }}
+    {%- endcall -%}
+  {%- endset -%}
+  {%- set closedText = 'Properties not listed under it are removed on submission.' -%}
+  {%- call gpa.Stack({ gap: 'section' }) -%}
+    {%- for section in questions.sections -%}
+      {%- call gpa.Section({
+        title: section.title,
+        description: 'GAS checks every submission against these questions.' if section.checked,
+        actions: notChecked if not section.checked,
+        testId: 'questions-phase'
+      }) -%}
+        {%- if section.body.kind == 'table' -%}
+          {%- call gpa.DataTable({ styleNonce: styleNonce, label: section.title ~ ' questions', columns: [
+            { key: 'path', label: 'Property', width: 'minmax(240px, 1.6fr)', mono: true },
+            { key: 'type', label: 'Type', width: 'minmax(150px, 0.8fr)' },
+            { key: 'required', label: 'Required', width: '96px' },
+            { key: 'constraints', label: 'Constraints', width: 'minmax(160px, 1.4fr)' }
+          ] }) -%}
+            {%- for row in section.body.rows -%}
+              {%- call gpa.TableRow({ testId: 'questions-row' }) -%}
+                <td role="cell" class="gpa-cell-mono">{{ row.path }}</td>
+                <td role="cell">
+                  {%- call gpa.Inline({ gap: 'xs' }) -%}
+                    {{ gpa.Text({ text: row.type, mono: true }) }}
+                    {%- if row.closed -%}
+                      {%- call gpa.Tooltip({ text: closedText, focusable: true }) -%}{{ gpa.Badge({ text: 'closed', size: 'sm', variant: 'outline', testId: 'questions-closed' }) }}{%- endcall -%}
+                    {%- endif -%}
+                  {%- endcall -%}
+                </td>
+                <td role="cell">{% if row.required %}{{ gpa.Text({ text: 'Yes' }) }}{% else %}{{ gpa.Text({ text: 'No', tone: 'subtle' }) }}{% endif %}</td>
+                <td role="cell">{% if row.constraints | length %}{{ gpa.Text({ text: row.constraints | join(', '), mono: true }) }}{% else %}{{ gpa.NoValue() }}{% endif %}</td>
+              {%- endcall -%}
+            {%- endfor -%}
+          {%- endcall -%}
+        {%- elif section.body.kind == 'problem' -%}
+          {{ gpa.Alert({ tone: 'danger', title: section.body.text, testId: 'questions-problem' }) }}
+        {%- else -%}
+          {%- call gpa.Card() -%}
+            {{ gpa.EmptyState({ compact: true, icon: 'list', title: 'Any answers are accepted.' if section.body.kind == 'any' else 'No questions in this phase.', testId: 'questions-empty' }) }}
+          {%- endcall -%}
+        {%- endif -%}
+      {%- endcall -%}
+    {%- endfor -%}
+  {%- endcall -%}
+{%- endif -%}

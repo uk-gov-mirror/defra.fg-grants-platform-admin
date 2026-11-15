@@ -7,32 +7,25 @@ import {
   toMappingRows,
   toMappingValue
 } from './mapping-table.ts'
-import type { Mapping, MappingRow, MappingValue } from './mapping-table.ts'
+import type { Mapping, MappingValue } from './mapping-table.ts'
+import { toValueCell, toValueRows } from './mapping-rows.ts'
+import type { ValueCell, ValueRow } from './mapping-rows.ts'
 
-/** Null where the key is absent. */
-interface InvoiceLine {
-  schemeCode: MappingValue | null
-  description: MappingValue | null
-  amountPence: MappingValue | null
-  accountCode: MappingValue | null
-  fundCode: MappingValue | null
-  deliveryBody: MappingValue | null
-  marketingYear: MappingValue | null
+/** One field of an invoice line, by the label the page gives it; null where the key is absent. */
+export interface LineCell {
+  label: string
+  cell: ValueCell | null
 }
 
 type InvoiceLineRow =
-  | ({
-      kind: 'line'
-      /** The fields GAS calculates, opened beneath the line in full. */
-      calculated: (keyof InvoiceLine)[]
-    } & InvoiceLine)
-  | { kind: 'from'; value: MappingValue }
+  | { kind: 'line'; cells: LineCell[] }
+  | { kind: 'from'; value: ValueCell }
 
 type InvoiceLines =
-  | { kind: 'lines'; forEach: MappingValue | null; rows: InvoiceLineRow[] }
-  | { kind: 'from'; value: MappingValue }
+  | { kind: 'lines'; forEach: string | null; rows: InvoiceLineRow[] }
+  | { kind: 'from'; value: ValueCell }
 
-/** `forEach` names what a collection of due payments walks; its title then says so. */
+/** `forEach` names what a collection of due payments walks. */
 interface DueTitle {
   text: string
   forEach: string | null
@@ -42,12 +35,17 @@ type DuePayment =
   | {
       kind: 'due'
       title: DueTitle
-      forEach: MappingValue | null
-      dueDate: MappingValue | null
-      totalAmountPence: MappingValue | null
+      dueDate: ValueCell | null
+      totalAmountPence: ValueCell | null
       lines: InvoiceLines
     }
-  | { kind: 'from'; title: DueTitle; value: MappingValue }
+  | { kind: 'from'; title: DueTitle; value: ValueCell }
+
+/** A value GAS calculates, by where it is, with its whole expression. */
+interface CalculatedField {
+  field: string
+  expression: string
+}
 
 /** The context a payment reads, as GAS hands it over. */
 type Root = 'claim' | 'agreement' | 'execution' | 'row'
@@ -63,8 +61,11 @@ export interface PaymentDefinitionView {
   version: string
   /** Reads the agreement's own rows, whose refs GAS has replaced with ids. */
   readsAgreementRows: boolean
-  request: MappingRow[]
+  request: ValueRow[]
   duePayments: DuePayment[]
+  calculated: CalculatedField[]
+  /** The stored definition, as Raw shows it. */
+  raw: string
 }
 
 export interface PaymentContext {
@@ -77,8 +78,8 @@ interface Item {
   forEach: MappingValue | null
 }
 
-const toField = (mapping: Mapping, key: string): MappingValue | null =>
-  Object.hasOwn(mapping, key) ? toMappingValue(mapping[key]) : null
+const toField = (mapping: Mapping, key: string): ValueCell | null =>
+  Object.hasOwn(mapping, key) ? toValueCell(toMappingValue(mapping[key])) : null
 
 /**
  * A collection gives one item per row and an array its elements; a collection
@@ -100,36 +101,33 @@ const toItems = (value: unknown): Item[] => {
 const isFields = (value: unknown): value is Mapping =>
   isObject(value) && !isCollection(value)
 
-const lineKeys: (keyof InvoiceLine)[] = [
-  'schemeCode',
-  'description',
-  'amountPence',
-  'accountCode',
-  'fundCode',
-  'deliveryBody',
-  'marketingYear'
+const lineLabels: [string, string][] = [
+  ['schemeCode', 'Scheme'],
+  ['description', 'Description'],
+  ['amountPence', 'Amount (pence)'],
+  ['accountCode', 'Account'],
+  ['fundCode', 'Fund'],
+  ['deliveryBody', 'Delivery body'],
+  ['marketingYear', 'Marketing year']
 ]
 
-const toLine = (mapping: Mapping): InvoiceLineRow => {
-  const line = Object.fromEntries(
-    lineKeys.map((key) => [key, toField(mapping, key)])
-  ) as unknown as InvoiceLine
+const toLine = (mapping: Mapping): InvoiceLineRow => ({
+  kind: 'line',
+  cells: lineLabels.map(([key, label]) => ({
+    label,
+    cell: toField(mapping, key)
+  }))
+})
 
-  return {
-    kind: 'line',
-    ...line,
-    calculated: lineKeys.filter((key) => line[key]?.kind === 'expression')
-  }
-}
+const fromCell = (value: unknown): ValueCell =>
+  toValueCell(toMappingValue(value))
 
 const toInvoiceLineRow = ({ value }: Item): InvoiceLineRow =>
-  isFields(value)
-    ? toLine(value)
-    : { kind: 'from', value: toMappingValue(value) }
+  isFields(value) ? toLine(value) : { kind: 'from', value: fromCell(value) }
 
 const toLines = (value: unknown): InvoiceLines => ({
   kind: 'lines',
-  forEach: isCollection(value) ? toMappingValue(value.itemsRef) : null,
+  forEach: isCollection(value) ? toMappingValue(value.itemsRef).text : null,
   rows: toItems(value).map(toInvoiceLineRow)
 })
 
@@ -141,7 +139,7 @@ const toInvoiceLines = (value: unknown): InvoiceLines => {
 
   return value !== null && typeof value === 'object'
     ? toLines(value)
-    : { kind: 'from', value: toMappingValue(value) }
+    : { kind: 'from', value: fromCell(value) }
 }
 
 /** A calculated list is too long for a title; its For each row gives it. */
@@ -171,20 +169,64 @@ const toTitle = (payments: unknown, index: number, count: number): DueTitle => {
 
 const toDuePayment =
   (payments: unknown, count: number) =>
-  ({ value, forEach }: Item, index: number): DuePayment => {
+  ({ value }: Item, index: number): DuePayment => {
     const title = toTitle(payments, index, count)
 
     return isFields(value)
       ? {
           kind: 'due',
           title,
-          forEach,
           dueDate: toField(value, 'dueDate'),
           totalAmountPence: toField(value, 'totalAmountPence'),
           lines: toInvoiceLines(value.invoiceLines)
         }
-      : { kind: 'from', title, value: toMappingValue(value) }
+      : { kind: 'from', title, value: fromCell(value) }
   }
+
+const calculatedOf = (
+  field: string,
+  cell: ValueCell | null
+): CalculatedField[] =>
+  cell?.calculated ? [{ field, expression: cell.value ?? '' }] : []
+
+const lineCalculated = (lines: InvoiceLines): CalculatedField[] =>
+  lines.kind === 'lines'
+    ? lines.rows.flatMap((row) =>
+        row.kind === 'line'
+          ? row.cells.flatMap(({ label, cell }) =>
+              calculatedOf(`${label} (invoice line)`, cell)
+            )
+          : []
+      )
+    : []
+
+const dueCalculated = (due: DuePayment): CalculatedField[] =>
+  due.kind === 'due'
+    ? [
+        ...calculatedOf('Due date', due.dueDate),
+        ...calculatedOf('Total (pence)', due.totalAmountPence),
+        ...lineCalculated(due.lines)
+      ]
+    : []
+
+/** Every calculated value once, so each table can point here instead of carrying the expression. */
+const toCalculated = (
+  request: ValueRow[],
+  due: DuePayment[]
+): CalculatedField[] => {
+  const all = [
+    ...request.flatMap((row) => calculatedOf(row.field, row)),
+    ...due.flatMap(dueCalculated)
+  ]
+
+  return all.filter(
+    (field, at) =>
+      all.findIndex(
+        (other) =>
+          other.field === field.field && other.expression === field.expression
+      ) === at
+  )
+}
 
 const knownRoots: Root[] = ['claim', 'agreement', 'execution']
 
@@ -211,6 +253,8 @@ export const toPaymentDefinition = (
   const { code: _code, payments, ...request } = definition
   const roots = contextRootsOf(definition)
   const items = toItems(payments === undefined ? [] : payments)
+  const requestRows = toValueRows(toMappingRows(request))
+  const duePayments = items.map(toDuePayment(payments, items.length))
 
   return {
     requestedWhen: toRequestedWhen(roots),
@@ -222,7 +266,9 @@ export const toPaymentDefinition = (
     mixed: roots.has('claim') && roots.has('agreement'),
     version: context.version,
     readsAgreementRows: reads(definition, agreementRows),
-    request: toMappingRows(request),
-    duePayments: items.map(toDuePayment(payments, items.length))
+    request: requestRows,
+    duePayments,
+    calculated: toCalculated(requestRows, duePayments),
+    raw: JSON.stringify(definition, null, 2)
   }
 }

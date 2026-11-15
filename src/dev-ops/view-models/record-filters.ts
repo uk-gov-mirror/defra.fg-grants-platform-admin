@@ -91,11 +91,11 @@ const backPages: [RegExp, (parts: string[]) => string][] = [
   [/^\/dev-ops\/cases\/[^/]+\/[^/]+$/, () => 'case'],
   [
     /^\/dev-ops\/grants\/([^/]+)\/([^/]+)$/,
-    ([code, version]) => `grant ${decode(code)} ${decode(version)}`
+    ([code, version]) => `grant ${decode(code)}@${decode(version)}`
   ],
   [
     /^\/dev-ops\/workflows\/([^/]+)\/([^/]+)$/,
-    ([code, version]) => `workflow ${decode(code)} ${decode(version)}`
+    ([code, version]) => `workflow ${decode(code)}@${decode(version)}`
   ],
   [/^\/dev-ops\/events\/[^/]+\/[^/]+\/[^/]+$/, () => 'event']
 ]

@@ -1,7 +1,0 @@
-{# Tailwind only sees class names written literally in this file. #}
-{% set tones = {
-  neutral: "badge badge-ghost badge-sm",
-  warning: "badge badge-warning badge-soft badge-sm"
-} %}
-<span class="{{ tones[params.tone] | default(tones.neutral, true) }}{% if params.class %} {{ params.class }}{% endif %}"{% if params.title %} title="{{ params.title }}"{% endif %}{% if params.testId %} data-testid="{{ params.testId }}"{% endif %}>{{ params.text }}{% if params.srText %}<span class="sr-only">: {{ params.srText }}</span>{% endif %}</span>
-{#- -#}

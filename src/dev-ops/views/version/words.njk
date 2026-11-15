@@ -1,0 +1,11 @@
+{% import "components/macros.njk" as gpa %}
+
+{#- A sentence a view model wrote as parts: text, codes and links, each drawn its own way. -#}
+{% macro words(parts) -%}
+  {%- for part in parts -%}
+    {%- if part is string %}{{ part }}
+    {%- elif part.code %}{{ gpa.Code({ text: part.code }) }}
+    {%- elif part.link %}{{ gpa.Link({ text: part.link, href: part.href }) }}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endmacro %}

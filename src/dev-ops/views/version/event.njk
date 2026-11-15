@@ -1,0 +1,10 @@
+{% import "components/macros.njk" as gpa %}
+
+{#- The Details row for the event the version arrived as. -#}
+{% macro eventFact(event) -%}
+  {%- if event.kind == 'held' -%}
+    {{ gpa.Link({ html: gpa.Text({ text: event.eventId, mono: true, tone: 'link' }), href: event.href, testId: 'version-event' }) }}
+  {%- else -%}
+    {{ gpa.Text({ text: event.text, tone: 'subtle', testId: 'version-event' }) }}
+  {%- endif -%}
+{%- endmacro %}

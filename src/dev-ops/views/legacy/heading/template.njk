@@ -1,8 +1,0 @@
-{% from "muted/macro.njk" import muted %}
-<hgroup class="mb-6" data-testid="do-heading">
-  <h1 class="text-2xl font-bold" data-testid="do-heading-title">{{ params.text }}</h1>
-
-  {% if params.caption %}
-    <p class="text-sm {{ muted }}" data-testid="do-heading-caption">{{ params.caption }}</p>
-  {% endif %}
-</hgroup>

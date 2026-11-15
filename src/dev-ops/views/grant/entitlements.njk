@@ -1,0 +1,128 @@
+{% from "version/words.njk" import words %}
+
+{%- set onSubmitTexts = {
+  'waits-for-approval': 'On submit: Waits for approval',
+  'requests-payment': 'On submit: Requests payment',
+  'no-payment-file': 'On submit: No payment file'
+} -%}
+
+{%- macro yesNo(value) -%}{% if value %}Yes{% else %}No{% endif %}{%- endmacro -%}
+
+{%- macro positions(chips) -%}
+  {%- if chips | length -%}
+    {%- for chip in chips -%}
+      {{ ', ' if not loop.first }}{{ gpa.Link({ text: chip.label, href: chip.href, title: chip.code }) }}{% if chip.any %} {{ gpa.Text({ text: 'any status' if chip.any == 'status' else 'any stage, any status', tone: 'subtle' }) }}{% endif %}
+    {%- endfor -%}
+  {%- else -%}{{ gpa.NoValue() }}{%- endif -%}
+{%- endmacro -%}
+
+{%- macro roleLines(roles) -%}
+  {%- call gpa.Stack({ gap: 'xs' }) -%}
+    {%- if roles.allOf | length -%}{% set line %}All of: {% for role in roles.allOf %}{{ ', ' if not loop.first }}{{ gpa.Code({ text: role }) }}{% endfor %}{% endset %}{{ gpa.Text({ html: line }) }}{%- endif -%}
+    {%- if roles.anyOf | length -%}{% set line %}Any of: {% for role in roles.anyOf %}{{ ', ' if not loop.first }}{{ gpa.Code({ text: role }) }}{% endfor %}{% endset %}{{ gpa.Text({ html: line }) }}{%- endif -%}
+  {%- endcall -%}
+{%- endmacro -%}
+
+{%- macro warning(template, item) -%}
+  {%- if item.kind == 'no-claimable-at' -%}
+    {#- The error code GAS answers with, which nothing names. -#}
+    {# gpa-lint-disable-next-line code-in-text #}
+    {%- set text %}Its claim rules list no “Claimable at” status, so GAS rejects every claim ({{ gpa.Code({ text: 'WRONG_POSITION' }) }}). Publish a version that sets {{ gpa.Code({ text: 'claim.claimableAt' }) }}.{% endset -%}
+    {{ gpa.Alert({ tone: 'danger', title: template.name ~ ' can’t be claimed.', html: text, testId: 'entitlements-problem' }) }}
+  {%- elif item.kind == 'materialised-claim' -%}
+    {{ gpa.Alert({ tone: 'warning', title: template.name ~ ' can’t be claimed.', text: 'It is materialised, which GAS doesn’t derive yet, so its claim rules never apply.', testId: 'entitlements-problem' }) }}
+  {%- else -%}
+    {%- set text %}Claim payments can only read {{ gpa.Code({ text: '$.claim' }) }} and {{ gpa.Code({ text: '$.execution' }) }}, but the {{ gpa.Link({ text: 'payment definition', href: item.paymentHref }) }} reads {{ gpa.Code({ text: '$.agreement' }) }}, so those fields resolve empty and GAS refuses the payment.{% endset -%}
+    {{ gpa.Alert({ tone: 'warning', title: 'Claim payments for ' ~ template.name ~ ' fail.', html: text, testId: 'entitlements-problem' }) }}
+  {%- endif -%}
+{%- endmacro -%}
+
+{%- if entitlements.nothing -%}
+  {%- call gpa.Card() -%}
+    {{ gpa.EmptyState({ icon: 'ticket', title: 'No entitlement templates', text: 'No entitlement templates in this version, so nothing can be claimed on it.', testId: 'entitlements-none' }) }}
+  {%- endcall -%}
+{%- else -%}
+  {%- set claims = entitlements.claims -%}
+  {%- set afterLast -%}
+    {%- if claims.move -%}
+      {%- call gpa.Inline({ gap: 'xs' }) -%}
+        {{ gpa.Link({ text: claims.move.from.label, href: claims.move.from.href, title: claims.move.from.code }) }}{{ gpa.Icon({ name: 'arrow-right', size: 'sm', label: 'moves to', classes: 'gpa-dir-icon' }) }}{{ gpa.Link({ text: claims.move.to.label, href: claims.move.to.href, title: claims.move.to.code }) }}
+      {%- endcall -%}
+    {%- endif -%}
+  {%- endset -%}
+  {{ gpa.FactsCard({ title: 'Claims (all templates)', testId: 'entitlements-claims', facts: [
+    { label: 'After the last claim', html: afterLast if claims.move },
+    { label: 'Payment definition', text: 'Payment definition' if claims.paymentHref, href: claims.paymentHref },
+    { label: 'Claim roles', html: roleLines(claims.roles) if claims.roles else 'Any operator' }
+  ] }) }}
+
+  {%- call gpa.Accordion({ framed: true, testId: 'entitlements-templates' }) -%}
+    {%- for template in entitlements.templates -%}
+      {%- set cantClaim = template.onSubmit.kind == 'cant-claim' -%}
+      {%- set meta -%}
+        {%- if cantClaim -%}{{ gpa.Badge({ text: 'Can’t be claimed', tone: 'danger', size: 'sm' }) }}
+        {%- else -%}{{ gpa.Badge({ text: onSubmitTexts[template.onSubmit.kind], tone: 'warning' if template.onSubmit.kind == 'no-payment-file' else 'neutral', size: 'sm' }) }}{%- endif -%}
+      {%- endset -%}
+      {%- call gpa.AccordionItem({
+        title: template.name,
+        leading: gpa.StatusMark({ tone: 'warning', label: 'Can’t be claimed' }) if cantClaim,
+        metaHtml: meta,
+        open: loop.first,
+        testId: 'entitlements-template'
+      }) -%}
+        {%- call gpa.Stack({ gap: 'lg' }) -%}
+          {%- if template.description %}{{ gpa.Text({ text: template.description, tone: 'muted' }) }}{% endif -%}
+          {%- for item in template.warnings %}{{ warning(template, item) }}{% endfor -%}
+          {%- call gpa.Grid({ columns: 2, gap: 'xl' }) -%}
+            {%- call gpa.Section({ title: 'How it’s created', headingLevel: 4 }) -%}
+              {%- call gpa.FactsList() -%}
+                {{ gpa.Fact({ label: 'Created by', text: 'Materialised: projected from the application’s position and past claims, which GAS doesn’t derive yet' if template.materialised else 'An operator (claimable item)' }) }}
+                {{ gpa.Fact({ label: 'Max per application', text: template.maxEntitlements | string }) }}
+                {{ gpa.Fact({ label: 'Can be created at', html: positions(template.availableAt) }) }}
+              {%- endcall -%}
+            {%- endcall -%}
+            {%- call gpa.Section({ title: 'Claiming', headingLevel: 4 }) -%}
+              {%- set claim = template.claim -%}
+              {%- call gpa.FactsList() -%}
+                {{ gpa.Fact({ label: 'Claimable at', html: positions(claim.claimableAt) if claim }) }}
+                {{ gpa.Fact({ label: 'Max claims', text: (claim.maximumClaims ~ ' per entitlement') if claim }) }}
+                {{ gpa.Fact({ label: 'Partial', text: yesNo(claim.partial) if claim }) }}
+                {{ gpa.Fact({ label: 'Approval', text: yesNo(claim.approval) if claim }) }}
+                {{ gpa.Fact({ label: 'Evidence', text: yesNo(claim.evidence) if claim }) }}
+              {%- endcall -%}
+            {%- endcall -%}
+          {%- endcall -%}
+          {%- if template.fields | length -%}
+            {%- call gpa.DataTable({ styleNonce: styleNonce, label: template.name ~ ' fields', columns: [
+              { key: 'field', label: 'Field', width: 'minmax(140px, 1fr)', mono: true },
+              { key: 'source', label: 'Source', width: 'minmax(120px, 0.8fr)' },
+              { key: 'value', label: 'Label or value', width: 'minmax(180px, 1.4fr)' },
+              { key: 'unit', label: 'Unit', width: 'minmax(70px, 0.5fr)' },
+              { key: 'bounds', label: 'Bounds', width: 'minmax(110px, 0.7fr)' }
+            ] }) -%}
+              {%- for field in template.fields -%}
+                {%- call gpa.TableRow({ testId: 'entitlements-field' }) -%}
+                  <td role="cell" class="gpa-cell-mono">{{ field.name }}</td>
+                  <td role="cell">{{ field.source }}</td>
+                  <td role="cell">{% if field.text %}{{ gpa.Text({ text: field.text, mono: field.text.startsWith('$') }) }}{% else %}{{ gpa.NoValue() }}{% endif %}</td>
+                  <td role="cell">{{ field.unit }}</td>
+                  <td role="cell">{% if field.bounds | length %}{{ field.bounds | join(', ') }}{% else %}{{ gpa.NoValue() }}{% endif %}</td>
+                {%- endcall -%}
+              {%- endfor -%}
+            {%- endcall -%}
+          {%- endif -%}
+          {%- if template.help -%}
+            {%- call gpa.Disclosure({ text: 'Help: ' ~ template.help.summary, hideText: 'Hide help', testId: 'entitlements-help' }) -%}
+              {%- call gpa.Stack({ gap: 'sm' }) -%}
+                {%- for block in template.help.content -%}
+                  {%- if block.text %}{{ gpa.Text({ text: block.text, as: 'p' }) }}
+                  {%- else %}{% for item in block.items %}{{ gpa.Text({ text: item, as: 'p' }) }}{% endfor %}{% endif -%}
+                {%- endfor -%}
+              {%- endcall -%}
+            {%- endcall -%}
+          {%- endif -%}
+        {%- endcall -%}
+      {%- endcall -%}
+    {%- endfor -%}
+  {%- endcall -%}
+{%- endif -%}

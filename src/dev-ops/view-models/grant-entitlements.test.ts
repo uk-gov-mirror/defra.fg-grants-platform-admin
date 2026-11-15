@@ -313,26 +313,13 @@ describe('toEntitlementsTab: claims', () => {
     expect(tabOf({ claims: null }, null).claims).toEqual({
       move: null,
       paymentHref: null,
-      paymentLink: null,
       roles: null
     })
   })
 
-  test('links the payment definition when the version has one, by its state', () => {
-    expect(tabOf().claims).toMatchObject({
-      paymentHref,
-      paymentLink: 'Stored · Payment tab ›'
-    })
-    expect(tabOf({}, 'not-stored').claims.paymentLink).toBe(
-      'Not stored yet · Payment tab ›'
-    )
-    expect(tabOf({}, 'failed').claims.paymentLink).toBe(
-      'Failed · Payment tab ›'
-    )
-    expect(tabOf({}, null).claims).toMatchObject({
-      paymentHref: null,
-      paymentLink: null
-    })
+  test('links the payment definition when the version has one', () => {
+    expect(tabOf().claims.paymentHref).toBe(paymentHref)
+    expect(tabOf({}, null).claims.paymentHref).toBeNull()
   })
 
   test('gives roles a list the grant leaves out as empty', () => {

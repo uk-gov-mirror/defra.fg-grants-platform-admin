@@ -1,0 +1,93 @@
+{% from "workflow/pages-call.njk" import callCell %}
+
+{%- call gpa.Stack({ gap: 'section', testId: 'workflow-pages' }) -%}
+  {%- call gpa.Section({ title: 'Case banner', description: 'Shown to caseworkers with ReadWrite and the workflow’s roles.', testId: 'workflow-pages-banner' }) -%}
+    {%- call gpa.Stack({ gap: 'lg' }) -%}
+      {%- call gpa.FactsList() -%}
+        {{ gpa.Fact({ label: 'Heading from', text: pages.banner.heading.text if pages.banner.heading, mono: true }) }}
+      {%- endcall -%}
+      {%- call gpa.DataTable({ styleNonce: styleNonce, label: 'Banner buttons', columns: [
+        { key: 'name', label: 'Button', width: 'minmax(180px, 1fr)' },
+        { key: 'call', label: 'Calls', width: 'minmax(320px, 2.4fr)' }
+      ], empty: { title: 'No buttons', text: 'CW shows no action buttons in this workflow’s case banner.', icon: 'square-mouse-pointer' } if not pages.banner.buttons | length }) -%}
+        {%- for button in pages.banner.buttons -%}
+          {%- call gpa.TableRow({ testId: 'workflow-pages-button' }) -%}
+            <td role="cell">{{ button.name }}</td>
+            <td role="cell">{{ callCell(button.call, environmentLabel) }}</td>
+          {%- endcall -%}
+        {%- endfor -%}
+      {%- endcall -%}
+    {%- endcall -%}
+  {%- endcall -%}
+
+  {%- set rowCount = pages.banner.summary | length -%}
+  {%- call gpa.Section({ title: 'Summary', actions: gpa.Badge({ text: rowCount ~ (' row' if rowCount == 1 else ' rows'), size: 'sm' }), testId: 'workflow-pages-summary' }) -%}
+    {%- call gpa.DataTable({ styleNonce: styleNonce, label: 'Summary rows', columns: [
+      { key: 'label', label: 'Label', width: 'minmax(120px, 0.7fr)' },
+      { key: 'from', label: 'Value from', width: 'minmax(260px, 3.4fr)' },
+      { key: 'type', label: 'Type', width: '88px', mono: true }
+    ], empty: { title: 'No summary rows', text: 'The case banner shows no summary.', icon: 'rows-3' } if not rowCount }) -%}
+      {%- for row in pages.banner.summary -%}
+        {%- call gpa.TableRow({ testId: 'workflow-pages-summary-row' }) -%}
+          <td role="cell">{{ row.label }}</td>
+          <td role="cell">
+            {%- if row.valueFrom -%}
+              {%- call gpa.Inline({ gap: 'xs', wrap: false }) -%}
+                {{ gpa.Text({ text: row.valueFrom.text, mono: true, truncate: true, title: row.valueFrom.text }) }}
+                {%- if row.valueFrom.calculated %}{{ gpa.Badge({ text: 'calculated', size: 'sm', variant: 'outline' }) }}{% endif -%}
+              {%- endcall -%}
+            {%- else -%}{{ gpa.NoValue() }}{%- endif -%}
+          </td>
+          <td role="cell" class="gpa-cell-mono">{{ row.type }}</td>
+        {%- endcall -%}
+      {%- endfor -%}
+    {%- endcall -%}
+  {%- endcall -%}
+
+  {%- call gpa.Section({ title: 'Case tabs', testId: 'workflow-pages-tabs' }) -%}
+    {%- call gpa.DataTable({ styleNonce: styleNonce, label: 'Case tabs', columns: [
+      { key: 'order', label: 'Order', width: '64px', mono: true },
+      { key: 'name', label: 'Tab', width: 'minmax(150px, 1fr)' },
+      { key: 'when', label: 'Shown when', width: 'minmax(200px, 1.1fr)' },
+      { key: 'fires', label: 'Calls when opened', width: 'minmax(300px, 2.4fr)' },
+      { key: 'comps', label: 'Components', width: 'minmax(120px, 0.6fr)' }
+    ] }) -%}
+      {%- for row in pages.tabs -%}
+        {%- call gpa.TableRow({ testId: 'workflow-pages-tab' }) -%}
+          <td role="cell" class="gpa-cell-mono">{{ row.order }}</td>
+          <td role="cell">
+            {%- call gpa.Stack({ gap: '2xs' }) -%}
+              {%- call gpa.Inline({ gap: 'xs' }) -%}
+                {{ gpa.Text({ text: row.label }) }}
+                {%- if row.builtIn %}{{ gpa.Badge({ text: 'built in', size: 'sm' }) }}{% endif -%}
+              {%- endcall -%}
+              {%- if row.link -%}
+                {%- set linkTo -%}link goes to {% if row.link.address %}{{ gpa.Text({ text: row.link.address, mono: true }) }}{% else %}an address worked out from the case{% endif %}{%- endset -%}
+                {{ gpa.Text({ html: linkTo, tone: 'subtle' }) }}
+              {%- endif -%}
+            {%- endcall -%}
+          </td>
+          <td role="cell">
+            {%- if row.shownWhen -%}
+              {%- set when %}{{ gpa.Code({ text: row.shownWhen.text }) }} is set{% endset -%}
+              {{ gpa.Text({ html: when }) }}
+            {%- else -%}{{ gpa.Text({ text: 'Always', tone: 'subtle' }) }}{%- endif -%}
+          </td>
+          <td role="cell">
+            {%- if row.calls | length -%}
+              {%- call gpa.Stack({ gap: 'sm' }) -%}
+                {%- for call in row.calls %}{{ callCell(call, environmentLabel) }}{% endfor -%}
+              {%- endcall -%}
+            {%- else -%}{{ gpa.NoValue() }}{%- endif -%}
+          </td>
+          <td role="cell">
+            {%- set count = row.components | length -%}
+            {%- if count -%}
+              {%- call gpa.Tooltip({ text: row.components | join(', '), focusable: true }) -%}{{ gpa.Text({ text: count ~ (' component' if count == 1 else ' components') }) }}{%- endcall -%}
+            {%- else -%}{{ gpa.NoValue() }}{%- endif -%}
+          </td>
+        {%- endcall -%}
+      {%- endfor -%}
+    {%- endcall -%}
+  {%- endcall -%}
+{%- endcall -%}

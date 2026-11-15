@@ -1,0 +1,27 @@
+{% from "version/event.njk" import eventFact %}
+{% from "version/files.njk" import versionFiles with context %}
+{% from "version/words.njk" import words %}
+
+{%- set receivedHtml %}{% if received %}{{ gpa.Time(received) }}{% endif %}{% endset -%}
+{%- set grantHtml -%}
+  {%- if details.grant.kind == 'link' -%}
+    {{ gpa.Link({ html: gpa.Text({ text: details.grant.text, mono: true, tone: 'link' }), href: details.grant.href, testId: 'workflow-grant' }) }}
+  {%- else -%}
+    {{ gpa.Text({ text: details.grant.text, tone: 'subtle', testId: 'workflow-grant' }) }}
+  {%- endif -%}
+{%- endset -%}
+{%- set rolesHtml -%}
+  {%- if details.roles -%}
+    {%- call gpa.Stack({ gap: 'xs', testId: 'workflow-roles' }) -%}
+      {%- for line in details.roles %}{{ gpa.Text({ html: words(line) }) }}{% endfor -%}
+    {%- endcall -%}
+  {%- endif -%}
+{%- endset -%}
+{{ gpa.FactsCard({ title: 'Details', testId: 'version-details', facts: [
+  { label: 'Grant', html: grantHtml },
+  { label: 'Who can work cases', html: rolesHtml if details.roles },
+  { label: 'Received', html: receivedHtml if received },
+  { label: 'Event', html: eventFact(details.event) }
+] }) }}
+
+{{ versionFiles(files) }}

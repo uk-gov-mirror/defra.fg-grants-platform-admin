@@ -1,0 +1,114 @@
+{% from "grant/payment-value.njk" import valueCell, valueTable with context %}
+
+{%- set view = payment -%}
+{%- set hasCalculated = view.calculated | length > 0 -%}
+{%- set readsText = {
+  claim: ['$.claim', ' the submitted claim'],
+  agreement: ['$.agreement', ' the stored agreement'],
+  execution: ['$.execution.executedAt', ' when GAS ran it'],
+  row: ['@.', ' the current row of a For each']
+} -%}
+
+{%- set requestedWhen -%}
+  {%- call gpa.Stack({ gap: 'xs' }) -%}
+    {%- if view.requestedWhen.claim -%}
+      {%- call gpa.Text({ testId: 'payment-requested-on-claim' }) -%}
+        a claim is submitted (claim payments){% if view.hrefs.entitlements %} {{ gpa.Link({ text: 'Entitlements', href: view.hrefs.entitlements }) }}{% endif %}
+      {%- endcall -%}
+    {%- endif -%}
+    {%- if view.requestedWhen.agreement -%}
+      {%- call gpa.Text({ testId: 'payment-requested-on-agreement' }) -%}
+        {# A GAS process code nothing names (HANDOVER step 3), set as code. #}
+        {# gpa-lint-disable-next-line code-in-text #}
+        an agreement action runs {{ gpa.Code({ text: 'CREATE_AGREEMENT_PAYMENT' }) }}{% if view.hrefs.agreement %} {{ gpa.Link({ text: 'Agreement', href: view.hrefs.agreement }) }}{% endif %}
+      {%- endcall -%}
+    {%- endif -%}
+  {%- endcall -%}
+{%- endset -%}
+{%- set reads -%}
+  {%- for root in view.reads -%}
+    {%- if not loop.first %}{{ ' and ' if loop.last else ', ' }}{% endif -%}
+    {{ gpa.Code({ text: readsText[root][0] }) }}{{ readsText[root][1] }}
+  {%- endfor -%}
+{%- endset -%}
+{%- set usedFor = 'Agreement payments whose agreement is on ' ~ view.version ~ ' (the version it was created or accepted under), and claims on applications currently on ' ~ view.version ~ '. GAS has no fallback: if this file can’t load, those payments fail.' -%}
+
+{%- call gpa.Stack({ gap: 'section', testId: 'grant-payment' }) -%}
+  {{ gpa.FactsCard({ title: 'When GAS requests this payment', testId: 'payment-when', facts: [
+    { label: 'Requested when', html: requestedWhen },
+    { label: 'Reads', html: reads, hidden: not view.reads | length },
+    { label: 'Used for', text: usedFor }
+  ] }) }}
+
+  {%- if view.mixed -%}
+    {%- set mixed %}This definition reads {{ gpa.Code({ text: '$.agreement' }) }}, but claim payments can only read {{ gpa.Code({ text: '$.claim' }) }} and {{ gpa.Code({ text: '$.execution' }) }}, so these fields resolve empty and GAS refuses the payment.{% endset -%}
+    {{ gpa.Alert({ tone: 'warning', title: 'Claim payments find no agreement.', html: mixed, testId: 'payment-mixed' }) }}
+  {%- endif -%}
+
+  {%- if view.readsAgreementRows -%}
+    {%- set rowIds %}Reads the stored agreement, where GAS has replaced {{ gpa.Code({ text: 'actionRef' }) }}, {{ gpa.Code({ text: 'itemRef' }) }} and {{ gpa.Code({ text: 'ref' }) }} with stable ids: {{ gpa.Code({ text: 'actionId' }) }}, {{ gpa.Code({ text: 'itemId' }) }}, {{ gpa.Code({ text: 'id' }) }} ({{ gpa.Code({ text: 'action:1' }) }}, {{ gpa.Code({ text: 'item:1' }) }}).{% endset -%}
+    {{ gpa.Text({ html: rowIds, tone: 'muted', as: 'p', testId: 'payment-row-ids' }) }}
+  {%- endif -%}
+
+  {%- call gpa.Section({ title: 'Payment request', testId: 'payment-request' }) -%}
+    {{ valueTable('Payment request', view.request, hasCalculated) }}
+  {%- endcall -%}
+
+  {%- for due in view.duePayments -%}
+    {%- set description -%}
+      {%- if due.title.forEach %}One per item of {{ gpa.Code({ text: due.title.forEach }) }}. {% endif -%}
+      {%- if due.kind == 'due' -%}
+        Each has a due date {% if due.dueDate and due.dueDate.value %}{{ gpa.Code({ text: due.dueDate.value }) }}{% else %}(none){% endif %} and a total {% if due.totalAmountPence and due.totalAmountPence.value %}{{ gpa.Code({ text: due.totalAmountPence.value }) }}{% else %}(none){% endif %}
+        {%- if due.lines.kind == 'lines' and due.lines.forEach %}, and one invoice line per row of {{ gpa.Code({ text: due.lines.forEach }) }}{% endif %}.
+      {%- endif -%}
+    {%- endset -%}
+    {%- call gpa.Section({ title: due.title.text, testId: 'payment-due' }) -%}
+      {%- call gpa.Stack({ gap: 'lg' }) -%}
+        {{ gpa.Text({ html: description, tone: 'muted', as: 'p', testId: 'payment-due-description' }) }}
+        {%- if due.kind == 'from' -%}
+          {%- call gpa.FactsList() -%}{{ gpa.Fact({ label: 'From', html: valueCell(due.value, false) }) }}{%- endcall -%}
+        {%- elif due.lines.kind == 'from' -%}
+          {%- call gpa.FactsList() -%}{{ gpa.Fact({ label: 'Invoice lines from', html: valueCell(due.lines.value, false) }) }}{%- endcall -%}
+        {%- elif not due.lines.rows | length -%}
+          {{ gpa.Alert({ tone: 'warning', title: 'No invoice lines.', text: 'GAS needs at least one on each due payment, so every payment for this version fails.', testId: 'payment-no-lines' }) }}
+        {%- else -%}
+          {%- for line in due.lines.rows -%}
+            {%- call gpa.DataTable({ styleNonce: styleNonce, label: 'Invoice lines', testId: 'payment-lines', columns: [
+              { key: 'field', label: 'Line field', width: 'minmax(180px, 1fr)' },
+              { key: 'value', label: 'Value', width: 'minmax(260px, 3fr)' }
+            ] }) -%}
+              {%- if line.kind == 'from' -%}
+                {%- call gpa.TableRow() -%}<td role="cell">Line from</td><td role="cell">{{ valueCell(line.value, false) }}</td>{%- endcall -%}
+              {%- else -%}
+                {%- for field in line.cells -%}
+                  {%- call gpa.TableRow() -%}<td role="cell">{{ field.label }}</td><td role="cell">{{ valueCell(field.cell, hasCalculated) }}</td>{%- endcall -%}
+                {%- endfor -%}
+              {%- endif -%}
+            {%- endcall -%}
+          {%- endfor -%}
+        {%- endif -%}
+      {%- endcall -%}
+    {%- endcall -%}
+  {%- else -%}
+    {{ gpa.Alert({ tone: 'warning', title: 'No due payments.', text: 'GAS needs at least one, so every payment for this version fails.', testId: 'payment-no-due' }) }}
+  {%- endfor -%}
+
+  {%- if hasCalculated -%}
+    {%- call gpa.Section({ title: 'Calculated fields', testId: 'payment-calculated' }) -%}
+      {%- call gpa.DataTable({ styleNonce: styleNonce, label: 'Calculated fields', columns: [
+        { key: 'field', label: 'Field', width: 'minmax(180px, 1fr)' },
+        { key: 'expression', label: 'Expression', width: 'minmax(260px, 3fr)', mono: true }
+      ] }) -%}
+        {%- for field in view.calculated -%}
+          {%- call gpa.TableRow() -%}<td role="cell">{{ field.field }}</td><td role="cell" class="gpa-cell-mono">{{ field.expression }}</td>{%- endcall -%}
+        {%- endfor -%}
+      {%- endcall -%}
+    {%- endcall -%}
+  {%- endif -%}
+
+  {{ gpa.Alert({ tone: 'info', title: 'GAS checks the request after resolving it.', text: 'Every field is present, as text or whole pence; each due payment has at least one invoice line and its total equals its lines; the request total equals the due payments. A payment that fails isn’t created.', testId: 'payment-checks' }) }}
+
+  {%- call gpa.Disclosure({ text: 'Show raw payment definition (JSON)', hideText: 'Hide raw payment definition', testId: 'payment-raw' }) -%}
+    {{ gpa.Code({ block: true, framed: true, code: view.raw, label: 'Raw payment definition' }) }}
+  {%- endcall -%}
+{%- endcall -%}

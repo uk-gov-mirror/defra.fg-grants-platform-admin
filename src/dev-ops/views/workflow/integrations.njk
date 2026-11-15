@@ -1,0 +1,105 @@
+{% import "components/macros.njk" as gpa %}
+{% from "workflow/pages-call.njk" import serviceLine %}
+{% from "version/words.njk" import words %}
+
+{%- macro trigger(item) -%}
+  {%- call gpa.Inline({ gap: 'xs', align: 'center' }) -%}
+    {%- if item.kind == 'button' -%}
+      {{ gpa.Text({ text: 'Caseworker presses' }) }}{{ gpa.Badge({ text: item.label, size: 'sm', variant: 'outline' }) }}{{ gpa.Text({ text: 'in the case banner' }) }}
+    {%- else -%}
+      {%- set after -%}
+        tab.{% if item.customLink %} Its link in the case view goes to {% if item.customLink.address %}{{ gpa.Code({ text: item.customLink.address }) }}{% else %}an address worked out from the case{% endif %}.{% endif %}
+      {%- endset -%}
+      {{ gpa.Text({ text: 'Every time a caseworker opens the' }) }}{{ gpa.Badge({ text: item.label, size: 'sm', variant: 'outline' }) }}{{ gpa.Text({ html: after }) }}
+    {%- endif -%}
+  {%- endcall -%}
+{%- endmacro -%}
+
+{%- macro sendValue(send) -%}
+  {%- if send.source == 'computed' -%}
+    {%- call gpa.Stack({ gap: '2xs' }) -%}
+      {{ gpa.Badge({ text: 'computed', size: 'sm', tone: 'info' }) }}
+      {%- call gpa.Disclosure({ text: 'Show expression', hideText: 'Hide expression' }) -%}
+        {{ gpa.Code({ block: true, framed: true, lineNumbers: false, code: send.text, label: 'Expression' }) }}
+      {%- endcall -%}
+    {%- endcall -%}
+  {%- else -%}
+    {%- call gpa.Inline({ gap: 'xs' }) -%}
+      {{ gpa.Text({ text: send.text, mono: true }) }}{{ gpa.Text({ text: 'fixed' if send.source == 'fixed' else 'from case', tone: 'subtle' }) }}
+    {%- endcall -%}
+  {%- endif -%}
+{%- endmacro -%}
+
+{%- if integrations.cards | length -%}
+  {%- call gpa.Accordion({ framed: true, testId: 'workflow-integrations' }) -%}
+    {%- for card in integrations.cards -%}
+      {%- call gpa.AccordionItem({
+        title: card.name,
+        open: loop.first,
+        leading: gpa.StatusMark({ tone: 'warning', label: 'Has a problem' }) if card.problems | length,
+        metaHtml: gpa.Badge({ text: 'API only', size: 'sm' }) if card.apiOnly,
+        testId: 'workflow-integration'
+      }) -%}
+        {%- call gpa.Stack({ gap: 'lg' }) -%}
+          {%- if card.description %}{{ gpa.Text({ text: card.description }) }}{% endif -%}
+          {%- for problem in card.problems %}{{ gpa.Alert({ tone: 'warning', title: problem, testId: 'workflow-integration-problem' }) }}{% endfor -%}
+
+          {%- set triggers -%}
+            {%- if card.triggers | length -%}
+              {%- call gpa.Stack({ gap: 'xs' }) -%}{%- for item in card.triggers %}{{ trigger(item) }}{% endfor -%}{%- endcall -%}
+            {%- else -%}
+              {{ gpa.Text({ text: 'No button or tab runs this in the case view. CW’s page-action API can still run it.' if card.apiOnly else 'Nothing runs this: CW runs only the first action with this code.', tone: 'subtle' }) }}
+            {%- endif -%}
+          {%- endset -%}
+          {%- set calls -%}
+            {%- if card.call -%}
+              {%- call gpa.Stack({ gap: '2xs' }) -%}
+                {%- call gpa.Inline({ gap: 'xs' }) -%}{{ gpa.Badge({ text: card.call.method, size: 'sm', mono: true }) }}{{ gpa.Text({ text: card.call.url, mono: true }) }}{%- endcall -%}
+                {%- set line %}{{ serviceLine(card.call, environmentLabel) }}, endpoint {{ gpa.Code({ text: card.call.endpoint }) }}{% endset -%}
+                {{ gpa.Text({ html: line, tone: 'subtle' if card.call.hasUrl else 'warning' }) }}
+              {%- endcall -%}
+            {%- else -%}
+              {{ gpa.NoValue() }}
+            {%- endif -%}
+          {%- endset -%}
+          {%- set writes -%}
+            {%- if card.writes | length -%}
+              {%- call gpa.Stack({ gap: 'xs' }) -%}{%- for line in card.writes %}{{ gpa.Text({ html: words(line) }) }}{% endfor -%}{%- endcall -%}
+            {%- else -%}
+              {{ gpa.Text({ text: 'Nothing', tone: 'subtle' }) }}
+            {%- endif -%}
+          {%- endset -%}
+          {%- call gpa.FactsList() -%}
+            {{ gpa.Fact({ label: 'Trigger', html: triggers }) }}
+            {{ gpa.Fact({ label: 'Calls', html: calls }) }}
+            {{ gpa.Fact({ label: 'Writes', html: writes }) }}
+          {%- endcall -%}
+
+          {%- if card.sends | length -%}
+            {%- call gpa.DataTable({ styleNonce: styleNonce, label: card.name ~ ': what it sends', columns: [
+              { key: 'kind', label: 'Sends as', width: 'minmax(80px, 0.5fr)' },
+              { key: 'name', label: 'Name', width: 'minmax(120px, 0.8fr)', mono: true },
+              { key: 'text', label: 'Value', width: 'minmax(260px, 2.4fr)' }
+            ] }) -%}
+              {%- for send in card.sends -%}
+                {%- call gpa.TableRow({ testId: 'workflow-integration-send' }) -%}
+                  <td role="cell">{{ gpa.Badge({ text: send.kind, size: 'sm', variant: 'outline' }) }}</td>
+                  <td role="cell" class="gpa-cell-mono">{{ send.name }}</td>
+                  <td role="cell">{{ sendValue(send) }}</td>
+                {%- endcall -%}
+              {%- endfor -%}
+            {%- endcall -%}
+          {%- endif -%}
+          {%- if card.headersService -%}
+            {%- set note %}Headers set in CW’s {{ gpa.Code({ text: card.headersService ~ '_HEADERS' }) }} replace same-named ones.{% endset -%}
+            {{ gpa.Text({ html: note, tone: 'muted' }) }}
+          {%- endif -%}
+        {%- endcall -%}
+      {%- endcall -%}
+    {%- endfor -%}
+  {%- endcall -%}
+{%- else -%}
+  {%- call gpa.Card({ testId: 'workflow-integrations-none' }) -%}
+    {{ gpa.EmptyState({ icon: 'plug', title: 'No integrations', text: 'This workflow version defines no actions that call another service.' }) }}
+  {%- endcall -%}
+{%- endif -%}

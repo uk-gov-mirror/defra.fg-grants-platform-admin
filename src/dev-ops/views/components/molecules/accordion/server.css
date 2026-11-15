@@ -1,0 +1,41 @@
+details.gpa-accordion-item > summary {
+  list-style: none;
+  cursor: pointer;
+}
+details.gpa-accordion-item > summary::-webkit-details-marker {
+  display: none;
+}
+details.gpa-accordion-item[open] > summary .gpa-accordion-chevron {
+  transform: rotate(90deg);
+}
+[dir="rtl"] details.gpa-accordion-item[open] > summary .gpa-accordion-chevron {
+  transform: scaleX(-1) rotate(90deg);
+}
+.gpa-accordion-details > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.gpa-accordion-details > summary::-webkit-details-marker {
+  display: none;
+}
+.gpa-accordion-details[open] > summary .gpa-accordion-chevron {
+  transform: rotate(90deg);
+}
+.gpa-accordion-note {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-inline-sm);
+  margin: 0;
+  min-height: var(--size-control-lg);
+  padding: var(--space-6) var(--inset-card);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+  color: var(--fg-muted);
+  letter-spacing: var(--tracking-sm);
+}
+.gpa-accordion-framed .gpa-accordion-panel.gpa-accordion-panel-flush {
+  padding: 0;
+}
+.gpa-accordion-panel[hidden] {
+  display: none;
+}
