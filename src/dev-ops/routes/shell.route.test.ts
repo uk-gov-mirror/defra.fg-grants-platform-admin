@@ -6,7 +6,10 @@ import { statusCodes } from '../../common/status-codes.ts'
 import { plugins } from '../../main.ts'
 import { createServer } from '../../server/index.ts'
 import { getApplicationPageUseCase } from '../use-cases/get-application-page.use-case.ts'
-import { getCatalogueUseCase } from '../use-cases/get-catalogue.use-case.ts'
+import {
+  getBucketAtUseCase,
+  getCatalogueUseCase
+} from '../use-cases/get-catalogue.use-case.ts'
 import {
   closeHrefOf,
   isOpenWithoutScript,
@@ -20,6 +23,7 @@ vi.mock(import('../use-cases/get-catalogue.use-case.ts'))
 vi.mock(import('../use-cases/get-application-page.use-case.ts'))
 vi.mock(import('../use-cases/access-tokens.use-case.ts'))
 vi.mock(import('../use-cases/query-bucket.use-case.ts'))
+vi.mock(import('../use-cases/get-overview.use-case.ts'))
 vi.mock(import('../../common/config.ts'))
 
 const operator = {
@@ -32,6 +36,11 @@ const applicationsAdmin = { ...operator, scope: ['FCP.GrantApplicationsAdmin'] }
 const applicationPath = '/dev-ops/applications/frps-private-beta/a7c-2f1-9e4'
 
 const tokensPath = '/dev-ops/clients/gas'
+
+const outboxPath = '/dev-ops/events/gas/outbox'
+
+/** No catalogue read, so no list can be found. */
+const catalogueDown = { available: false, bucket: null }
 
 const appOrigin = () => new URL(config.get('auth.appBaseUrl')).origin
 
@@ -134,6 +143,7 @@ describe('the shell', () => {
           $(link).find('svg').attr('data-icon')
         ])
     ).toEqual([
+      ['Overview', 'layout-dashboard'],
       ['Grant Application Service Outbox', 'radio-tower'],
       ['Applications', 'file-text'],
       ['Grants', 'landmark'],
@@ -208,7 +218,7 @@ describe('the shell', () => {
     expect(badge.attr('title')).toBe(`This is the ${label} environment`)
   })
 
-  test('keeps only the access tokens in the sidebar when the catalogue is down', async () => {
+  test('keeps only the Overview and the access tokens in the sidebar when the catalogue is down', async () => {
     vi.mocked(getCatalogueUseCase).mockResolvedValue(null)
 
     const { $ } = await visit(tokensPath)
@@ -218,7 +228,7 @@ describe('the shell', () => {
         .find('a')
         .toArray()
         .map((link) => $(link).attr('href'))
-    ).toEqual(['/dev-ops/clients/gas', '/dev-ops/clients/cw'])
+    ).toEqual(['/dev-ops', '/dev-ops/clients/gas', '/dev-ops/clients/cw'])
   })
 
   test('names the user in Title Case, then Times and Dark theme in one group, then Sign out', async () => {
@@ -458,7 +468,7 @@ describe("Dev Ops' status pages", () => {
     expect(flatten(part($, 'status-home').text())).toBe('Go to GAS outbox')
     expect(part($, 'status-home').attr('class')).toContain('gpa-btn-primary')
     expect(part($, 'status-back').attr('href')).toBe(tokensPath)
-    expect(part($, 'shell-nav').find('a')).toHaveLength(7)
+    expect(part($, 'shell-nav').find('a')).toHaveLength(8)
     expect($('.govuk-header, .govuk-template')).toHaveLength(0)
   })
 
@@ -537,8 +547,9 @@ describe("Dev Ops' status pages", () => {
 
   test('says it could not read its lists when the catalogue is down, keeping the access tokens in reach', async () => {
     vi.mocked(getCatalogueUseCase).mockResolvedValue(null)
+    vi.mocked(getBucketAtUseCase).mockResolvedValueOnce(catalogueDown)
 
-    const { $, statusCode } = await visit('/dev-ops')
+    const { $, statusCode } = await visit(outboxPath)
     const page = part($, 'status-catalogue')
 
     expect(statusCode).toBe(statusCodes.serviceUnavailable)
@@ -546,14 +557,14 @@ describe("Dev Ops' status pages", () => {
       'Dev Ops couldn’t read its lists'
     )
     expect(page.find('.gpa-statuspage-code')).toHaveLength(0)
-    expect(part($, 'status-retry').attr('href')).toBe('/dev-ops')
+    expect(part($, 'status-retry').attr('href')).toBe(outboxPath)
     expect(part($, 'status-tokens').attr('href')).toBe(tokensPath)
     expect(
       part($, 'shell-nav')
         .find('a')
         .toArray()
         .map((link) => $(link).attr('href'))
-    ).toEqual(['/dev-ops/clients/gas', '/dev-ops/clients/cw'])
+    ).toEqual(['/dev-ops', '/dev-ops/clients/gas', '/dev-ops/clients/cw'])
   })
 })
 
@@ -619,8 +630,9 @@ describe("Dev Ops' status pages' Content-Security-Policy", () => {
 
   test('sends it on the 503 page for lists it couldn’t read', async () => {
     vi.mocked(getCatalogueUseCase).mockResolvedValue(null)
+    vi.mocked(getBucketAtUseCase).mockResolvedValueOnce(catalogueDown)
 
-    const { $, statusCode, headers } = await visit('/dev-ops')
+    const { $, statusCode, headers } = await visit(outboxPath)
 
     expect(statusCode).toBe(statusCodes.serviceUnavailable)
     await expectPolicy($, headers)

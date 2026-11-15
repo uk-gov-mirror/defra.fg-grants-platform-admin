@@ -12,13 +12,13 @@ import {
 } from './routes/access-tokens.route.ts'
 import {
   searchBucketRoute,
-  viewBucketRoute,
-  viewDevOpsRoute
+  viewBucketRoute
 } from './routes/bucket-list.route.ts'
 import {
   fetchGrantDefinitionsRoute,
   fetchWorkflowDefinitionRoute
 } from './routes/fetch-definitions.route.ts'
+import { viewOverviewRoute } from './routes/overview.route.ts'
 import { purgeEventRoute } from './routes/purge-event.route.ts'
 import {
   viewApplicationRoute,
@@ -77,7 +77,7 @@ export const devOps = {
         scopedTo(
           roles.grantOperationsAdmin,
           asOperator([
-            viewDevOpsRoute,
+            viewOverviewRoute,
             viewBucketRoute,
             viewApplicationRoute,
             viewCaseRoute,

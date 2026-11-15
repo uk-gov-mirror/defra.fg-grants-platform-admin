@@ -1,0 +1,15 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+{%- from "../../atoms/sparkline/macro.njk" import Sparkline -%}
+{%- set tag = 'a' if p.href else 'div' -%}
+  {%- set d = (p.delta ~ '') if (p.delta is defined and p.delta !== null) else null -%}
+  {%- set neg = d and (d[0] == '-' or d[0] == '−') -%}
+  {%- set dt = p.deltaTone or ('danger' if neg else 'success') -%}
+  <{{ tag }} class="{{ cls('gpa-stat' ~ (' is-link' if p.href else '') ~ (' is-current' if p.current else ''), p) }}"{% if p.href %} href="{{ p.href }}"{% endif %}{% if p.current %} aria-current="page"{% endif %}{% if p.ariaLabel %} aria-label="{{ p.ariaLabel }}"{% endif %}{{ attrs(p) }}>
+    <div class="gpa-stat-label"{% if p.labelTestId %} data-testid="{{ p.labelTestId }}"{% endif %}>{% if p.icon %}{{ Icon({ name: p.icon, size: 'sm' }) }}{% endif %}{{ p.label }}</div>
+    <div class="gpa-stat-value{{ ' gpa-text-' ~ p.tone if p.tone }}"{% if p.valueTestId %} data-testid="{{ p.valueTestId }}"{% endif %}>{{ p.valueHtml | safe if p.valueHtml else p.value }}{% if p.unit %}<span class="gpa-stat-unit">{{ p.unit }}</span>{% endif %}</div>
+    {%- if p.trend %}{{ Sparkline({ data: p.trend, width: 120, height: 28, series: p.trendSeries, label: p.trendLabel or '' }) }}{% endif -%}
+    {%- if d !== null or p.hint -%}
+      <div class="gpa-stat-foot">{% if d !== null %}<span class="gpa-stat-delta gpa-text-{{ 'subtle' if dt == 'neutral' else dt }}">{{ Icon({ name: 'trending-down' if neg else ('trending-up' if d[0] == '+' else 'minus'), size: 'sm' }) }}{{ d }}</span>{% endif %}{% if p.hint %}<span class="gpa-stat-hint">{{ p.hint }}</span>{% endif %}</div>
+    {%- endif -%}
+  </{{ tag }}>

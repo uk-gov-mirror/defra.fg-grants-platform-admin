@@ -51,8 +51,10 @@
 @import "./templates/app-shell/styles.css" layer(gpa);
 @import "./atoms/heading/styles.css" layer(gpa);
 @import "./atoms/code/styles.css" layer(gpa);
+@import "./atoms/progress-bar/styles.css" layer(gpa);
 @import "./molecules/breadcrumbs/styles.css" layer(gpa);
 @import "./molecules/stepper/styles.css" layer(gpa);
+@import "./molecules/stat/styles.css" layer(gpa);
 @import "./molecules/timeline/styles.css" layer(gpa);
 @import "./molecules/popover/styles.css" layer(gpa);
 @import "./molecules/calendar/styles.css" layer(gpa);
@@ -69,6 +71,8 @@
 @import "./templates/list-page/styles.css" layer(gpa);
 @import "./molecules/error-summary/styles.css" layer(gpa);
 @import "./organisms/confirm-dialog/styles.css" layer(gpa);
+@import "./atoms/sparkline/styles.css" layer(gpa);
+@import "./organisms/chart/styles.css" layer(gpa);
 @import "./templates/status-page/styles.css" layer(gpa);
 @import "./atoms/time/styles.css" layer(gpa);
 @import "./organisms/state-map/styles.css" layer(gpa);
@@ -103,6 +107,7 @@
 @import "./atoms/heading/server.css" layer(gpa);
 @import "./atoms/code/server.css" layer(gpa);
 @import "./atoms/visually-hidden/server.css" layer(gpa);
+@import "./molecules/stat/server.css" layer(gpa);
 @import "./molecules/timeline/server.css" layer(gpa);
 @import "./molecules/calendar/server.css" layer(gpa);
 @import "./layouts/stack/server.css" layer(gpa);

@@ -1,0 +1,4 @@
+{% macro ProgressBar(p) -%}
+  {%- set __html %}{% include "./template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}

@@ -87,6 +87,32 @@ describe('toListPage', () => {
     ])
   })
 
+  test('the dead letters with no error: their filter is said in words, not as a code', () => {
+    const summarised = {
+      ...gasOutbox,
+      summaries: [
+        {
+          id: 'errors',
+          label: 'Top errors',
+          by: ['errorKey', 'eventType'],
+          among: { status: 'DEAD_LETTER' },
+          top: 20,
+          none: 'No error recorded'
+        }
+      ]
+    }
+    const tag = (errorKey: string) =>
+      toListPage(input({ bucket: summarised, filters: { errorKey } }))
+        .applied[0]
+
+    expect(tag('No error recorded')).toMatchObject({
+      label: 'Error',
+      value: 'No error recorded',
+      mono: false
+    })
+    expect(tag('Grant <v> not found')).toMatchObject({ mono: true })
+  })
+
   test('a chosen value the catalogue no longer lists is kept in the menu', () => {
     const page = toListPage(input({ filters: { eventType: 'Retired' } }))
 

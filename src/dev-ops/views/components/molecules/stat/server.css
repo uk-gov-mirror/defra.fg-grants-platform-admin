@@ -1,0 +1,12 @@
+.gpa-stat.is-link {
+  color: inherit;
+  text-decoration: none;
+}
+.gpa-stat.is-link:hover {
+  background: var(--bg-hover);
+}
+.gpa-stat.is-current {
+  border-color: var(--border-selected);
+  box-shadow: inset 0 calc(var(--border-width-thick) * -1) 0
+    var(--border-selected);
+}

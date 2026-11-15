@@ -1,9 +1,17 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import type nunjucks from "nunjucks";
+import { chartModel, fmtNum, sparkline } from "./core/charts.ts";
 import { calendarMonth, formatDate, formatRange } from "./core/dates.ts";
 import { diffLines } from "./core/diff.ts";
 
+export {
+  barList,
+  chartModel,
+  fmtNum,
+  sparkline,
+  treeLeaves,
+} from "./core/charts.ts";
 export {
   calendarMonth,
   formatDate,
@@ -45,5 +53,8 @@ export const addDesignSystem = (environment: nunjucks.Environment) => {
   environment.addGlobal("gpaFormatDate", formatDate);
   environment.addGlobal("gpaFormatRange", formatRange);
   environment.addGlobal("gpaCalendarMonth", calendarMonth);
+  environment.addGlobal("gpaChart", chartModel);
+  environment.addGlobal("gpaSparkline", sparkline);
+  environment.addGlobal("gpaNum", fmtNum);
   return environment;
 };

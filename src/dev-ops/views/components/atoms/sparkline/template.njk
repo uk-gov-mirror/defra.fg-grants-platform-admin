@@ -1,0 +1,3 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- set s = gpaSparkline(p.data, p.width or 96, p.height or 28) -%}{%- set c = 'var(--chart-' ~ (p.series or 1) ~ ')' -%}
+  <svg class="{{ cls('gpa-sparkline', p) }}" width="{{ s.width }}" height="{{ s.height }}" viewBox="0 0 {{ s.width }} {{ s.height }}" {% if p.label %} role="img" aria-label="{{ p.label }}"{% else %} aria-hidden="true"{% endif %}{{ attrs(p) }}><polyline points="{{ s.points }}" fill="none" stroke="{{ c }}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></polyline>{% if s.last %}<circle cx="{{ s.last[0] }}" cy="{{ s.last[1] }}" r="2.5" fill="{{ c }}"></circle>{% endif %}</svg>

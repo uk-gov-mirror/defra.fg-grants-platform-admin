@@ -1,0 +1,8 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- set max = p.max or 100 -%}
+  {%- set raw = null if (p.value is not defined or p.value === null) else (p.value / max) * 100 -%}
+  {%- set pct = null if raw === null else (0 if raw < 0 else (100 if raw > 100 else raw)) -%}
+  <div class="{{ cls('gpa-progress gpa-progress-' ~ (p.tone or 'accent') ~ (' is-indeterminate' if pct === null else ''), p) }}"{{ attrs(p) }}>
+    {%- if p.label or p.labelHtml or p.showValue %}<div class="gpa-progress-head"><span>{{ p.labelHtml | safe if p.labelHtml else p.label }}</span>{% if p.showValue and pct !== null %}<span class="gpa-num">{{ pct | round }}%</span>{% endif %}</div>{% endif -%}
+    <div class="gpa-progress-track" role="progressbar" aria-label="{{ p.ariaLabel or p.label or 'Progress' }}" aria-valuemin="0" aria-valuemax="{{ max }}"{% if pct !== null %} aria-valuenow="{{ p.value }}"{% endif %}><div class="gpa-progress-fill{{ (' gpa-pct-' ~ (pct | round)) if pct !== null }}"></div></div>
+  </div>

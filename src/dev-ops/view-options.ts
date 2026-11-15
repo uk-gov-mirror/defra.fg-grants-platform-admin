@@ -13,9 +13,10 @@ import { assets } from '../server/plugins/views/assets.ts'
 import { getCatalogueUseCase } from './use-cases/get-catalogue.use-case.ts'
 import { toCodeBreaks } from './view-models/code-text.ts'
 import {
+  devOpsPath,
   toHomeHref,
   toHomeLabel,
-  toNavSections
+  toShellNav
 } from './view-models/bucket-nav.ts'
 import { toClientsPath } from './view-models/access-token-services.ts'
 import { toSidebarSections } from './view-models/shell.ts'
@@ -119,7 +120,8 @@ const context = async (request: ViewContextRequest = {}) => {
     themeCookieName,
     environmentLabel: config.get('environmentLabel'),
     signedInUser: userOf(request),
-    navSections: toNavSections(catalogue),
+    navSections: toShellNav(catalogue),
+    overviewHref: mayUseDevOps(request) ? devOpsPath : null,
     homeHref,
     homeLabel: toHomeLabel(catalogue),
     tokensHref,

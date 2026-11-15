@@ -1,0 +1,55 @@
+.gpa-num {
+  font-variant-numeric: tabular-nums;
+}
+.gpa-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-stack-xs);
+  min-width: 0;
+}
+.gpa-progress-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--gap-inline-md);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+  color: var(--fg-muted);
+  letter-spacing: var(--tracking-sm);
+}
+.gpa-progress-track {
+  position: relative;
+  height: var(--size-progress);
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--bg-hover);
+}
+.gpa-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--bg-accent);
+  transition: width var(--duration-slow) var(--easing-standard);
+}
+.gpa-progress-success .gpa-progress-fill {
+  background: var(--status-success);
+}
+.gpa-progress-warning .gpa-progress-fill {
+  background: var(--status-warning);
+}
+.gpa-progress-danger .gpa-progress-fill {
+  background: var(--status-danger);
+}
+.gpa-progress.is-indeterminate .gpa-progress-fill {
+  width: 40%;
+  animation: gpa-indeterminate 1.2s var(--easing-standard) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gpa-progress.is-indeterminate .gpa-progress-fill {
+    animation-duration: 3s;
+  }
+  .gpa-progress-fill {
+    transition: none;
+  }
+}
+[dir="rtl"] .gpa-progress.is-indeterminate .gpa-progress-fill {
+  animation-direction: reverse;
+}

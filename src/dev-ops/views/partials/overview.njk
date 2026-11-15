@@ -1,0 +1,140 @@
+{% import "components/macros.njk" as gpa %}
+
+{#- The Overview's sections, each drawing its rows, or saying in their place why they couldn't be read. -#}
+{%- macro sectionAlerts(alerts, testId) -%}
+  {%- for a in alerts -%}
+    {{ gpa.Alert({ tone: a.tone, title: a.title, text: a.text, testId: testId }) }}
+  {%- endfor -%}
+{%- endmacro -%}
+
+{%- macro timeCell(time) -%}
+  {%- if time %}{{ gpa.Time({ datetime: time.datetime, text: time.text, title: time.title }) }}{% else %}{{ gpa.NoValue() }}{% endif -%}
+{%- endmacro -%}
+
+{%- macro topErrors(section) -%}
+  {%- call gpa.Section({ title: 'Top errors', description: 'Current dead letters grouped by message, both services, most first.', testId: 'overview-top-errors' }) -%}
+    {%- call gpa.Stack({ gap: 'md' }) -%}
+      {{ sectionAlerts(section.alerts, 'overview-top-errors-alert') }}
+      {%- if section.rows -%}
+        {%- call gpa.DataTable({
+          styleNonce: styleNonce,
+          label: 'Top errors',
+          link: true,
+          testId: 'overview-top-errors-table',
+          empty: { title: 'No dead letters', text: 'Nothing is waiting as a dead letter in either service.', icon: 'circle-check' } if not section.rows.length,
+          columns: [
+            { key: 'error', label: 'Error', width: 'minmax(180px, 3fr)', mono: true },
+            { key: 'service', label: 'Service', width: 'max-content' },
+            { key: 'event', label: 'Event', width: 'auto' },
+            { key: 'count', label: 'Dead letters', width: 'auto', align: 'right' },
+            { key: 'last', label: 'Last seen', width: 'max-content', align: 'right' }
+          ]
+        }) -%}
+          {%- for row in section.rows -%}
+            {%- call gpa.TableRow({ link: true, testId: 'overview-top-error-row' }) -%}
+              {%- if row.error -%}
+                <td role="cell" class="gpa-cell-mono">{{ gpa.RowLink({ text: row.error, href: row.href, mono: true }) }}</td>
+              {%- else -%}
+                <td role="cell">{{ gpa.RowLink({ text: 'No error recorded', href: row.href }) }}</td>
+              {%- endif -%}
+              <td role="cell">{{ gpa.Text({ text: row.service }) }}</td>
+              <td role="cell">{% if row.event %}{{ gpa.Text({ text: row.event }) }}{% else %}{{ gpa.NoValue() }}{% endif %}</td>
+              <td role="cell" class="gpa-right"><span class="gpa-num">{{ row.count }}</span></td>
+              <td role="cell" class="gpa-right">{{ timeCell(row.lastSeen) }}</td>
+              {{ gpa.RowChevron() }}
+            {%- endcall -%}
+          {%- endfor -%}
+        {%- endcall -%}
+      {%- endif -%}
+      {%- if section.partial %}{{ gpa.Text({ text: section.partial, tone: 'subtle', variant: 'body-sm', testId: 'overview-top-errors-partial' }) }}{% endif -%}
+    {%- endcall -%}
+  {%- endcall -%}
+{%- endmacro -%}
+
+{%- macro deadLetters(chart, alerts, links) -%}
+  {%- if chart or alerts.length or links.length -%}
+    {%- call gpa.Stack({ gap: 'sm', testId: 'overview-dead-letters' }) -%}
+      {{ sectionAlerts(alerts, 'overview-dead-letters-alert') }}
+      {%- if chart -%}
+        {{ gpa.Chart({ type: 'bar', title: chart.title, summary: chart.summary, tableToggle: false, x: chart.x, xLabel: chart.xLabel, series: chart.series, height: 200, testId: 'overview-chart' }) }}
+        {%- for note in chart.notes %}{{ gpa.Text({ text: note, tone: 'subtle', variant: 'body-sm', testId: 'overview-chart-note' }) }}{% endfor -%}
+      {%- endif -%}
+      {%- if links.length -%}
+        {%- call gpa.Inline({ gap: 'md', testId: 'overview-dead-letter-links' }) -%}
+          {%- for a in links %}{{ gpa.Link({ text: a.text, href: a.href, testId: a.testId }) }}{% endfor -%}
+        {%- endcall -%}
+      {%- endif -%}
+    {%- endcall -%}
+  {%- endif -%}
+{%- endmacro -%}
+
+{%- macro configFailed(section) -%}
+  {%- call gpa.Section({ title: 'Config that failed', description: 'Active grant and workflow versions whose definition the service couldn’t fetch or read.', testId: 'overview-config' }) -%}
+    {%- call gpa.Stack({ gap: 'md' }) -%}
+      {{ sectionAlerts(section.alerts, 'overview-config-alert') }}
+      {%- if section.rows -%}
+        {%- call gpa.DataTable({
+          styleNonce: styleNonce,
+          label: 'Config that failed',
+          link: true,
+          testId: 'overview-config-table',
+          empty: { title: 'Every active version is usable', text: 'No active grant or workflow definition has failed.', icon: 'circle-check' } if not section.rows.length,
+          columns: [
+            { key: 'version', label: 'Version', width: 'auto', mono: true },
+            { key: 'service', label: 'Service', width: 'max-content' },
+            { key: 'type', label: 'Type', width: 'auto' },
+            { key: 'definition', label: 'Definition', width: 'auto' },
+            { key: 'received', label: 'Received', width: 'var(--size-column-date)', align: 'right' }
+          ]
+        }) -%}
+          {%- for row in section.rows -%}
+            {%- call gpa.TableRow({ link: true, testId: 'overview-config-row' }) -%}
+              <td role="cell" class="gpa-cell-mono">{{ gpa.RowLink({ text: row.version, href: row.href, mono: true }) }}</td>
+              <td role="cell">{{ gpa.Text({ text: row.service }) }}</td>
+              <td role="cell">{{ gpa.Text({ text: row.type }) }}</td>
+              <td role="cell">{{ gpa.StatusDot({ text: row.definition.text, tone: row.definition.tone }) }}</td>
+              <td role="cell" class="gpa-right">{{ timeCell(row.received) }}</td>
+              {{ gpa.RowChevron() }}
+            {%- endcall -%}
+          {%- endfor -%}
+        {%- endcall -%}
+      {%- endif -%}
+      {%- if section.more %}{{ gpa.Text({ text: section.more, tone: 'subtle', variant: 'body-sm', testId: 'overview-config-more' }) }}{% endif -%}
+    {%- endcall -%}
+  {%- endcall -%}
+{%- endmacro -%}
+
+{%- macro tokensExpiring(section) -%}
+  {%- call gpa.Section({ title: 'Access tokens expiring', testId: 'overview-tokens' }) -%}
+    {%- call gpa.Stack({ gap: 'md' }) -%}
+      {{ sectionAlerts(section.alerts, 'overview-tokens-alert') }}
+      {%- if section.rows -%}
+        {%- call gpa.DataTable({
+          styleNonce: styleNonce,
+          label: 'Access tokens expiring',
+          link: true,
+          testId: 'overview-tokens-table',
+          empty: { title: 'No tokens expiring or expired', text: 'Nothing expires in the next 30 days, and nothing has expired.', icon: 'circle-check' } if not section.rows.length,
+          columns: [
+            { key: 'client', label: 'Client ID', width: 'auto', mono: true },
+            { key: 'service', label: 'Service', width: 'max-content' },
+            { key: 'status', label: 'Status', width: 'auto' },
+            { key: 'expires', label: 'Expires', width: 'max-content', align: 'right' }
+          ]
+        }) -%}
+          {%- for row in section.rows -%}
+            {%- call gpa.TableRow({ link: true, testId: 'overview-token-row' }) -%}
+              <td role="cell" class="gpa-cell-mono">{{ gpa.RowLink({ html: (row.client | escape) if row.client else gpa.NoValue(), href: row.href, mono: true }) }}</td>
+              <td role="cell">{{ gpa.Text({ text: row.service }) }}</td>
+              <td role="cell">{{ gpa.StatusDot({ tone: row.status.tone, text: row.status.text }) }}</td>
+              <td role="cell" class="gpa-right">
+                {%- if row.expires %}{{ gpa.Time({ datetime: row.expires.datetime, text: row.expires.text, title: row.expires.title }) }}{% else %}{{ gpa.Text({ text: 'Never', tone: 'subtle' }) }}{% endif -%}
+              </td>
+              {{ gpa.RowChevron() }}
+            {%- endcall -%}
+          {%- endfor -%}
+        {%- endcall -%}
+      {%- endif -%}
+    {%- endcall -%}
+  {%- endcall -%}
+{%- endmacro -%}

@@ -5,7 +5,12 @@ import {
   pagedInbox,
   pagedOutbox
 } from '../use-cases/test-fixtures.ts'
-import { toBackBucket, toBucketPath, toNavSections } from './bucket-nav.ts'
+import {
+  toBackBucket,
+  toBucketPath,
+  toNavSections,
+  toShellNav
+} from './bucket-nav.ts'
 
 describe('toBucketPath', () => {
   test('is the path the bucket declares, below the admin', () => {
@@ -236,5 +241,32 @@ describe('toBackBucket', () => {
 
   test('finds none without a catalogue', () => {
     expect(toBackBucket(null, '/dev-ops/applications')).toBeNull()
+  })
+})
+
+describe('toShellNav', () => {
+  const overview = {
+    title: '',
+    items: [
+      {
+        id: 'overview',
+        ids: ['overview'],
+        label: 'Overview',
+        perService: false,
+        href: '/dev-ops',
+        icon: 'layout-dashboard'
+      }
+    ]
+  }
+
+  test('opens with the Overview, untitled, then each service’s lists', () => {
+    expect(toShellNav(catalogue)).toEqual([
+      overview,
+      ...toNavSections(catalogue)
+    ])
+  })
+
+  test('keeps the Overview without the catalogue', () => {
+    expect(toShellNav(null)[0]).toEqual(overview)
   })
 })

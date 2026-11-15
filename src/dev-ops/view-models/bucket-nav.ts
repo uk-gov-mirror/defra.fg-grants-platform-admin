@@ -121,6 +121,23 @@ const withUnreachable = (
     ? [...sections, { title: serviceWords.cw.short, items: [cwEventsItem] }]
     : sections
 
+export const overviewNavId = 'overview'
+
+/** Not a list: the admin's front page, first and untitled, there whether or not the catalogue answers. */
+const overviewSection: NavSection = {
+  title: '',
+  items: [
+    {
+      id: overviewNavId,
+      ids: [overviewNavId],
+      label: 'Overview',
+      perService: false,
+      href: devOpsPath,
+      icon: 'layout-dashboard'
+    }
+  ]
+}
+
 /** One section per service, in the order the catalogue first names it, each ending with that service's access tokens. */
 export const toNavSections = (catalogue: Catalogue | null): NavSection[] => {
   const buckets = catalogue?.buckets ?? []
@@ -176,3 +193,9 @@ export const toListLabel = ({ page, label }: BucketEntry): string =>
   page?.label ?? label
 
 const toPageLabel = toListLabel
+
+/** The sidebar: the Overview, then each service's lists. */
+export const toShellNav = (catalogue: Catalogue | null): NavSection[] => [
+  overviewSection,
+  ...toNavSections(catalogue)
+]

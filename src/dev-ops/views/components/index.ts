@@ -1,5 +1,6 @@
 import { GpaAccordion } from "./molecules/accordion/web-component.ts";
 import { GpaCalendar } from "./molecules/calendar/web-component.ts";
+import { GpaChart } from "./organisms/chart/web-component.ts";
 import { GpaClearable } from "./atoms/input/web-component.ts";
 import { GpaConfirm } from "./organisms/confirm-dialog/web-component.ts";
 import { GpaCopy } from "./molecules/copy-button/web-component.ts";
@@ -26,6 +27,7 @@ import { GpaTooltip } from "./atoms/tooltip/web-component.ts";
 const elements: [string, CustomElementConstructor][] = [
   ["gpa-accordion", GpaAccordion],
   ["gpa-calendar", GpaCalendar],
+  ["gpa-chart", GpaChart],
   ["gpa-clearable", GpaClearable],
   ["gpa-confirm", GpaConfirm],
   ["gpa-copy", GpaCopy],
@@ -130,6 +132,7 @@ else upgrade(document);
 export {
   GpaAccordion,
   GpaCalendar,
+  GpaChart,
   GpaClearable,
   GpaConfirm,
   GpaCopy,

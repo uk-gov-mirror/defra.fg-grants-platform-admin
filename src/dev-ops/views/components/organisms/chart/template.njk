@@ -1,0 +1,22 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../molecules/disclosure/macro.njk" import Disclosure -%}
+{% macro chartTable(p) -%}
+      <div class="gpa-chart-table"><table><thead><tr>{% if p.xLabel %}<th>{{ p.xLabel }}</th>{% else %}<td></td>{% endif %}{% for s in p.series %}{% if loop.index <= 8 %}<th>{{ s.name }}</th>{% endif %}{% endfor %}</tr></thead><tbody>
+        {%- for x in (p.x or p.series[0].data) %}{% set i = loop.index0 %}<tr><th>{{ x if p.x else i }}</th>{% for s in p.series %}{% if loop.index <= 8 %}<td>{{ '—' if (s.data[i] === null or s.data[i] is not defined) else gpaNum(s.data[i]) }}</td>{% endif %}{% endfor %}</tr>{% endfor -%}
+      </tbody></table></div>
+{%- endmacro %}
+{%- set id = gpaId('chart') -%}
+  {%- set mdl = gpaChart(p) -%}
+  <gpa-chart data-chart="{{ { type: p.type, series: p.series, x: p.x, height: p.height, title: p.title, summary: p.summary } | dump }}"><figure class="{{ cls('gpa-chart', p) }}"{% if p.title %} aria-labelledby="{{ id }}"{% endif %}{{ attrs(p) }}>
+    {%- if p.title or mdl.series | length > 1 -%}
+      <figcaption class="gpa-chart-head">{% if p.title %}<span id="{{ id }}" class="heading-xs">{{ p.title }}</span>{% else %}<span></span>{% endif %}{% if mdl.series | length > 1 %}<ul class="gpa-chart-legend">{% for s in mdl.series %}<li><span class="gpa-chart-key gpa-bg-chart-{{ loop.index }}"></span>{{ s.name }}</li>{% endfor %}</ul>{% endif %}</figcaption>
+    {%- endif -%}
+    <div class="gpa-chart-plot{{ ' is-labelled' if mdl.labelled }}"><div class="gpa-chart-area"><svg class="gpa-chart-svg" role="img" aria-label="{{ (p.title or ('Chart of ' ~ (p.series | join(', ', 'name')))) ~ ((' — ' ~ p.summary) if p.summary else '') }}" height="{{ mdl.H }}">
+      {%- for g in mdl.grid %}<g><line x1="0" x2="100%" y1="{{ g.y }}" y2="{{ g.y }}" class="{{ 'gpa-chart-base' if g.base else 'gpa-chart-grid' }}"></line><text x="-8" y="{{ g.y }}" dy="0.32em" text-anchor="end" class="gpa-chart-axis">{{ g.label }}</text></g>{% endfor -%}
+      {%- for t in mdl.xLabels %}<text x="{{ t.x }}" y="{{ mdl.H - 8 }}" text-anchor="middle" class="gpa-chart-axis gpa-chart-xl {{ t.tiers }}">{{ t.text }}</text>{% endfor -%}
+      {%- if mdl.bar %}{% for sl in mdl.slots %}<svg class="gpa-chart-slot" x="{{ sl.x }}" y="0" width="{{ sl.width }}" height="{{ mdl.baseline }}" data-i="{{ loop.index0 }}">{% for b in sl.bars %}<rect class="gpa-chart-bar k{{ mdl.k }} s{{ b.s }}" y="{{ b.y }}" height="{{ b.h + 4 }}" fill="var(--chart-{{ b.s + 1 }})"></rect>{% endfor %}</svg>{% endfor -%}
+      {%- else %}<svg class="gpa-chart-lines" x="0" y="{{ mdl.m.t }}" width="100%" height="{{ mdl.ih }}" viewBox="0 0 1000 {{ mdl.ih }}" preserveAspectRatio="none" overflow="visible">{% for l in mdl.lines %}<path d="{{ l.d }}" fill="none" stroke="var(--chart-{{ l.series }})" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></path>{% endfor %}</svg>
+        {%- for l in mdl.lines %}{% if l.label %}<text x="{{ l.label.x }}" dx="8" y="{{ l.label.y }}" dy="0.32em" class="gpa-chart-label">{{ l.label.text }}</text>{% endif %}{% endfor %}{% endif -%}
+    </svg></div></div>
+    {%- if p.tableToggle === false %}<div class="gpa-chart-sr">{{ chartTable(p) }}</div>{% else %}{% call Disclosure({ text: 'Show as table', hideText: 'Hide table' }) %}{{ chartTable(p) }}{% endcall %}{% endif -%}
+  </figure></gpa-chart>

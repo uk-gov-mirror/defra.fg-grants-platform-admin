@@ -17,7 +17,7 @@ import type {
 import { queryBucketUseCase } from '../use-cases/query-bucket.use-case.ts'
 import { toBucketHref } from '../view-models/bucket-links.ts'
 import type { BucketFilters } from '../view-models/bucket-links.ts'
-import { devOpsPath, toHomeHref } from '../view-models/bucket-nav.ts'
+import { devOpsPath } from '../view-models/bucket-nav.ts'
 import {
   fromUrlQuery,
   repeatedKeys,
@@ -310,23 +310,6 @@ const viewBucket = async (
   }
 
   return viewList(request, h, bucket, filters, { cursor, searched })
-}
-
-/**
- * The admin's own root opens its first list, as the catalogue orders them.
- * Found rather than moved permanently, so a browser never caches it past a
- * change of order. No other path is redirected.
- */
-export const viewDevOpsRoute: ServerRoute = {
-  method: 'GET',
-  path: devOpsPath,
-  async handler(request: Request, h: ResponseToolkit) {
-    const home = toHomeHref(await getCatalogueUseCase())
-
-    return home === null
-      ? viewCatalogueUnavailable(request, h)
-      : h.redirect(home)
-  }
 }
 
 /** Every path below the admin's root no other route takes: a list, or a 404. */

@@ -1,0 +1,28 @@
+{% extends 'layouts/page.njk' %}
+{% import "components/macros.njk" as gpa %}
+{% import "partials/overview.njk" as overview with context %}
+
+
+{#- Is anything wrong in GAS or CW? One page for both services, from one GAS read; each part says on its own if it couldn't be read. -#}
+{% block content %}
+  {%- call gpa.Page() -%}
+    {{ gpa.PageHeader({ title: pageTitle, meta: meta, titleTestId: 'overview-title' }) }}
+    {%- if alert -%}
+      {%- set retry = gpa.Button({ text: 'Try again', size: 'sm', iconStart: 'refresh-cw', href: alert.retryHref, testId: 'overview-retry' }) if alert.retryHref else '' -%}
+      {{ gpa.Alert({ tone: alert.tone, title: alert.title, text: alert.text, actions: retry, testId: 'overview-alert' }) }}
+    {%- endif -%}
+    {%- if sections -%}
+      {%- call gpa.Stack({ gap: 'section' }) -%}
+        {%- call gpa.StatGrid({ testId: 'overview-figures' }) -%}
+          {%- for f in sections.figures -%}
+            {{ gpa.Stat({ label: f.label, value: f.value, valueHtml: gpa.NoValue() if f.value === null, trend: f.trend, trendLabel: f.trendLabel, hint: f.hint, testId: f.testId }) }}
+          {%- endfor -%}
+        {%- endcall -%}
+        {{ overview.topErrors(sections.topErrors) }}
+        {{ overview.deadLetters(sections.chart, sections.deadLetterAlerts, sections.deadLetterLinks) }}
+        {{ overview.configFailed(sections.configFailed) }}
+        {{ overview.tokensExpiring(sections.tokensExpiring) }}
+      {%- endcall -%}
+    {%- endif -%}
+  {%- endcall -%}
+{% endblock %}
