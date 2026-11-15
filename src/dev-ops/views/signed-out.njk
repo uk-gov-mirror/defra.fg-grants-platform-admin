@@ -1,0 +1,10 @@
+{% extends 'layouts/page.njk' %}
+{% import "components/macros.njk" as gpa %}
+
+{% block oldPage %}{% endblock %}
+
+{#- Where Dev Ops' Sign out lands: no one to show and nothing to use, so the shell has no navigation. -#}
+{% block content %}
+  {%- set actions %}{{ gpa.Button({ text: 'Sign in', href: signInHref, variant: 'primary', iconStart: 'log-in', testId: 'signed-out-sign-in' }) }}{% endset -%}
+  {{ gpa.StatusPage({ kind: 'no-access', code: false, icon: 'log-in', title: 'You’re signed out', text: 'Your session ended. Sign in again to use Dev Ops.', actions: actions, testId: 'signed-out' }) }}
+{% endblock %}

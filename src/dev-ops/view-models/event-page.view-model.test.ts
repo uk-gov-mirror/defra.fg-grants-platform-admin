@@ -1,3 +1,4 @@
+import { ukZone } from './zoned-clock.ts'
 import { config } from '../../common/config.ts'
 import { logger } from '../../common/logger.ts'
 import type { EditNoteProblem } from '../use-cases/edit-payload-command.ts'
@@ -171,8 +172,8 @@ const found = (event: EventDetail = detail()): EventResult => ({
 const model = (
   result: EventResult = found(),
   query: Parameters<typeof toEventPage>[2] = {},
-  notice?: Parameters<typeof toEventPage>[3]
-) => toEventPage(result, key, query, notice)
+  notice?: Parameters<typeof toEventPage>[4]
+) => toEventPage(result, key, query, ukZone, notice)
 
 /** Opened from a list that filters by status and error name. */
 const listed = (result: EventResult = found(), from: BucketEntry = bucket) =>
@@ -180,6 +181,7 @@ const listed = (result: EventResult = found(), from: BucketEntry = bucket) =>
     result,
     key,
     { back: listPath },
+    ukZone,
     undefined,
     undefined,
     undefined,
@@ -187,13 +189,13 @@ const listed = (result: EventResult = found(), from: BucketEntry = bucket) =>
   )
 
 const noticed = (
-  notice: Omit<NonNullable<Parameters<typeof toEventPage>[3]>, 'page'>
+  notice: Omit<NonNullable<Parameters<typeof toEventPage>[4]>, 'page'>
 ) => model(found(), {}, { ...notice, page: `/dev-ops/events/gas/outbox/${id}` })
 
 const inboxModel = (
   result: EventResult = found(inboxDetail()),
   query: Parameters<typeof toEventPage>[2] = {}
-) => toEventPage(result, inboxKey, query)
+) => toEventPage(result, inboxKey, query, ukZone)
 
 describe('toSafeFrom', () => {
   test.each([
@@ -236,6 +238,7 @@ describe('toEventPage', () => {
         found(),
         key,
         { back: `${listPath}?status=FAILED` },
+        ukZone,
         undefined,
         undefined,
         undefined,
@@ -1206,6 +1209,7 @@ describe('the shared failure link', () => {
       found(),
       key,
       { back: `${listPath}?status=FAILED&grant=example-grant` },
+      ukZone,
       undefined,
       undefined,
       undefined,
@@ -1222,6 +1226,7 @@ describe('the shared failure link', () => {
       found(),
       key,
       { back: `${listPath}?status=FAILED&audit=on` },
+      ukZone,
       undefined,
       undefined,
       undefined,
@@ -1299,7 +1304,7 @@ describe('the shared failure link', () => {
   })
 })
 
-const listRow = (event: EventRow) => toEventRow(now, listPath)(event)
+const listRow = (event: EventRow) => toEventRow(now, ukZone, listPath)(event)
 
 const row = (overrides: Partial<EventRow> = {}): EventRow => ({
   ...base,
@@ -1671,13 +1676,14 @@ const purgedState = {
 
 const confirming = (
   event: EventDetail = purgeable(),
-  form?: Parameters<typeof toEventPage>[4]
-) => toEventPage(found(event), key, { confirm: 'purge' }, undefined, form)
+  form?: Parameters<typeof toEventPage>[5]
+) =>
+  toEventPage(found(event), key, { confirm: 'purge' }, ukZone, undefined, form)
 
 const submitted = (
   reasonCode: string,
   note: string,
-  error: NonNullable<Parameters<typeof toEventPage>[4]>['error']
+  error: NonNullable<Parameters<typeof toEventPage>[5]>['error']
 ) =>
   confirming(purgeable(), {
     page: `/dev-ops/events/gas/outbox/${id}`,
@@ -1942,17 +1948,12 @@ describe('the message a purge leaves behind', () => {
     status: string | null = null,
     event: EventDetail = detail({ ...purgedState, lastPurge })
   ) =>
-    toEventPage(
-      found(event),
-      key,
-      {},
-      {
-        outcome,
-        status,
-        action: 'purge',
-        page: `/dev-ops/events/gas/outbox/${id}`
-      }
-    ).banner
+    toEventPage(found(event), key, {}, ukZone, {
+      outcome,
+      status,
+      action: 'purge',
+      page: `/dev-ops/events/gas/outbox/${id}`
+    }).banner
 
   test('says when the database will delete the event it just purged', () => {
     expect(
@@ -2341,6 +2342,7 @@ describe('the plain JSON warning', () => {
         found(editable({ payloadIsPlainJson: false })),
         key,
         {},
+        ukZone,
         undefined,
         undefined,
         {
@@ -2376,7 +2378,7 @@ describe('the review', () => {
     event: EventDetail = editable(),
     overrides: { note?: string; noteProblem?: EditNoteProblem | null } = {}
   ) =>
-    toEventPage(found(event), key, {}, undefined, undefined, {
+    toEventPage(found(event), key, {}, ukZone, undefined, undefined, {
       step: 'review',
       text: '{\n  "data": {\n    "caseRef": "GLD-9B3"\n  }\n}',
       revision: 2,
@@ -2445,19 +2447,14 @@ describe('the message an edit leaves behind', () => {
     extra: { status?: string | null; reason?: string | null } = {},
     event: EventDetail = editable()
   ) =>
-    toEventPage(
-      found(event),
-      key,
-      {},
-      {
-        outcome,
-        status: null,
-        reason: null,
-        ...extra,
-        action: 'edit',
-        page: `/dev-ops/events/gas/outbox/${id}`
-      }
-    )
+    toEventPage(found(event), key, {}, ukZone, {
+      outcome,
+      status: null,
+      reason: null,
+      ...extra,
+      action: 'edit',
+      page: `/dev-ops/events/gas/outbox/${id}`
+    })
 
   test('says the payload was saved and the dead letter was not retried', () => {
     expect(afterEdit('saved').banner).toEqual({
@@ -2476,17 +2473,12 @@ describe('the message an edit leaves behind', () => {
 
   test('says only that it was saved when the page could not read the event back', () => {
     expect(
-      toEventPage(
-        { outcome: 'unavailable', event: null },
-        key,
-        {},
-        {
-          outcome: 'saved',
-          status: null,
-          action: 'edit',
-          page: `/dev-ops/events/gas/outbox/${id}`
-        }
-      ).banner?.message
+      toEventPage({ outcome: 'unavailable', event: null }, key, {}, ukZone, {
+        outcome: 'saved',
+        status: null,
+        action: 'edit',
+        page: `/dev-ops/events/gas/outbox/${id}`
+      }).banner?.message
     ).toBe("Payload saved. It hasn't been retried.")
   })
 

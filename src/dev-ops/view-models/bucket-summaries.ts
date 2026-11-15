@@ -12,7 +12,7 @@ import { toBucketHref } from './bucket-links.ts'
 import type { BucketFilters } from './bucket-links.ts'
 import { showKey } from './bucket-toggles.ts'
 import { none, toTimestamp } from './event-formats.ts'
-import type { Timestamp } from './event-formats.ts'
+import type { Timestamp, Zone } from './event-formats.ts'
 
 /** One summary a list declares, and what was read for it. */
 export interface SummarySource {
@@ -113,14 +113,15 @@ const toEntry =
     bucket: BucketEntry,
     summary: BucketSummary,
     filters: BucketFilters,
-    now: Date
+    now: Date,
+    zone: Zone
   ) =>
   ({ values, count, capped, firstAt, lastAt }: SummaryEntry): Entry => ({
     cells: summary.by.map(toCell(bucket, summary, values)),
     href: toEntryHref(bucket, summary, values, filters),
     countLabel: `${counted.format(count)}${capped ? '+' : ''}`,
-    first: toTimestamp(firstAt, now),
-    last: toTimestamp(lastAt, now)
+    first: toTimestamp(firstAt, now, zone),
+    last: toTimestamp(lastAt, now, zone)
   })
 
 const toNotes = (top: number, { more, complete }: SummaryResult): string[] => [
@@ -158,7 +159,8 @@ const toRead = (
   bucket: BucketEntry,
   { summary, read }: SummarySource,
   filters: BucketFilters,
-  now: Date
+  now: Date,
+  zone: Zone
 ): Pick<
   SummarySection,
   'title' | 'unavailable' | 'entries' | 'emptyText' | 'notes'
@@ -176,7 +178,7 @@ const toRead = (
     : {
         title: toTitle(summary.label, page.entries.length),
         unavailable: false,
-        entries: page.entries.map(toEntry(bucket, summary, filters, now)),
+        entries: page.entries.map(toEntry(bucket, summary, filters, now, zone)),
         emptyText: toEmptyText(bucket, summary, filters),
         notes: toNotes(summary.top, page)
       }
@@ -187,6 +189,7 @@ export const toSummarySections = (
   bucket: BucketEntry,
   sources: SummarySource[],
   filters: BucketFilters,
+  zone: Zone,
   now: Date = new Date()
 ): SummarySection[] =>
   sources.map((source) => ({
@@ -194,5 +197,5 @@ export const toSummarySections = (
     valueLabels: source.summary.by.map((fact) => factLabelOf(bucket, fact)),
     firstLabel: 'First seen',
     lastLabel: 'Last seen',
-    ...toRead(bucket, source, filters, now)
+    ...toRead(bucket, source, filters, now, zone)
   }))

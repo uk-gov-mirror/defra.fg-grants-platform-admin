@@ -7,6 +7,7 @@ import type {
   EventResult
 } from '../use-cases/get-event.use-case.ts'
 import { toEventHref } from './event-formats.ts'
+import type { Zone } from './event-formats.ts'
 import type { EventNotice, EventPageModel } from './event-page.view-model.ts'
 import { toEventPage } from './event-page.view-model.ts'
 import { toEventState } from './event-state.ts'
@@ -33,6 +34,7 @@ const toFoundPage = (
   event: EventDetail,
   key: EventKey,
   submission: PayloadSubmission,
+  zone: Zone,
   bucket: BucketEntry | null
 ): PayloadPageModel => {
   const query = { back: submission.from }
@@ -41,6 +43,7 @@ const toFoundPage = (
         result,
         key,
         query,
+        zone,
         undefined,
         undefined,
         toSubmittedStep(event, submission),
@@ -50,6 +53,7 @@ const toFoundPage = (
         result,
         key,
         query,
+        zone,
         toConflict(key, event),
         undefined,
         undefined,
@@ -67,9 +71,10 @@ const toFoundPage = (
 const toUnreadPage = (
   result: EventResult,
   key: EventKey,
-  submission: PayloadSubmission
+  submission: PayloadSubmission,
+  zone: Zone
 ): PayloadPageModel => ({
-  ...toEventPage(result, key, { back: submission.from }),
+  ...toEventPage(result, key, { back: submission.from }, zone),
   pageTitle: result.outcome === 'not-found' ? 'Event not found' : 'Event',
   heldEdit: toHeldEdit(result.outcome, submission)
 })
@@ -83,20 +88,25 @@ export const toPayloadPage = (
   result: EventResult,
   key: EventKey,
   submission: PayloadSubmission,
+  zone: Zone,
   bucket: BucketEntry | null = null
 ): PayloadPageModel =>
   result.event === null
-    ? toUnreadPage(result, key, submission)
-    : toFoundPage(result, result.event, key, submission, bucket)
+    ? toUnreadPage(result, key, submission, zone)
+    : toFoundPage(result, result.event, key, submission, zone, bucket)
 
 /** Not read: nothing is written, and the event has nothing to add to the refusal. */
 export const toUnattributedPage = (
   key: EventKey,
-  submission: PayloadSubmission
+  submission: PayloadSubmission,
+  zone: Zone
 ): PayloadPageModel => ({
-  ...toEventPage({ outcome: 'unavailable', event: null }, key, {
-    back: submission.from
-  }),
+  ...toEventPage(
+    { outcome: 'unavailable', event: null },
+    key,
+    { back: submission.from },
+    zone
+  ),
   pageTitle: 'Event',
   heldEdit: toUnattributedEdit(submission)
 })

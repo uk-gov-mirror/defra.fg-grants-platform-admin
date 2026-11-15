@@ -2,12 +2,26 @@ import path from 'node:path'
 import nunjucks from 'nunjucks'
 
 import { config } from '../common/config.ts'
-import { logoutPath } from '../server/plugins/auth/paths.ts'
+import { roles } from '../common/roles.ts'
+import { addDesignSystem } from './views/components/nunjucks.ts'
+import {
+  devOpsSignedOutPath,
+  loginPath,
+  logoutPath
+} from '../server/plugins/auth/paths.ts'
 import { assets } from '../server/plugins/views/assets.ts'
 import { getCatalogueUseCase } from './use-cases/get-catalogue.use-case.ts'
 import { toCodeBreaks } from './view-models/code-text.ts'
-import { toHomeHref, toNavSections } from './view-models/bucket-nav.ts'
+import {
+  toHomeHref,
+  toHomeLabel,
+  toNavSections
+} from './view-models/bucket-nav.ts'
+import { toClientsPath } from './view-models/access-token-services.ts'
+import { toSidebarSections } from './view-models/shell.ts'
 import { toSignedInUser } from './view-models/signed-in-user.ts'
+import { toRefererBack } from './view-models/status-page.ts'
+import { timesOf, toTimesDialog, toTimesOptions } from './view-models/times.ts'
 import {
   buildViewOptions,
   type ViewContextRequest
@@ -15,20 +29,17 @@ import {
 
 /**
  * The dev-ops app's own nunjucks environment. Its search path is this
- * domain's views directory alone — no govuk-frontend, no src/common/views —
- * because dev-ops is a separate app on daisyUI, not a GDS domain: the two
- * design systems meet only at the server and auth layer, never in a template.
+ * domain's views directory, the design system's components among them — no
+ * govuk-frontend, no src/common/views — so the two design systems meet only
+ * at the server and auth layer, never in a template.
  */
 const viewsPath = path.resolve(import.meta.dirname, 'views')
 
 export const environment = new nunjucks.Environment(
-  new nunjucks.FileSystemLoader(
-    [viewsPath, path.join(viewsPath, 'components')],
-    {
-      watch: config.get('nunjucks.watch'),
-      noCache: config.get('nunjucks.noCache')
-    }
-  ),
+  new nunjucks.FileSystemLoader([viewsPath, path.join(viewsPath, 'legacy')], {
+    watch: config.get('nunjucks.watch'),
+    noCache: config.get('nunjucks.noCache')
+  }),
   {
     autoescape: true,
     throwOnUndefined: false,
@@ -37,18 +48,25 @@ export const environment = new nunjucks.Environment(
   }
 )
 
+addDesignSystem(environment)
 environment.addFilter('codeBreaks', toCodeBreaks)
+environment.addGlobal('sidebarSections', toSidebarSections)
+
+/**
+ * Every page imports the design system's macros, the costliest template to
+ * compile, so they are compiled once before the first page asks for them. A
+ * macros file that does not compile stops the server starting, since no page
+ * could be drawn without it.
+ */
+export const compileDesignSystemMacros = () => {
+  environment.getTemplate('components/macros.njk', true)
+}
 
 /**
  * An operator with four tabs open needs the one they are about to redrive an
- * event in to look different from the other three, and only production is
- * worth a warning colour; everywhere else the badge simply says where it is.
- *
- * The classes themselves are in layouts/page.njk: Tailwind scans views/ for
- * candidates and a class name spelled only here is purged from the stylesheet
- * without a word of warning.
+ * event in to look different from the other three: the sidebar's badge names
+ * the environment, and the design system draws production in its danger tone.
  */
-const productionLabel = 'prod'
 const themeCookieName = 'dev-ops-theme'
 const themes = { dark: 'dark', light: 'light' } as const
 
@@ -57,18 +75,58 @@ const selectedTheme = (request?: ViewContextRequest) => {
   return themes[theme as keyof typeof themes] ?? null
 }
 
-const context = async (request?: ViewContextRequest) => {
-  const environmentLabel = config.get('environmentLabel')
+/** Dev Ops' Sign out ends on Dev Ops' own signed out page. */
+const signOutHref = `${logoutPath}?next=${encodeURIComponent(devOpsSignedOutPath)}`
+
+const tokensHref = toClientsPath('gas')
+
+const isGet = ({ method }: ViewContextRequest): boolean =>
+  (method ?? 'get').toLowerCase() === 'get'
+
+/** A page drawn in answer to a form has no address to open the Times dialog over: the page the form came from stands in. */
+const toTimesContext = (request: ViewContextRequest, fallback: string) => {
+  const times = timesOf(request)
+  const from = toRefererBack(request.headers?.referer) ?? fallback
 
   return {
-    serviceName: config.get('serviceName'),
+    times,
+    timesDialog: toTimesDialog(isGet(request) ? request.url : undefined, from),
+    timesOptions: toTimesOptions(times)
+  }
+}
+
+const userOf = ({ auth }: ViewContextRequest) =>
+  toSignedInUser(auth?.credentials?.user)
+
+/** Only someone who may use Dev Ops has GAS asked for its lists: a refused or signed out page draws none. */
+const mayUseDevOps = ({ auth }: ViewContextRequest): boolean =>
+  [auth?.credentials?.scope ?? []].flat().includes(roles.grantOperationsAdmin)
+
+const catalogueFor = async (request: ViewContextRequest) =>
+  mayUseDevOps(request) ? getCatalogueUseCase() : null
+
+/** The response's CSP style nonce, for the <style> each DataTable sets its column widths in. */
+const styleNonceOf = ({ plugins }: ViewContextRequest) =>
+  plugins?.blankie?.nonces?.style
+
+const context = async (request: ViewContextRequest = {}) => {
+  const catalogue = await catalogueFor(request)
+  const homeHref = toHomeHref(catalogue)
+
+  return {
+    productName: 'Grants Platform',
     devOpsTheme: selectedTheme(request),
-    environmentLabel,
-    environmentIsProduction: environmentLabel === productionLabel,
-    signedInUser: toSignedInUser(request?.auth?.credentials?.user),
-    navSections: toNavSections(await getCatalogueUseCase()),
-    homeHref: toHomeHref(await getCatalogueUseCase()),
-    logoutPath,
+    themeCookieName,
+    environmentLabel: config.get('environmentLabel'),
+    signedInUser: userOf(request),
+    navSections: toNavSections(catalogue),
+    homeHref,
+    homeLabel: toHomeLabel(catalogue),
+    tokensHref,
+    signOutHref,
+    signInHref: loginPath,
+    styleNonce: styleNonceOf(request),
+    ...toTimesContext(request, homeHref ?? tokensHref),
     ...(await assets())
   }
 }

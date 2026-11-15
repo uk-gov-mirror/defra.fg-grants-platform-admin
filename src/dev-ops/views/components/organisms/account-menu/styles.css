@@ -1,0 +1,28 @@
+.gpa-account {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-inline-md);
+  min-width: 0;
+  max-width: var(--size-account-max-width);
+  height: var(--size-control-md);
+  padding: 0 var(--inset-tag);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--fg-default);
+  font: inherit;
+  font-size: var(--font-size-md);
+  cursor: pointer;
+}
+.gpa-account:hover:where(
+    :not(:disabled, [aria-disabled="true"], .is-disabled)
+  ) {
+  background: var(--bg-hover);
+}
+
+.gpa-account-compact {
+  justify-content: center;
+  width: var(--size-control-md);
+  padding: 0;
+  border-radius: var(--radius-full);
+}

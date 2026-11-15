@@ -1,0 +1,6 @@
+{%- from "../../core/macros.njk" import attrs, cls, body -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+{%- set tone = p.tone if p.tone in ['error', 'warning', 'count'] else 'hint' -%}
+  <p{% if p.id %} id="{{ p.id }}"{% endif %} class="{{ cls('gpa-field-' ~ tone, p) }}"{% if tone == 'error' %} role="alert"{% elif p.live %} aria-live="polite"{% endif %}{{ attrs(p) }}>
+    {%- if tone == 'error' %}{{ Icon({ name: 'circle-alert', size: 'sm' }) }}{% elif tone == 'warning' %}{{ Icon({ name: 'triangle-alert', size: 'sm' }) }}{% endif -%}
+    {{ body(p, caller) }}</p>

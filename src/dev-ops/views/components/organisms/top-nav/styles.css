@@ -1,0 +1,92 @@
+.gpa-topnav-search {
+  flex: 0 1 var(--size-shell-search);
+  min-width: 0;
+}
+.gpa-topnav {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--inset-page-x);
+  border-bottom: var(--border-width-hairline) solid var(--border-default);
+  background: var(--bg-surface);
+}
+.gpa-topnav-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-inline-xl);
+  min-height: var(--size-header);
+  padding-block: var(--gap-stack-sm);
+}
+.gpa-topnav-brand {
+  height: auto;
+  padding: 0;
+  border: 0;
+}
+.gpa-topnav-spacer {
+  flex: 1;
+}
+.gpa-topnav-nav ul {
+  display: flex;
+  gap: var(--gap-tabs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.gpa-topnav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-inline-md);
+  height: var(--size-control-lg);
+  padding: 0 var(--gap-inline-xs);
+  border-bottom: var(--border-width-thick) solid transparent;
+  color: var(--fg-muted);
+  font-size: var(--font-size-md);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.gpa-topnav-link:hover {
+  color: var(--fg-default);
+}
+.gpa-topnav-link[aria-current="page"] {
+  border-bottom-color: var(--fg-default);
+  color: var(--fg-default);
+}
+.gpa-topnav-link:focus-visible {
+  outline: var(--focus-ring-width) solid var(--border-focus);
+  outline-offset: var(--focus-ring-offset-inset);
+}
+@container gpa-shell (max-width: 639px) {
+  .gpa-topnav-search {
+    flex: 1 0 100%;
+    order: 3;
+  }
+  .gpa-topnav {
+    padding: 0 var(--inset-page-compact);
+  }
+  .gpa-topnav-row {
+    gap: var(--gap-inline-md);
+  }
+}
+@container gpa-shell (max-width: 639px) {
+  .gpa-topnav-brand .heading-sm {
+    white-space: nowrap;
+  }
+  .gpa-topnav-row > .gpa-segmented,
+  .gpa-topnav-row > gpa-segmented > .gpa-segmented {
+    order: 3;
+    flex: 1 0 100%;
+  }
+  .gpa-topnav-row > gpa-segmented {
+    display: contents;
+  }
+  .gpa-topnav-row .gpa-segmented > :is(button, a) {
+    flex: 1;
+  }
+  .gpa-topnav-search {
+    order: 4;
+  }
+}

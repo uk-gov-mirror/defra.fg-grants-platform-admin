@@ -1,0 +1,11 @@
+.gpa-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+.gpa-dropdown-pop {
+  display: flex;
+  flex-direction: column;
+}
+.gpa-dropdown-pop > .gpa-menu {
+  min-height: 0;
+}

@@ -1,0 +1,16 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../molecules/back-link/macro.njk" import BackLink -%}
+{%- from "../../molecules/breadcrumbs/macro.njk" import Breadcrumbs -%}
+<div class="{{ cls('gpa-pageheader', p) }}"{{ attrs(p) }}>
+    {%- if p.breadcrumbs %}{{ Breadcrumbs({ items: p.breadcrumbs }) }}{% elif p.back %}{{ BackLink({ href: p.back.href, text: p.back.text or 'Back', testId: p.back.testId, attributes: p.back.attributes }) }}{% endif -%}
+    <div class="gpa-pageheader-row{{ ' has-meta' if p.meta and p.meta | length }}">
+      <div class="gpa-pageheader-titles">
+        <h1 class="heading-lg{{ ' gpa-mono' if p.mono }}"{% if p.titleTestId %} data-testid="{{ p.titleTestId }}"{% endif %}{% if p.titleTitle %} title="{{ p.titleTitle }}"{% endif %}>{{ p.titleHtml | safe if p.titleHtml else p.title }}</h1>
+        {%- if p.meta and p.meta | length -%}
+          <div class="gpa-pageheader-metawrap"><div class="gpa-pageheader-meta"{% if p.metaTestId %} data-testid="{{ p.metaTestId }}"{% endif %}>{% for m in p.meta %}{% if m %}{{ ' ' if not loop.first }}<span class="gpa-meta-item"><span class="gpa-sep" aria-hidden="true"></span>{{ m | safe }}</span>{% endif %}{% endfor %}</div></div>
+        {%- endif -%}
+      </div>
+      {%- if p.aside %}<div class="gpa-pageheader-aside">{{ p.aside | safe }}</div>{% endif -%}
+      {%- if p.actions %}<div class="gpa-actions"{% if p.actionsTestId %} data-testid="{{ p.actionsTestId }}"{% endif %}>{{ p.actions | safe }}</div>{% endif -%}
+    </div>
+  </div>

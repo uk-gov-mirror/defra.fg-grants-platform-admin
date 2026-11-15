@@ -1,3 +1,4 @@
+import { ukZone } from './zoned-clock.ts'
 import type {
   GrantVersionHeader,
   GrantVersionOverview
@@ -50,7 +51,7 @@ const allowListFact = (
     },
     'overview',
     '',
-    { query: {}, catalogue: null, canAdministerGrants }
+    { zone: ukZone, query: {}, catalogue: null, canAdministerGrants }
   )
     .facts?.flat()
     .find(({ id }) => id === 'who-can-apply')

@@ -1,3 +1,4 @@
+import { ukZone } from './zoned-clock.ts'
 import {
   applicationsBucket,
   grantsBucket,
@@ -90,10 +91,16 @@ const page = (
   result: BucketListResult = read(),
   filters: Record<string, string> = {},
   bucket: BucketEntry = outboxBucket
-) => toBucketPage(bucket, result, { filters }, null, now)
+) => toBucketPage(bucket, result, { zone: ukZone, filters }, null, now)
 
 const searchedPage = (q: string, result: BucketListResult = read()) =>
-  toBucketPage(outboxBucket, result, { filters: {} }, { q, id: searchId }, now)
+  toBucketPage(
+    outboxBucket,
+    result,
+    { zone: ukZone, filters: {} },
+    { q, id: searchId },
+    now
+  )
 
 const path = '/dev-ops/events/gas/outbox'
 
@@ -406,7 +413,7 @@ describe('toBucketPage', () => {
           }
         })
       ),
-      { filters: { show: 'eventType' } },
+      { zone: ukZone, filters: { show: 'eventType' } },
       null,
       now
     )
@@ -597,7 +604,7 @@ describe('toBucketPage', () => {
     const { search } = toBucketPage(
       outboxBucket,
       read(),
-      { filters: {} },
+      { zone: ukZone, filters: {} },
       null,
       now,
       { kind: 'trace', value: 'not this', error: 'Enter an identifier' }
@@ -769,7 +776,7 @@ describe('toBucketPage', () => {
     const [drawn] = toBucketPage(
       outboxBucket,
       read(),
-      { filters: { status: 'DEAD_LETTER' }, cursor: 'eyJ0Ijoi' },
+      { zone: ukZone, filters: { status: 'DEAD_LETTER' }, cursor: 'eyJ0Ijoi' },
       { q: 'ref:abc-123-xyz', id: searchId },
       now
     ).rows

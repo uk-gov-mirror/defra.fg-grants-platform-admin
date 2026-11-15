@@ -1,0 +1,8 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- set id = p.id or gpaId('gpa-menu') -%}
+  <gpa-dropdown class="{{ cls('gpa-dropdown', p) }}"{% if p.align %} data-align="{{ p.align }}"{% endif %}{% if p.placement %} data-placement="{{ p.placement }}"{% endif %}{{ attrs(p) }}>
+    <button type="button" class="{{ p.triggerClasses }}" popovertarget="{{ id }}" aria-haspopup="menu"{% if p.triggerLabel %} aria-label="{{ p.triggerLabel }}"{% endif %}{% if p.triggerTitle %} title="{{ p.triggerTitle }}"{% endif %}{% if p.triggerTestId %} data-testid="{{ p.triggerTestId }}"{% endif %}{% if p.triggerHidden %} hidden{% endif %}{% for k, v in p.triggerAttributes %} {{ k }}="{{ v }}"{% endfor %}>{{ p.trigger | safe }}</button>
+    <div class="gpa-float gpa-dropdown-pop" popover id="{{ id }}"{% if p.panelTestId %} data-testid="{{ p.panelTestId }}"{% endif %}>
+      <div class="gpa-menu{{ ' gpa-menu-' ~ p.menuWidth if p.menuWidth }}" role="{{ p.menuRole or 'menu' }}"{% if p.menuLabel %} aria-label="{{ p.menuLabel }}"{% endif %}>{{ p.menuHtml | safe if p.menuHtml else (caller() if caller) }}</div>
+    </div>
+  </gpa-dropdown>

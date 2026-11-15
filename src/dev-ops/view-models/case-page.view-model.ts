@@ -18,12 +18,14 @@ import {
   toVersionLinkOf
 } from './record-page.view-model.ts'
 import type { Fact, RecordPageModel } from './record-page.view-model.ts'
+import type { Zone } from './zoned-clock.ts'
 import { toWorkflowHref } from './workflows-page.view-model.ts'
 
 const toFacts = (
   overview: CaseOverview,
   applicationHref: string | null,
-  workflowHref: string | null
+  workflowHref: string | null,
+  zone: Zone
 ): Fact[][] => [
   [
     toVersionedFact(
@@ -33,8 +35,8 @@ const toFacts = (
       workflowHref
     ),
     ...toCounterpartFacts(applicationType, applicationHref),
-    toDateFact('created', 'Created', overview.createdAt),
-    toDateFact('closed-at', 'Closed at', overview.closedAt)
+    toDateFact('created', 'Created', overview.createdAt, zone),
+    toDateFact('closed-at', 'Closed at', overview.closedAt, zone)
   ],
   [toSizeFact(overview.storedBytes)]
 ]
@@ -51,6 +53,7 @@ export const toCasePage = (
   page: CasePage,
   tab: RecordTab,
   from: string,
+  zone: Zone,
   now: Date = new Date()
 ): RecordPageModel =>
   toRecordPage(
@@ -69,7 +72,8 @@ export const toCasePage = (
               page.overview.currentConfigVersion,
               toCaseHref(page.header),
               from
-            )
+            ),
+            zone
           )
         : null,
       series: page.overview
@@ -86,6 +90,7 @@ export const toCasePage = (
       sectionErrors: page.sectionErrors
     },
     tab,
+    zone,
     from,
     now
   )

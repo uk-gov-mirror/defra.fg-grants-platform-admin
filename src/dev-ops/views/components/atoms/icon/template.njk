@@ -1,0 +1,6 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- set sizes = { xs: 12, sm: 14, md: 16, lg: 20, xl: 24 } -%}
+  {%- set size = p.size if p.size is number else sizes[p.size or 'md'] -%}
+  <svg xmlns="http://www.w3.org/2000/svg" width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="{{ p.strokeWidth or 2 }}" stroke-linecap="round" stroke-linejoin="round" class="{{ cls('gpa-icon', p) }}"{% if p.label %} role="img" aria-label="{{ p.label }}"{% else %} aria-hidden="true"{% endif %} focusable="false" data-icon="{{ gpaIconName(p.name) }}"{{ attrs(p) }}>
+    {%- for node in gpaIconNodes(p.name) %}<{{ node[0] }}{% for k, v in node[1] %} {{ k }}="{{ v }}"{% endfor %}/>{% endfor -%}
+  </svg>

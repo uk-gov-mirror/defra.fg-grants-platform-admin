@@ -3,6 +3,7 @@ import {
   toSessionUser,
   toTrimmed
 } from '../../common/view-models/actor.ts'
+import { toTitleCase } from './shell.ts'
 
 export interface SignedInUser {
   name: string
@@ -21,7 +22,8 @@ export const toInitials = (name: string): string =>
 /** Who the shell says is signed in: the name, or the email standing in for it; null when the session carries neither. */
 export const toSignedInUser = (user: unknown): SignedInUser | null => {
   const session = toSessionUser(user)
-  const name = toIdentifier(session)
+  const identifier = toIdentifier(session)
+  const name = identifier && toTitleCase(identifier)
 
   return name
     ? { name, email: toTrimmed(session.email), initials: toInitials(name) }

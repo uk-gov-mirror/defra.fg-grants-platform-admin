@@ -1,0 +1,7 @@
+{%- from "../../core/macros.njk" import attrs -%}
+{%- if p.focusable -%}
+    {%- set tid = p.id or gpaId('tip') -%}
+    <gpa-tooltip text="{{ p.text }}"{% if p.side %} side="{{ p.side }}"{% endif %}{{ attrs(p) }}><span class="gpa-tooltip-trigger" tabindex="0" aria-describedby="{{ tid }}">{{ caller() }}</span><span class="gpa-vh" id="{{ tid }}">{{ p.text }}</span></gpa-tooltip>
+  {%- else -%}
+  <gpa-tooltip text="{{ p.text }}"{% if p.side %} side="{{ p.side }}"{% endif %}{{ attrs(p) }}>{{ caller() }}</gpa-tooltip>
+  {%- endif -%}

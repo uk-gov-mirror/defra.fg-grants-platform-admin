@@ -1,0 +1,8 @@
+{%- from "../../core/macros.njk" import attrs, cls, body -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+<div class="{{ cls('gpa-empty' ~ (' gpa-empty-compact' if p.compact else ''), p) }}"{{ attrs(p) }}>
+    {%- if p.icon %}<span class="gpa-empty-icon">{{ Icon({ name: p.icon, size: 'xl' }) }}</span>{% endif -%}
+    <p class="gpa-empty-title"{% if p.titleTestId %} data-testid="{{ p.titleTestId }}"{% endif %}>{{ p.title }}</p>
+    {%- if p.text or p.html or caller %}<p class="gpa-empty-body"{% if p.bodyTestId %} data-testid="{{ p.bodyTestId }}"{% endif %}>{{ body(p, caller) }}</p>{% endif -%}
+    {%- if p.actions %}<div class="gpa-empty-actions">{{ p.actions | safe }}</div>{% endif -%}
+  </div>

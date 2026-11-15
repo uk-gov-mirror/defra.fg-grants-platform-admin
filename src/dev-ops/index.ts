@@ -1,8 +1,10 @@
 import type { Server } from '@hapi/hapi'
 
+import { devOpsSignedOutPath } from '../server/plugins/auth/paths.ts'
 import { sameOriginOnly } from '../server/plugins/auth/same-origin.ts'
 import { scopedTo } from '../server/plugins/auth/scoped-to.ts'
 import { asOperator } from '../common/as-operator.ts'
+import { config } from '../common/config.ts'
 import { roles } from '../common/roles.ts'
 import {
   accessTokenWriteRoutes,
@@ -30,7 +32,25 @@ import { redriveEventRoute } from './routes/redrive-event.route.ts'
 import { reviewPayloadRoute } from './routes/review-payload.route.ts'
 import { savePayloadRoute } from './routes/save-payload.route.ts'
 import { viewEventRoute } from './routes/view-event.route.ts'
-import { devOpsViewOptions } from './view-options.ts'
+import { saveTimesRoute, viewTimesRoute } from './routes/times.route.ts'
+import { toSignedOutRoute } from './routes/signed-out.route.ts'
+import { toStatusResponse } from './status-pages.ts'
+import { timesCookieName } from './view-models/times.ts'
+import { compileDesignSystemMacros, devOpsViewOptions } from './view-options.ts'
+
+const yearMs = 365 * 24 * 60 * 60 * 1000
+
+/** The Times setting, kept a year like the theme; only the server reads it. */
+const timesCookieOptions = {
+  ttl: yearMs,
+  path: '/',
+  isSecure: config.get('session.cookie.secure'),
+  isHttpOnly: true,
+  isSameSite: 'Strict' as const,
+  encoding: 'none' as const,
+  clearInvalid: true,
+  ignoreErrors: true
+}
 
 export const devOps = {
   plugin: {
@@ -41,6 +61,17 @@ export const devOps = {
         relativeTo: import.meta.dirname,
         path: 'views'
       })
+      compileDesignSystemMacros()
+
+      server.state(timesCookieName, timesCookieOptions)
+
+      // Before the CSP plugin, so the page it draws in place of an error gets the header too.
+      server.ext('onPreResponse', toStatusResponse, {
+        sandbox: 'plugin',
+        before: ['errors', 'blankie']
+      })
+
+      server.route(toSignedOutRoute(devOpsSignedOutPath))
 
       server.route(
         scopedTo(
@@ -63,7 +94,8 @@ export const devOps = {
             reviewPayloadRoute,
             savePayloadRoute,
             viewAccessTokensRoute,
-            ...sameOriginOnly(accessTokenWriteRoutes)
+            viewTimesRoute,
+            ...sameOriginOnly([...accessTokenWriteRoutes, saveTimesRoute])
           ])
         )
       )

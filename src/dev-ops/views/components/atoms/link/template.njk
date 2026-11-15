@@ -1,0 +1,6 @@
+{%- from "../../core/macros.njk" import attrs, cls, body, vh -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+<a href="{{ p.href }}" class="{{ cls('gpa-link' ~ (' gpa-link-subtle' if p.subtle else '') ~ (' gpa-link-sm' if p.size == 'sm' else ''), p) }}"{% if p.external %} target="_blank" rel="noopener noreferrer"{% endif %}{% if p.title %} title="{{ p.title }}"{% endif %}{{ attrs(p) }}>
+    {%- if p.iconStart %}{{ Icon({ name: p.iconStart, size: 'sm' }) }}{% endif %}<span>{{ body(p, caller) }}</span>
+    {%- if p.external %}{{ Icon({ name: 'external-link', size: 'xs' }) }}{{ vh(' (opens in a new tab)') }}{% elif p.iconEnd %}{{ Icon({ name: p.iconEnd, size: 'sm' }) }}{% endif -%}
+  </a>

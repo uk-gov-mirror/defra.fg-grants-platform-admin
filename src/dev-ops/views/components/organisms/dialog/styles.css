@@ -1,0 +1,155 @@
+dialog.gpa-dialog-layer {
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  overflow: visible;
+}
+dialog.gpa-dialog-layer::backdrop {
+  background: transparent;
+}
+dialog.gpa-dialog-layer:not([open]) {
+  display: none;
+}
+.gpa-dialog:focus {
+  outline-color: transparent;
+}
+
+.gpa-dialog-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-dialog);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: var(--inset-overlay-top) var(--inset-page-compact)
+    var(--inset-page-compact);
+}
+.gpa-dialog-layer.is-inline {
+  position: relative;
+  inset: auto;
+  height: 100%;
+  min-height: 100%;
+}
+.gpa-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-overlay);
+}
+.gpa-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: min(var(--size-dialog-min-width), 100%);
+  max-height: calc(
+    100vh - var(--inset-overlay-top) - var(--inset-page-compact)
+  );
+  border-radius: var(--radius-xl);
+  background: var(--bg-surface-raised);
+  box-shadow: var(--elevation-modal);
+}
+.gpa-dialog-sm {
+  max-width: var(--size-dialog-sm);
+}
+.gpa-dialog-md {
+  max-width: var(--size-dialog-md);
+}
+.gpa-dialog-lg {
+  max-width: var(--size-dialog-lg);
+}
+.gpa-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--gap-inline-xl);
+  padding-block: var(--inset-dialog-y) var(--inset-tag-xs);
+  padding-inline: var(--inset-dialog) var(--inset-dialog-close);
+}
+.gpa-dialog-close {
+  flex: none;
+  margin-top: calc(var(--space-4) * -1);
+}
+.gpa-dialog-head h2 {
+  margin: 0;
+}
+.gpa-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-stack-xl);
+  padding: var(--inset-alert-y) var(--inset-dialog) var(--inset-dialog-y);
+  overflow-y: auto;
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-md);
+}
+.gpa-dialog-body p {
+  margin: 0;
+}
+.gpa-dialog-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--gap-inline-md);
+  padding: var(--inset-dialog-head-end) var(--inset-dialog)
+    var(--inset-dialog-y);
+  border-top: var(--border-width-hairline) solid var(--border-subtle);
+}
+.gpa-dialog-layer:has(.gpa-drawer) {
+  z-index: var(--z-drawer);
+  justify-content: flex-end;
+  align-items: stretch;
+  padding: 0;
+}
+.gpa-dialog-layer > .gpa-overlay {
+  animation: gpa-fade-in var(--duration-slow) var(--easing-enter) both;
+}
+.gpa-dialog-layer > .gpa-dialog {
+  animation: gpa-dialog-in var(--duration-slow) var(--easing-enter) both;
+}
+.gpa-dialog-layer > .gpa-drawer {
+  animation: gpa-drawer-in 280ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.gpa-dialog-layer:not(.is-leaving):has(> .gpa-drawer) > .gpa-overlay {
+  animation-duration: 280ms;
+  animation-timing-function: ease-out;
+}
+[dir="rtl"] .gpa-dialog-layer > .gpa-drawer {
+  animation-name: gpa-drawer-in-rtl;
+}
+.gpa-dialog-layer.is-leaving {
+  pointer-events: none;
+}
+.gpa-dialog-layer.is-leaving > .gpa-overlay {
+  animation: gpa-fade-out var(--duration-exit) var(--easing-exit) both;
+}
+.gpa-dialog-layer.is-leaving > .gpa-dialog {
+  animation: gpa-dialog-out var(--duration-exit) var(--easing-exit) both;
+}
+.gpa-dialog-layer.is-leaving > .gpa-drawer {
+  animation: gpa-drawer-out 200ms var(--easing-exit) both;
+}
+.gpa-dialog-layer.is-leaving:has(> .gpa-drawer) > .gpa-overlay {
+  animation-duration: 200ms;
+}
+[dir="rtl"] .gpa-dialog-layer.is-leaving > .gpa-drawer {
+  animation-name: gpa-drawer-out-rtl;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gpa-dialog-layer > .gpa-dialog,
+  .gpa-dialog-layer > .gpa-drawer,
+  [dir="rtl"] .gpa-dialog-layer > .gpa-drawer {
+    animation: gpa-fade-in var(--duration-fast) linear both;
+  }
+  .gpa-dialog-layer.is-leaving > .gpa-dialog,
+  .gpa-dialog-layer.is-leaving > .gpa-drawer,
+  .gpa-dialog-layer.is-leaving > .gpa-overlay {
+    animation: none;
+  }
+}
+.gpa-dialog-layer:has(.gpa-drawer) {
+  overflow: clip;
+}

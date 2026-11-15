@@ -1,0 +1,2 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- set p = p or {} -%}{% if p.vertical %}<span class="{{ cls('gpa-divider-v', p) }}" role="separator" aria-orientation="vertical"{{ attrs(p) }}></span>{% else %}<hr class="{{ cls('gpa-divider' ~ (' gpa-divider-strong' if p.strong else ''), p) }}"{{ attrs(p) }}>{% endif %}

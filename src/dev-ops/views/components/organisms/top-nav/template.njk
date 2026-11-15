@@ -1,0 +1,24 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../atoms/badge/macro.njk" import Badge -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+{%- from "../../molecules/segmented-control/macro.njk" import SegmentedControl -%}
+{%- from "../../organisms/account-menu/macro.njk" import AccountMenu -%}
+{%- set nav = p.sections or [] -%}
+  {%- set hit = [] -%}
+  {%- for s in nav %}{% for it in s.items %}{% if it.id == p.active or it.current %}{% set hit = (hit.push(s), hit) %}{% endif %}{% endfor %}{% endfor -%}
+  {%- set cur = hit[0] or nav[0] or { title: '', items: [] } -%}
+  <header class="{{ cls('gpa-topnav', p) }}"{{ attrs(p) }}>
+    <div class="gpa-topnav-row">
+      <div class="gpa-sidebar-brand gpa-topnav-brand"><span class="heading-sm">{{ p.product or 'Admin' }}</span>{% if p.env %}{{ Badge({ text: p.env, size: 'sm', tone: 'danger' if p.env == 'prod' else 'neutral', variant: 'outline' }) }}{% endif %}</div>
+      {%- if nav | length > 1 -%}
+        {%- set opts = [] -%}{%- for s in nav %}{% set opts = (opts.push({ value: s.title, text: s.title, href: s.items[0].href if s.items | length else '#' }), opts) %}{% endfor -%}
+        {{- SegmentedControl({ label: p.switchLabel or 'Sections', size: 'sm', value: cur.title, options: opts }) -}}
+      {%- endif -%}
+      <span class="gpa-topnav-spacer"></span>
+      {%- if p.search %}<div class="gpa-topnav-search">{{ p.search | safe }}</div>{% endif -%}
+      {{- AccountMenu({ name: p.userName or 'Signed-in user', email: p.userEmail, items: p.accountItems, signOutHref: p.signOutHref, theme: p.theme, themeCookie: p.themeCookie, compact: true, placement: 'bottom', align: 'end' }) -}}
+    </div>
+    <nav class="gpa-topnav-nav" aria-label="{{ (cur.title ~ ': ') if cur.title }}{{ p.label or 'Main' }}"><ul>
+      {%- for it in cur.items %}<li><a href="{{ it.href or '#' }}" class="gpa-topnav-link"{% if it.id == p.active or it.current %} aria-current="page"{% endif %}>{% if it.icon %}{{ Icon({ name: it.icon, size: 'md' }) }}{% endif %}{{ it.text or it.label }}{{ it.badge | safe if it.badge }}</a></li>{% endfor -%}
+    </ul></nav>
+  </header>

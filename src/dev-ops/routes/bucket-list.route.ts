@@ -49,6 +49,12 @@ import {
   timeRangeFilters,
   toRangeInstants
 } from '../view-models/time-range.view-model.ts'
+import { shellQuery, timesOf, withoutShellKeys } from '../view-models/times.ts'
+import {
+  catalogueUnavailableCode,
+  toStatusPage
+} from '../view-models/status-page.ts'
+import type { Zone } from '../view-models/zoned-clock.ts'
 
 const badRequest = 400
 
@@ -79,12 +85,16 @@ interface SearchPayload extends Filters {
 }
 
 /** An unset menu or an empty box sends an empty value, which is no filter. */
-const toFilters = (bucket: BucketEntry, query: Filters): BucketFilters => {
+const toFilters = (
+  bucket: BucketEntry,
+  query: Filters,
+  zone: Zone
+): BucketFilters => {
   const { from, to, range, ...facts } = fromUrlQuery(bucket, query)
 
   return withShown(bucket, {
     ...Object.fromEntries(Object.entries(facts).filter(([, value]) => value)),
-    ...toRangeInstants({ from, to }),
+    ...toRangeInstants({ from, to }, zone),
     ...present('range', range)
   })
 }
@@ -168,17 +178,25 @@ const searchFor = (
 const matesOf = async (bucket: BucketEntry): Promise<BucketEntry[]> =>
   pageMates(bucket, (await getCatalogueUseCase())?.buckets ?? [])
 
-const unavailablePage = { pageTitle: 'Buckets', unavailable: true }
+/** Without the catalogue no list can be drawn: the page says so, and access tokens, which need none, stay in reach. */
+const viewCatalogueUnavailable = (request: Request, h: ResponseToolkit) =>
+  h
+    .view(
+      'status',
+      toStatusPage(request, catalogueUnavailableCode, 'catalogue')
+    )
+    .code(catalogueUnavailableCode)
 
 const viewRefused = async (
   h: ResponseToolkit,
   bucket: BucketEntry,
-  filters: BucketFilters
+  filters: BucketFilters,
+  zone: Zone
 ) => {
   const page = toBucketPage(
     bucket,
     refusedRead,
-    { filters, mates: await matesOf(bucket) },
+    { filters, mates: await matesOf(bucket), zone },
     null
   )
 
@@ -214,17 +232,18 @@ const viewList = async (
 
   forgetRefused(request, toSearchKey(bucket.id), search, read.refused)
 
+  const { zone } = timesOf(request)
   const page = toBucketPage(
     bucket,
     read,
-    { filters, mates: await matesOf(bucket) },
+    { filters, mates: await matesOf(bucket), zone },
     search
   )
 
   return h.view('bucket', {
     pageTitle: page.title,
     ...page,
-    summaries: toSummarySections(bucket, summaries, filters)
+    summaries: toSummarySections(bucket, summaries, filters, zone)
   })
 }
 
@@ -233,11 +252,14 @@ const viewBucket = async (
   h: ResponseToolkit,
   bucket: BucketEntry
 ) => {
-  const { cursor, searched, ...rest } = request.query as ListQuery
-  const filters = toFilters(bucket, rest)
+  const { cursor, searched, ...rest } = withoutShellKeys(
+    request.query as ListQuery
+  )
+  const { zone } = timesOf(request)
+  const filters = toFilters(bucket, rest, zone)
 
   if (unknownKeys(bucket, rest).length) {
-    return viewRefused(h, bucket, filters)
+    return viewRefused(h, bucket, filters, zone)
   }
 
   return viewList(request, h, bucket, filters, { cursor, searched })
@@ -251,10 +273,12 @@ const viewBucket = async (
 export const viewDevOpsRoute: ServerRoute = {
   method: 'GET',
   path: devOpsPath,
-  async handler(_request: Request, h: ResponseToolkit) {
+  async handler(request: Request, h: ResponseToolkit) {
     const home = toHomeHref(await getCatalogueUseCase())
 
-    return home === null ? h.view('bucket', unavailablePage) : h.redirect(home)
+    return home === null
+      ? viewCatalogueUnavailable(request, h)
+      : h.redirect(home)
   }
 }
 
@@ -272,7 +296,8 @@ export const viewBucketRoute: ServerRoute = {
       query: Joi.object({
         cursor: Joi.string().max(cursorMax),
         searched: Joi.string().guid(),
-        ...timeRangeFilters
+        ...timeRangeFilters,
+        ...shellQuery
       }).pattern(urlKey, urlValue)
     }
   },
@@ -284,7 +309,7 @@ export const viewBucketRoute: ServerRoute = {
     }
 
     return bucket === null
-      ? h.view('bucket', unavailablePage)
+      ? viewCatalogueUnavailable(request, h)
       : viewBucket(request, h, bucket)
   }
 }
@@ -333,10 +358,11 @@ export const searchBucketRoute: ServerRoute = {
       ...rest
     } = request.payload as SearchPayload
     const key = toSearchKey(bucket.id)
-    const filters = toFilters(bucket, rest)
+    const { zone } = timesOf(request)
+    const filters = toFilters(bucket, rest, zone)
 
     if (unknownKeys(bucket, rest).length) {
-      return (await viewRefused(h, bucket, filters)).code(badRequest)
+      return (await viewRefused(h, bucket, filters, zone)).code(badRequest)
     }
 
     const href = toBucketHref(bucket, filters)
@@ -350,7 +376,7 @@ export const searchBucketRoute: ServerRoute = {
       const page = toBucketPage(
         bucket,
         await queryBucketUseCase(bucket, toSearch(filters, '', browse), false),
-        { filters, mates: await matesOf(bucket) },
+        { filters, mates: await matesOf(bucket), zone },
         null,
         new Date(),
         attempt

@@ -15,7 +15,7 @@ export type RenderedComponent = CheerioAPI
  * stacks do.
  *
  * @param name The component directory, which is also the macro name once
- *   camel cased, e.g. `theme-toggle` renders `themeToggle`. No prefix: the
+ *   camel cased, e.g. `json-viewer` renders `jsonViewer`. No prefix: the
  *   dev-ops environment resolves no foreign components, so macro names
  *   have nothing to collide with.
  * @param params The macro's params object.
@@ -73,7 +73,7 @@ export const mount = async (
   // Imported lazily because the element classes extend HTMLElement, which
   // only exists once a DOM environment is up — a top-level import would
   // crash every node-environment test that touches this module.
-  await import('./views/components/index.ts')
+  await import('./views/legacy/index.ts')
 
   document.body.innerHTML = render(name, params, block)('body').html() ?? ''
 
@@ -82,3 +82,26 @@ export const mount = async (
 
   return document.body
 }
+
+/**
+ * Whether a dialog is drawn open for a browser that runs no script: the
+ * native `open` attribute shows it, and `data-open` tells the dialog element
+ * to open it as a modal once the script does run. The convention for every
+ * dialog a URL can ask for.
+ */
+export const isOpenWithoutScript = ($: CheerioAPI, id: string): boolean => {
+  const dialog = $(`dialog#${id}`)
+
+  return dialog.is('[open]') && dialog.parent('gpa-dialog').is('[data-open]')
+}
+
+/**
+ * Where a dialog's × goes: the page without a script, and, with one, the
+ * address the dialog puts back when it closes after the address opened it.
+ */
+export const closeHrefOf = ($: CheerioAPI, id: string): string | undefined =>
+  $(`dialog#${id} a.gpa-dialog-close`).attr('href')
+
+/** Whether a dialog's fields go back to what the server drew each time it's opened from the page. */
+export const resetsOnOpen = ($: CheerioAPI, id: string): boolean =>
+  $(`dialog#${id}`).parent('gpa-dialog').is('[data-reset-on-open]')

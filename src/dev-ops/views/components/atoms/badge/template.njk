@@ -1,0 +1,3 @@
+{%- from "../../core/macros.njk" import attrs, cls, body -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+<span class="{{ cls('gpa-badge' ~ (' gpa-badge-sm' if p.size == 'sm' else '') ~ ' gpa-badge-' ~ (p.tone or 'neutral') ~ (' gpa-badge-outline' if p.variant == 'outline' else '') ~ (' gpa-mono' if p.mono else ''), p) }}"{% if p.title %} title="{{ p.title }}"{% endif %}{{ attrs(p) }}>{% if p.icon %}{{ Icon({ name: p.icon, size: 'xs' }) }}{% endif %}{{ body(p, caller) }}</span>

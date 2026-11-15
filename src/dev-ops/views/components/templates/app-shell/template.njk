@@ -1,0 +1,28 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../atoms/badge/macro.njk" import Badge -%}
+{%- from "../../organisms/sidebar/macro.njk" import Sidebar -%}
+{%- from "../../organisms/top-nav/macro.njk" import TopNav -%}
+{%- set mode = p.nav or 'sidebar' -%}
+  {%- if mode == 'none' -%}
+  {%- set name %}<span class="heading-sm">{{ p.product or 'Admin' }}</span>{% endset -%}
+  <div class="{{ cls('gpa-shell-frame', p) }}"{{ attrs(p) }}>
+    {%- if p.banner %}<div class="gpa-shell-banner">{{ p.banner | safe }}</div>{% endif -%}
+    <div class="gpa-shell-bare"><header class="gpa-shell-bare-brand">{% if p.productHref %}<a href="{{ p.productHref }}">{{ name | safe }}</a>{% else %}{{ name | safe }}{% endif %}{% if p.env %}{{ Badge({ text: p.env, size: 'sm', tone: p.envTone or ('danger' if p.env == 'prod' else 'neutral'), variant: 'outline' }) }}{% endif %}</header>
+      <main class="gpa-main-bare" id="{{ p.mainId or 'main-content' }}" tabindex="-1">{{ caller() }}</main></div>
+  </div>
+  {%- else -%}
+  {%- set main %}<main class="gpa-main" id="{{ p.mainId or 'main-content' }}" tabindex="-1"><div class="gpa-content">{{ caller() }}</div></main>{% endset -%}
+  <div class="{{ cls('gpa-shell-frame', p) }}"{{ attrs(p) }}><a class="gpa-skiplink" href="#{{ p.mainId or 'main-content' }}">{{ p.skipText or 'Skip to main content' }}</a>
+    {%- if p.banner %}<div class="gpa-shell-banner">{{ p.banner | safe }}</div>{% endif -%}
+    {%- if mode == 'top' -%}
+      <div class="gpa-shell gpa-shell-top">{{ TopNav({ product: p.product, env: p.env, sections: p.sections, active: p.active, label: p.navLabel, search: p.search, userName: p.userName, userEmail: p.userEmail, accountItems: p.accountItems, signOutHref: p.signOutHref, theme: p.theme, themeCookie: p.themeCookie }) }}{{ main | safe }}</div>
+    {%- else -%}
+    <div class="gpa-shell{{ ' gpa-shell-rail' if mode == 'rail' }}">
+      {{- Sidebar({ product: p.product, productShort: p.productShort, productHref: p.productHref, productTestId: p.productTestId, env: p.env, envTone: p.envTone, envTitle: p.envTitle, envTestId: p.envTestId, sections: p.sections, active: p.active, rail: mode == 'rail', navLabel: p.navLabel, navTestId: p.navTestId, footTestId: p.footTestId, testId: p.sidebarTestId, userName: p.userName, userEmail: p.userEmail, accountItems: p.accountItems, signOutHref: p.signOutHref, theme: p.theme, themeCookie: p.themeCookie, account: p.account }) -}}
+      {%- if p.search or p.header -%}
+        <div class="gpa-shell-body"><div class="gpa-shell-bar"><div class="gpa-shell-bar-start">{{ p.header | safe if p.header }}</div>{% if p.search %}<div class="gpa-shell-bar-search">{{ p.search | safe }}</div>{% endif %}</div>{{ main | safe }}</div>
+      {%- else -%}{{ main | safe }}{%- endif -%}
+    </div>
+    {%- endif -%}
+  </div>
+  {%- endif -%}

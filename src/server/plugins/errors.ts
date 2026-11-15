@@ -1,7 +1,7 @@
 import type { Boom } from '@hapi/boom'
 import type { Request, ResponseToolkit, Server } from '@hapi/hapi'
 
-import { statusCodes } from '../../common/status-codes.ts'
+import { insufficientScope, statusCodes } from '../../common/status-codes.ts'
 
 const statusCodeMessages: Record<number, string> = {
   [statusCodes.notFound]: 'Page not found',
@@ -27,9 +27,6 @@ const renderError = (h: ResponseToolkit, statusCode: number) => {
 
 // Names the part, not the service: a user may hold one area's role but not the other's.
 const forbiddenHeading = 'You do not have access to this part of the service'
-
-// Hapi's message when a user lacks the role a route declares.
-const insufficientScope = 'Insufficient scope'
 
 // Interpolated, as CDP drops the context object. Only a missing role gets the
 // role page; any other 403 is not about the user's roles.

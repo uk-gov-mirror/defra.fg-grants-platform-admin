@@ -342,9 +342,10 @@ export const config = convict<ConfigSchema>({
       default: isDevelopment
     },
     noCache: {
-      doc: 'Use a cache and recompile templates each time',
+      doc: 'Recompile templates on every render instead of when they change.',
       format: Boolean,
-      default: isDevelopment
+      default: false,
+      env: 'NUNJUCKS_NO_CACHE'
     }
   },
   tracing: {

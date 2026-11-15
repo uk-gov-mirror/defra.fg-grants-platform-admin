@@ -21,9 +21,13 @@ import { config } from '../../../common/config.ts'
  */
 export type ViewContextRequest = {
   path?: string
+  url?: URL
+  method?: string
+  headers?: Record<string, unknown>
   state?: Record<string, unknown>
-  auth?: { credentials?: { user?: unknown } | null }
+  auth?: { credentials?: { user?: unknown; scope?: string | string[] } | null }
   yar?: { id?: string | null; get(key: string): unknown }
+  plugins?: { blankie?: { nonces?: { style?: string } } }
 }
 
 export const buildViewOptions = (
@@ -32,14 +36,12 @@ export const buildViewOptions = (
 ) => ({
   engines: {
     njk: {
-      compile(src: string, options: { environment: nunjucks.Environment }) {
-        const template = nunjucks.compile(src, options.environment)
+      // Not through compileOptions: vision deep-clones those on every compile, and a clone starts with an empty template cache.
+      compile(src: string) {
+        const template = nunjucks.compile(src, environment)
         return (ctx: object) => template.render(ctx)
       }
     }
-  },
-  compileOptions: {
-    environment
   },
   isCached: config.get('isProduction'),
   context

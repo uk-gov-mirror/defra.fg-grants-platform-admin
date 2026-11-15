@@ -1,0 +1,54 @@
+.gpa-navitem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--gap-inline-lg);
+  height: var(--size-target-comfortable);
+  padding: 0 var(--inset-menuitem-x);
+  border-radius: var(--radius-md);
+  color: var(--nav-item-fg);
+  font-size: var(--font-size-md);
+  font-weight: 500;
+  text-decoration: none;
+}
+.gpa-navitem .gpa-icon {
+  color: var(--fg-muted);
+}
+.gpa-navitem:hover:where(
+    :not(:disabled, [aria-disabled="true"], .is-disabled)
+  ) {
+  background: var(--nav-item-bg-hover);
+  color: var(--nav-item-fg);
+}
+.gpa-navitem[aria-current="page"] {
+  background: var(--nav-item-bg-active);
+  color: var(--nav-item-fg-active);
+}
+.gpa-navitem[aria-current="page"] .gpa-icon {
+  color: inherit;
+}
+.gpa-navitem[aria-current="page"] .gpa-badge {
+  background: var(--bg-surface);
+}
+.gpa-navitem-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gpa-navitem-meta {
+  flex: none;
+  font-feature-settings:
+    "zero" 1,
+    "cv05" 1,
+    "cv08" 1;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+  color: var(--fg-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.gpa-navitem[aria-current="page"] .gpa-navitem-meta {
+  color: inherit;
+  opacity: var(--opacity-muted);
+}

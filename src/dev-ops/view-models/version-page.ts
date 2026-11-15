@@ -9,6 +9,7 @@ import type { RecordType } from './record-type.ts'
 import type { VersionFiles, VersionFileType } from './version-banner.ts'
 import { toVersionHeader } from './version-header.ts'
 import type { VersionHeader } from './version-header.ts'
+import type { Zone } from './zoned-clock.ts'
 
 type HeaderInput = Parameters<typeof toVersionHeader>[1]
 
@@ -44,12 +45,26 @@ export const toVersionShell = (
   {
     notice,
     catalogue,
-    now
-  }: { notice?: DefinitionFetchFlash; catalogue: Catalogue | null; now: Date }
+    now,
+    zone
+  }: {
+    notice?: DefinitionFetchFlash
+    catalogue: Catalogue | null
+    now: Date
+    zone: Zone
+  }
 ): VersionShell => ({
   backHref: from || record.path,
   navActive: ownLists[record.itemId],
-  versionHeader: toVersionHeader(record, header, tab, from, catalogue, now),
+  versionHeader: toVersionHeader(
+    record,
+    header,
+    tab,
+    from,
+    zone,
+    catalogue,
+    now
+  ),
   version: header.version,
   notices: toDefinitionFetchNotices(
     record,

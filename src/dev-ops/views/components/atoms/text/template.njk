@@ -1,0 +1,3 @@
+{%- from "../../core/macros.njk" import attrs, cls, body -%}
+{%- set tag = p.as or 'span' -%}
+  <{{ tag }} class="{{ cls((p.variant or 'body-md') ~ ' gpa-text-' ~ (p.tone or 'default') ~ (' gpa-mono' if p.mono else '') ~ (' gpa-truncate' if p.truncate else ''), p) }}"{% if p.title %} title="{{ p.title }}"{% endif %}{{ attrs(p) }}>{{ body(p, caller) }}</{{ tag }}>

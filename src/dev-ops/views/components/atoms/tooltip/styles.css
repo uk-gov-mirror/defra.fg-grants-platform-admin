@@ -1,0 +1,33 @@
+.gpa-tooltip-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.gpa-tooltip-trigger {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+}
+.gpa-tooltip-trigger:focus-visible {
+  outline: var(--focus-ring-width) solid var(--border-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+.gpa-tooltip {
+  z-index: var(--z-tooltip);
+  max-width: var(--size-tooltip-max-width);
+  width: max-content;
+  padding: var(--inset-tag-xs) var(--inset-menuitem-x);
+  border-radius: var(--radius-sm);
+  background: var(--tooltip-bg);
+  color: var(--tooltip-fg);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+  box-shadow: var(--elevation-overlay);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 80ms ease;
+  letter-spacing: var(--tracking-sm);
+}
+
+.gpa-tooltip.is-placed {
+  opacity: 1;
+}

@@ -1,0 +1,18 @@
+.gpa-errorsummary {
+  outline: none;
+  border-radius: var(--radius-md);
+}
+.gpa-errorsummary:focus-visible {
+  outline: var(--focus-ring-width) solid var(--border-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+.gpa-errorsummary-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-stack-xs);
+  margin: var(--gap-stack-xs) 0 0;
+  padding-inline-start: var(--inset-card);
+}
+.gpa-errorsummary-list .gpa-link {
+  color: var(--fg-danger);
+}

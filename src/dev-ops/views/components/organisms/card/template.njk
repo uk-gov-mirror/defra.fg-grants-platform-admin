@@ -1,0 +1,13 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+<section class="{{ cls('gpa-card' ~ (' gpa-card-flush' if p.flush else ''), p) }}"{% if p.id %} id="{{ p.id }}"{% endif %}{% if p.title and not p.labelledBy %} aria-label="{{ p.title }}"{% elif p.labelledBy %} aria-labelledby="{{ p.labelledBy }}"{% endif %}{{ attrs(p) }}>
+    {%- if p.title or p.titleHtml -%}
+      <div class="gpa-card-head"><h{{ p.headingLevel or 2 }} class="heading-xs"{% if p.headingId %} id="{{ p.headingId }}"{% endif %}{% if p.headingTestId %} data-testid="{{ p.headingTestId }}"{% endif %}>{{ p.titleHtml | safe if p.titleHtml else p.title }}{% if p.count is defined and p.count !== null %}<span class="gpa-count"{% if p.countTestId %} data-testid="{{ p.countTestId }}"{% endif %}>{{ p.count }}</span>{% endif %}</h{{ p.headingLevel or 2 }}>
+        {%- if p.meta %}<span class="gpa-card-meta">{{ p.meta | safe }}</span>{% endif -%}
+        {%- if p.actions %}<div class="gpa-actions gpa-actions-sm">{{ p.actions | safe }}</div>{% endif -%}
+      </div>
+    {%- endif -%}
+    {%- if p.text or p.html %}<div class="gpa-card-body">{{ p.html | safe if p.html else p.text }}</div>{% endif -%}
+    {%- if p.padded and (p.bodyHtml or caller) %}<div class="gpa-card-body">{% endif -%}
+    {%- if p.bodyHtml %}{{ p.bodyHtml | safe }}{% elif caller %}{{ caller() }}{% endif -%}
+    {%- if p.padded and (p.bodyHtml or caller) %}</div>{% endif -%}
+  </section>

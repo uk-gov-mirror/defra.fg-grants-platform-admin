@@ -1,0 +1,10 @@
+.gpa-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-stack-2xl);
+  max-width: var(--size-measure-md);
+  margin: 0;
+}
+.gpa-form-wide {
+  max-width: none;
+}

@@ -1,0 +1,3 @@
+{%- from "../../core/macros.njk" import attrs, cls, vh -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+<a href="{{ p.href or '#' }}" class="{{ cls('gpa-navitem', p) }}"{% if p.title %} title="{{ p.title }}"{% endif %}{% if p.current %} aria-current="page"{% endif %}{{ attrs(p) }}>{% if p.icon %}{{ Icon({ name: p.icon, size: 'lg' }) }}{% endif %}<span class="gpa-navitem-label">{% if p.srPrefix %}{{ vh(p.srPrefix ~ ' ') }}{% endif %}{{ p.text }}</span>{% if p.meta is defined and p.meta !== null %}<span class="gpa-navitem-meta">{{ p.meta }}</span>{% endif %}{{ p.badge | safe if p.badge }}</a>

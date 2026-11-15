@@ -1,0 +1,27 @@
+:where(.gpa-toast-region[popover]) {
+  inset: auto;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  overflow: visible;
+}
+.gpa-toast-region {
+  position: fixed;
+  inset-inline-start: var(--inset-page-x);
+  bottom: var(--inset-page-x);
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-stack-md);
+  pointer-events: none;
+}
+.gpa-toast-region > * {
+  pointer-events: auto;
+}
+.gpa-toast-region:empty {
+  display: none;
+}

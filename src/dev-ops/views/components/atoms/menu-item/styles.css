@@ -1,0 +1,88 @@
+.gpa-menuitem-meta {
+  font-variant-numeric: tabular-nums;
+}
+.gpa-menuitem {
+  outline-offset: var(--focus-ring-offset-inset);
+}
+.gpa-menuitem {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-inline-md);
+  width: 100%;
+  min-height: var(--size-target-comfortable);
+  padding: var(--inset-menuitem-y) var(--inset-menuitem-x);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-default);
+  font: inherit;
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-md);
+  text-align: start;
+  cursor: pointer;
+}
+.gpa-menuitem:hover:where(
+    :not(:disabled, [aria-disabled="true"], .is-disabled)
+  ),
+.gpa-menuitem:focus-visible {
+  background: var(--bg-hover);
+}
+.gpa-menuitem:focus-visible {
+  outline: var(--focus-ring-width) solid var(--border-focus);
+  outline-offset: var(--focus-ring-offset-inset);
+}
+.gpa-menuitem[aria-checked="true"] {
+  font-weight: 500;
+}
+.gpa-menuitem[disabled] {
+  color: var(--fg-disabled);
+  cursor: not-allowed;
+  background: none;
+}
+.gpa-menuitem-danger {
+  color: var(--fg-danger);
+}
+.gpa-menuitem-tick {
+  display: inline-flex;
+  width: var(--size-icon-sm);
+  flex: none;
+}
+.gpa-menuitem-tick-end {
+  margin-inline-start: auto;
+  color: var(--fg-muted);
+}
+.gpa-menuitem-label {
+  flex: 1;
+  min-width: 0;
+}
+.gpa-menuitem-label:not(.gpa-menuitem-text) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gpa-menuitem-meta {
+  margin-inline-start: auto;
+  font-feature-settings:
+    "zero" 1,
+    "cv05" 1,
+    "cv08" 1;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+  color: var(--fg-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.gpa-menuitem-sm {
+  min-height: var(--size-control-sm);
+  padding: var(--inset-tag-xs) var(--inset-menuitem-x);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+  letter-spacing: var(--tracking-sm);
+}
+@media (forced-colors: active) {
+  .gpa-menuitem {
+    outline-style: none;
+  }
+  .gpa-menuitem:focus-visible {
+    outline: var(--focus-ring-width) solid Highlight;
+  }
+}

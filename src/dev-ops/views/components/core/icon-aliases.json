@@ -1,0 +1,23 @@
+{
+  "exclamation-circle": "circle-alert",
+  "exclamation-triangle": "triangle-alert",
+  "alert-circle": "circle-alert",
+  "alert-octagon": "octagon-alert",
+  "alert-triangle": "triangle-alert",
+  "check-circle": "circle-check-big",
+  "check-circle-2": "circle-check",
+  "x-circle": "circle-x",
+  "help-circle": "circle-question-mark",
+  "circle-help": "circle-question-mark",
+  "file-warning": "file-exclamation-point",
+  "file-question": "file-question-mark",
+  "home": "house",
+  "more-horizontal": "ellipsis",
+  "more-vertical": "ellipsis-vertical",
+  "edit": "square-pen",
+  "edit-2": "pen",
+  "edit-3": "pen-line",
+  "loader-2": "loader-circle",
+  "plus-circle": "circle-plus",
+  "minus-circle": "circle-minus"
+}

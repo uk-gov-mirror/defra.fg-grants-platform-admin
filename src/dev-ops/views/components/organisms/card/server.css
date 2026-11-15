@@ -1,0 +1,25 @@
+.gpa-card-head > .gpa-card-meta {
+  margin-inline-start: auto;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+  color: var(--fg-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.gpa-card-head > .gpa-card-meta + .gpa-actions {
+  margin-inline-start: var(--gap-inline-md);
+}
+.gpa-card-head-actions {
+  margin-inline-start: auto;
+}
+.gpa-card-padded {
+  padding: var(--inset-card);
+}
+.gpa-card-head-tall {
+  height: auto;
+  min-height: var(--size-header);
+  padding-block: var(--space-12);
+}
+.gpa-card-head-wrap {
+  flex-wrap: wrap;
+  row-gap: var(--gap-stack-xs);
+}

@@ -1,0 +1,51 @@
+.gpa-dropdown-pop[popover]:not(:popover-open) {
+  display: none;
+}
+.gpa-dropdown-pop[popover] {
+  inset: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+  color: inherit;
+}
+.gpa-dropdown-pop[popover] {
+  position-anchor: --gpa-dropdown;
+}
+.gpa-dropdown-pop[popover]:not(.is-placed) {
+  top: anchor(bottom);
+  left: anchor(start);
+  margin-top: var(--space-4);
+  position-try-fallbacks: flip-block, flip-inline;
+}
+gpa-dropdown[data-align="end"] .gpa-dropdown-pop[popover]:not(.is-placed) {
+  left: auto;
+  right: anchor(end);
+}
+gpa-dropdown[data-placement="top"] .gpa-dropdown-pop[popover]:not(.is-placed) {
+  top: auto;
+  bottom: anchor(top);
+  margin-top: 0;
+  margin-bottom: var(--space-4);
+}
+.gpa-dropdown-pop[popover].is-placed {
+  right: auto;
+  bottom: auto;
+  margin: 0;
+}
+.gpa-dropdown > button:has(+ :popover-open) .gpa-chevron {
+  transform: rotate(180deg);
+}
+.gpa-dropdown > .gpa-chip:not(.is-set):has(+ :popover-open) {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+.gpa-dropdown > .gpa-chip.is-set:has(+ :popover-open) {
+  border-color: var(--chip-border-set-hover);
+}
+@media (scripting: none) {
+  gpa-search-kind > .gpa-dropdown[data-gpa-picker] {
+    display: none;
+  }
+}

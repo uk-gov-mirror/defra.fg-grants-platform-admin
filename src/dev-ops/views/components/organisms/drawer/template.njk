@@ -1,0 +1,18 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../atoms/icon-button/macro.njk" import IconButton -%}
+{%- set close = p.dismissible !== false -%}
+  {%- set lv = p.headingLevel or 2 -%}
+  <gpa-dialog{% if p.open %} data-open{% endif %}{% if p.resetOnOpen %} data-reset-on-open{% endif %}{% if not close %} data-dismissible="false"{% endif %}>
+    <dialog class="{{ cls('gpa-dialog-layer', p) }}" id="{{ p.id }}"{% if p.open %} open{% endif %}{{ attrs(p) }}>
+      <div class="gpa-overlay" aria-hidden="true"{% if close %} data-gpa-close{% endif %}></div>
+      <div class="gpa-drawer" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="{{ p.id }}-title">
+        <header class="gpa-dialog-head">
+          {%- set h -%}<h{{ lv }} id="{{ p.id }}-title" class="heading-md{{ ' gpa-mono' if p.mono }}"{% if p.titleTestId %} data-testid="{{ p.titleTestId }}"{% endif %}>{{ p.title }}</h{{ lv }}>{%- endset -%}
+          {%- if p.subtitle %}<div>{{ h | safe }}<div class="gpa-drawer-sub">{{ p.subtitle | safe }}</div></div>{% else %}{{ h | safe }}{% endif -%}
+          {%- if close %}{{ IconButton({ icon: 'x', label: p.closeLabel or 'Close', href: p.closeHref, classes: 'gpa-dialog-close', attributes: { 'data-gpa-close': true } }) }}{% endif -%}
+        </header>
+        <div class="gpa-drawer-body">{{ caller() }}</div>
+        {%- if p.actions %}<footer class="gpa-dialog-foot gpa-drawer-foot">{{ p.actions | safe }}</footer>{% endif -%}
+      </div>
+    </dialog>
+  </gpa-dialog>

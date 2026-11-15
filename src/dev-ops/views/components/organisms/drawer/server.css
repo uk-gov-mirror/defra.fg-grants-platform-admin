@@ -1,0 +1,15 @@
+.gpa-drawer-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.gpa-drawer-panel[hidden] {
+  display: none;
+}
+.gpa-drawer-title {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+}

@@ -1,0 +1,22 @@
+a.gpa-menuitem {
+  color: var(--fg-default);
+  text-decoration: none;
+}
+.gpa-menuitem-tick .gpa-tick {
+  visibility: hidden;
+}
+.gpa-menuitem[aria-checked="true"] .gpa-menuitem-tick .gpa-tick {
+  visibility: visible;
+}
+.gpa-menuitem-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.gpa-menuitem-hint {
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+  color: var(--fg-subtle);
+  letter-spacing: var(--tracking-sm);
+  white-space: normal;
+}

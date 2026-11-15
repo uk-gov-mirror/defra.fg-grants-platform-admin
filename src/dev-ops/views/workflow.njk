@@ -11,7 +11,7 @@
 {% from "workflow-tasks/macro.njk" import workflowTasks %}
 {% from "workflow-status-panel/macro.njk" import workflowStatusPanel %}
 
-{% block pageTitle %}{% if missingVersion %}Not found – {{ record.title }} {{ ref }} {{ missingVersion.version }}{% elif version %}{{ (tabs | selectattr("active") | first).label }} – {{ record.title }} {{ ref }} {{ version }}{% else %}{{ record.title }} {{ ref }}{% endif %} | {{ serviceName }}{% endblock %}
+{% block pageTitle %}{% if version %}{{ (tabs | selectattr("active") | first).label }} – {{ record.title }} {{ ref }} {{ version }}{% else %}{{ record.title }} {{ ref }}{% endif %} – {{ productName }}{% endblock %}
 
 {% block recordHeader %}
   {% if versionHeader %}

@@ -1,0 +1,44 @@
+{% extends 'layouts/page.njk' %}
+{% import "components/macros.njk" as gpa %}
+
+{% block oldPage %}{% endblock %}
+
+{#- What Dev Ops answers with when it has nothing to show; the route picks `state`. -#}
+{% block content %}
+  {%- set home = gpa.Button({ text: 'Go to ' ~ homeLabel, href: homeHref, testId: 'status-home' }) if homeHref else '' -%}
+  {%- set homeFirst = gpa.Button({ text: 'Go to ' ~ homeLabel, href: homeHref, variant: 'primary', testId: 'status-home' }) if homeHref else '' -%}
+  {%- set back = gpa.Button({ text: 'Back', href: backHref, testId: 'status-back' }) if backHref else '' -%}
+  {%- set backFirst = gpa.Button({ text: 'Back', href: backHref, variant: 'primary', testId: 'status-back' }) if backHref else '' -%}
+  {%- set retry = gpa.Button({ text: 'Try again', href: retryHref, variant: 'primary', iconStart: 'refresh-cw', testId: 'status-retry' }) -%}
+
+  {%- if state == 'not-found' -%}
+    {%- set actions %}{{ homeFirst | safe }}{{ back | safe }}{% endset -%}
+    {{ gpa.StatusPage({ kind: 'not-found', title: pageTitle, actions: actions, testId: 'status-not-found',
+      text: 'Check the address. A link to an event, application or case may have the wrong ID or service in it; search for it from its list instead.' }) }}
+
+  {%- elif state == 'bad-request' -%}
+    {%- set actions %}{% if backHref %}{{ backFirst | safe }}{{ home | safe }}{% else %}{{ homeFirst | safe }}{% endif %}{% endset -%}
+    {{ gpa.StatusPage({ kind: 'error', code: '400', icon: 'link-2-off', title: pageTitle, actions: actions, testId: 'status-bad-request',
+      text: 'Part of the address isn’t something Dev Ops understands, so it showed nothing. Nothing was changed.' }) }}
+
+  {%- elif state == 'no-role' -%}
+    {%- set actions %}{{ gpa.Button({ text: 'Sign out', href: signOutHref, variant: 'primary', iconStart: 'log-out', testId: 'status-sign-out' }) }}{% endset -%}
+    {%- set body %}Dev Ops needs the {{ gpa.Code({ text: 'FCP.GrantOperationsAdmin' }) }} role. Ask your Entra ID admin to add it, then sign out and sign in again.{% endset -%}
+    {{ gpa.StatusPage({ kind: 'no-access', title: pageTitle, html: body, actions: actions, testId: 'status-no-role' }) }}
+
+  {%- elif state == 'refused' -%}
+    {%- set actions %}{% if backHref %}{{ backFirst | safe }}{{ home | safe }}{% else %}{{ homeFirst | safe }}{% endif %}{% endset -%}
+    {{ gpa.StatusPage({ kind: 'no-access', icon: 'shield-x', title: pageTitle, actions: actions, testId: 'status-refused',
+      text: 'It didn’t come from a Dev Ops page, so nothing was changed. Go back, reload the page and try again.' }) }}
+
+  {%- elif state == 'catalogue' -%}
+    {%- set actions %}{{ retry | safe }}{{ gpa.Button({ text: 'Go to GAS access tokens', href: tokensHref, testId: 'status-tokens' }) }}{% endset -%}
+    {{ gpa.StatusPage({ kind: 'error', code: false, icon: 'database-zap', title: pageTitle, actions: actions, testId: 'status-catalogue',
+      text: 'The catalogue that says which lists GAS and CW keep didn’t load, so events, errors, applications, grants, cases and workflows can’t be shown. Access tokens still work. Nothing was changed.' }) }}
+
+  {%- else -%}
+    {%- set actions %}{{ retry | safe }}{{ home | safe }}{% endset -%}
+    {{ gpa.StatusPage({ kind: 'error', code: statusCode | string, title: pageTitle, reference: reference, actions: actions, testId: 'status-error',
+      text: 'Dev Ops hit an error it didn’t expect. If you were saving a change, check whether it was made before you try again.' ~ (' If it keeps happening, quote the reference below.' if reference else '') }) }}
+  {%- endif -%}
+{% endblock %}

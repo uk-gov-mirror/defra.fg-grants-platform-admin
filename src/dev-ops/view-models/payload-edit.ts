@@ -21,6 +21,7 @@ import type {
 } from '../use-cases/json-scan.ts'
 import { scanJson } from '../use-cases/json-scan.ts'
 import { isAfter, toAbsoluteInstant, toPreciseOrNone } from './event-formats.ts'
+import type { Zone } from './event-formats.ts'
 import type { EventState } from './event-state.ts'
 import { toJsonTextView, toJsonViewOrNone } from './json-viewer.view-model.ts'
 import type { JsonView } from './json-viewer.view-model.ts'
@@ -78,7 +79,10 @@ export const hasNoAttemptsSinceEdit = (event: EventDetail): boolean =>
 const toShownNote = (note: string | null): string | null =>
   note === null || note === '' ? null : note
 
-export const toEditedFact = (event: EventDetail): EditedFact | null => {
+export const toEditedFact = (
+  event: EventDetail,
+  zone: Zone
+): EditedFact | null => {
   const edit = lastEditOf(event)
 
   if (edit === null) {
@@ -87,7 +91,7 @@ export const toEditedFact = (event: EventDetail): EditedFact | null => {
 
   return {
     by: edit.by,
-    at: toPreciseOrNone(edit.at),
+    at: toPreciseOrNone(edit.at, zone),
     atInstant: toAbsoluteInstant(edit.at),
     note: toShownNote(edit.note)
   }
@@ -97,14 +101,17 @@ export const toEditedFact = (event: EventDetail): EditedFact | null => {
 export const toOriginalPayloadView = (event: EventDetail): JsonView | null =>
   toJsonViewOrNone(event.originalPayload ?? undefined)
 
-export const toRedriveEditedNote = (event: EventDetail): string | null => {
+export const toRedriveEditedNote = (
+  event: EventDetail,
+  zone: Zone
+): string | null => {
   const edit = lastEditOf(event)
 
   if (edit === null || !isEditedSinceRedrive(event)) {
     return null
   }
 
-  return `The payload was edited on ${toPreciseOrNone(edit.at)} and hasn't been retried since.`
+  return `The payload was edited on ${toPreciseOrNone(edit.at, zone)} and hasn't been retried since.`
 }
 
 /** The owning service sends a revision only once it can take an edit, so its presence is the capability. */

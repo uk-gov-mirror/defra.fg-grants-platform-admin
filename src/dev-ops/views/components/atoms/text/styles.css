@@ -1,0 +1,50 @@
+.gpa-truncate {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gpa-text-default {
+  color: var(--fg-default);
+}
+.gpa-text-muted {
+  color: var(--fg-muted);
+}
+.gpa-text-subtle {
+  color: var(--fg-subtle);
+}
+.gpa-text-faint {
+  color: var(--fg-faint);
+}
+.gpa-text-success {
+  color: var(--fg-success);
+}
+.gpa-text-warning {
+  color: var(--fg-warning);
+}
+.gpa-text-danger {
+  color: var(--fg-danger);
+}
+.gpa-text-info {
+  color: var(--fg-info);
+}
+.gpa-text-link {
+  color: var(--fg-link);
+}
+:where(.gpa-text-subtle) .gpa-code-inline {
+  color: var(--fg-muted);
+}
+
+:where(
+  .gpa-text-default,
+  .gpa-text-muted,
+  .gpa-text-subtle,
+  .gpa-text-faint,
+  .gpa-text-danger,
+  .gpa-text-success,
+  .gpa-text-warning,
+  .gpa-text-info,
+  .gpa-text-link
+) {
+  margin: 0;
+}

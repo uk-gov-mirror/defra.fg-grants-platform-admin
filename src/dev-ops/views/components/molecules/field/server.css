@@ -1,0 +1,14 @@
+.gpa-field-control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-stack-xs);
+}
+.gpa-field-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--gap-inline-xl);
+  margin: 0;
+}
+.gpa-field-foot > .gpa-field-count {
+  margin-inline-start: auto;
+}

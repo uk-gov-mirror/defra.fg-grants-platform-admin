@@ -217,6 +217,27 @@ describe('auth', () => {
     expect(afterLogout.headers.location).toBe('/auth/login')
   })
 
+  test.each([
+    [
+      'an area asks for its own signed out page',
+      '/dev-ops/signed-out',
+      '/dev-ops/signed-out'
+    ],
+    ['next names a page elsewhere', 'https://example.com/', '/auth/signed-out'],
+    [
+      'next names a path that is no signed out page',
+      '/dev-ops',
+      '/auth/signed-out'
+    ]
+  ])('lands logout where %s', async (_case, next, location) => {
+    const { headers } = await server.inject({
+      method: 'GET',
+      url: `/auth/logout?next=${encodeURIComponent(next)}`
+    })
+
+    expect(headers.location).toBe(location)
+  })
+
   test('serves the signed out page to a visitor with no session at all', async () => {
     const { statusCode, headers, payload } = await server.inject({
       method: 'GET',

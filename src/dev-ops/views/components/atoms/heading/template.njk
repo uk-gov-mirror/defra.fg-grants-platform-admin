@@ -1,0 +1,4 @@
+{%- from "../../core/macros.njk" import attrs, cls, body -%}
+{%- set level = p.level or 2 -%}
+  {%- set variants = { '1': 'heading-lg', '2': 'heading-sm', '3': 'heading-xs', '4': 'heading-xs', '5': 'heading-xs', '6': 'heading-xs' } -%}
+  <h{{ level }} class="{{ cls('gpa-heading ' ~ (p.variant or (('heading-' ~ p.size) if p.size else variants[level ~ ''])) ~ (' gpa-mono' if p.mono else ''), p) }}"{% if p.id %} id="{{ p.id }}"{% endif %}{{ attrs(p) }}>{{ body(p, caller) }}</h{{ level }}>

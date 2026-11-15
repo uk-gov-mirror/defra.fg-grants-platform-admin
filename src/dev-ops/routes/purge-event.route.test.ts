@@ -90,7 +90,8 @@ const follow = async (cookie: string, url = page): Promise<CheerioAPI> => {
   const { result } = await server.inject({
     method: 'GET',
     url,
-    headers: { cookie },
+    // UK time, the setting these expectations are written in.
+    headers: { cookie: `${cookie}; dev-ops-times=uk` },
     auth: { strategy: 'session', credentials }
   })
 
@@ -454,7 +455,7 @@ describe('a purge form the admin refused', () => {
 
     expect($('#purge-note').text()).toBe(xss)
     expect($('main script')).toHaveLength(0)
-    expect($('script')).toHaveLength(1)
+    expect($('script:not([src^="/public/"])')).toHaveLength(0)
   })
 })
 

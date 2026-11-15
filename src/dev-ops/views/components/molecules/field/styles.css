@@ -1,0 +1,60 @@
+.gpa-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-stack-sm);
+  min-width: 0;
+}
+.gpa-field-hint {
+  margin: calc(var(--gap-stack-2xs) * -1) 0 0;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+  color: var(--fg-subtle);
+  letter-spacing: var(--tracking-sm);
+}
+.gpa-field-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap-inline-sm);
+  margin: 0;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+  color: var(--fg-danger);
+  letter-spacing: var(--tracking-sm);
+}
+.gpa-field-error .gpa-icon {
+  margin-top: 1px;
+}
+.gpa-field-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap-inline-sm);
+  margin: 0;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+  color: var(--fg-warning);
+  letter-spacing: var(--tracking-sm);
+}
+.gpa-field-warning .gpa-icon {
+  flex: none;
+  margin-top: 1px;
+}
+.gpa-field-hint.gpa-check-reason {
+  margin: calc(var(--gap-stack-xs) * -1) 0 0
+    calc(var(--size-check-md) + var(--gap-inline-md));
+  color: var(--fg-muted);
+}
+.gpa-field-hint.gpa-group-note {
+  margin: 0;
+}
+.gpa-field-count {
+  margin: 0;
+  align-self: flex-end;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+  color: var(--fg-subtle);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tracking-sm);
+}
+:where(.gpa-field-hint) .gpa-code-inline {
+  color: var(--fg-muted);
+}

@@ -14,7 +14,7 @@
 {% from "version-banner/macro.njk" import versionBanner %}
 {% from "version-status/macro.njk" import versionStatus %}
 
-{% block pageTitle %}{% if missingVersion %}Not found – {{ record.title }} {{ ref }} {{ missingVersion.version }}{% elif version %}{{ (tabs | selectattr("active") | first).label }} – {{ record.title }} {{ ref }} {{ version }}{% else %}{{ record.title }} {{ ref }}{% endif %} | {{ serviceName }}{% endblock %}
+{% block pageTitle %}{% if version %}{{ (tabs | selectattr("active") | first).label }} – {{ record.title }} {{ ref }} {{ version }}{% else %}{{ record.title }} {{ ref }}{% endif %} – {{ productName }}{% endblock %}
 
 {% macro errorAlert(text, testId) %}
   <div role="alert" class="alert alert-error alert-soft text-sm" data-testid="{{ testId }}">

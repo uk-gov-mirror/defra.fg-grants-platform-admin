@@ -1,0 +1,3 @@
+{%- from "../../core/macros.njk" import attrs, cls, iconTemplate -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+<gpa-theme-toggle{% if p.cookie %} data-cookie="{{ p.cookie }}"{% endif %}><label class="{{ cls('gpa-theme', p) }}" title="{{ p.label or 'Dark theme' }}"{{ attrs(p) }}><input type="checkbox" aria-label="{{ p.label or 'Dark theme' }}"{% if p.theme == 'dark' %} checked{% endif %}>{% set dark = p.theme == 'dark' %}<span class="gpa-theme-knob" aria-hidden="true">{{ Icon({ name: 'moon' if dark else 'sun', size: 'xs' }) }}</span><span class="gpa-theme-other" aria-hidden="true">{{ Icon({ name: 'sun' if dark else 'moon', size: 'xs' }) }}</span></label>{{ iconTemplate({ names: ['sun', 'moon'] }) }}</gpa-theme-toggle>

@@ -17,6 +17,7 @@ import {
 } from '../view-models/event-page.view-model.ts'
 import { toPayloadPage } from '../view-models/payload-edit-page.ts'
 import { fromMax } from '../view-models/record-filters.ts'
+import { timesOf } from '../view-models/times.ts'
 
 /** As the save route bounds it. */
 const noteMax = 2000
@@ -94,6 +95,9 @@ export const reviewPayloadRoute: ServerRoute = {
       toSafeFrom(submission.from)
     )
 
-    return h.view('event', toPayloadPage(result, key, submission, bucket))
+    return h.view(
+      'event',
+      toPayloadPage(result, key, submission, timesOf(request).zone, bucket)
+    )
   }
 }

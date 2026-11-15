@@ -1,0 +1,18 @@
+{%- from "../../core/macros.njk" import attrs, cls, body -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+{%- set klass = cls('gpa-menuitem' ~ (' gpa-menuitem-sm' if p.size == 'sm' else '') ~ (' gpa-menuitem-danger' if p.danger else ''), p) -%}
+  {%- set role = ('menuitemcheckbox' if p.toggle else 'menuitemradio') if p.checked is defined and p.checked !== null else 'menuitem' -%}
+  {%- set inner -%}
+    {%- set tickEnd = p.icon and p.toggle and p.checked is defined and p.checked !== null -%}
+    {%- if p.checked is defined and p.checked !== null and not tickEnd %}<span class="gpa-menuitem-tick">{% if p.checked %}{{ Icon({ name: 'check', size: 'sm' }) }}{% endif %}</span>{% elif p.icon %}{{ Icon({ name: p.icon, size: 'sm' if p.size == 'sm' else 'md' }) }}{% endif -%}
+    {%- if p.hint -%}<span class="gpa-menuitem-label gpa-menuitem-text"><span{% if p.mono %} class="gpa-mono"{% endif %}>{{ body(p, caller) }}</span><span class="gpa-menuitem-hint"{% if p.hintTestId %} data-testid="{{ p.hintTestId }}"{% endif %}>{{ p.hint }}</span></span>
+    {%- else -%}<span class="gpa-menuitem-label{{ ' gpa-mono' if p.mono }}"{% if p.labelTitle %} title="{{ p.labelTitle }}"{% endif %}>{{ body(p, caller) }}</span>{%- endif -%}
+    {%- if p.extra %}{{ p.extra | safe }}{% endif -%}
+    {%- if p.meta is defined and p.meta !== null and p.meta !== '' %}<span class="gpa-menuitem-meta"{% if p.metaTestId %} data-testid="{{ p.metaTestId }}"{% endif %}>{{ p.meta }}</span>{% endif -%}
+    {%- if tickEnd %}<span class="gpa-menuitem-tick gpa-menuitem-tick-end">{% if p.checked %}{{ Icon({ name: 'check', size: 'sm' }) }}{% endif %}</span>{% endif -%}
+  {%- endset -%}
+  {%- if p.href -%}
+    <a href="{{ p.href }}" class="{{ klass }}" role="{{ role }}"{% if role != 'menuitem' %} aria-checked="{{ 'true' if p.checked else 'false' }}"{% endif %}{% if p.current %} aria-current="page"{% endif %}{% if p.ariaLabel %} aria-label="{{ p.ariaLabel }}"{% endif %}{{ attrs(p) }}>{{ inner | safe }}</a>
+  {%- else -%}
+    <button type="{{ p.type or 'button' }}" class="{{ klass }}" role="{{ role }}"{% if role != 'menuitem' %} aria-checked="{{ 'true' if p.checked else 'false' }}"{% endif %}{% if p.name %} name="{{ p.name }}"{% endif %}{% if p.value is defined %} value="{{ p.value }}"{% endif %}{% if p.form %} form="{{ p.form }}"{% endif %}{% if p.disabled %} disabled{% endif %}{% if p.ariaLabel %} aria-label="{{ p.ariaLabel }}"{% endif %}{{ attrs(p) }}>{{ inner | safe }}</button>
+  {%- endif -%}

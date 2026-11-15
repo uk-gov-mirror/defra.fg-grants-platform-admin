@@ -1,0 +1,5 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+<div class="{{ cls('gpa-menu' ~ (' gpa-menu-' ~ p.width if p.width), p) }}"{% if p.id %} id="{{ p.id }}"{% endif %} role="{{ p.role or 'menu' }}"{% if p.label %} aria-label="{{ p.label }}"{% endif %}{% if p.multiselectable %} aria-multiselectable="true"{% endif %}{{ attrs(p) }}>
+    {%- if p.heading %}<div class="gpa-menu-heading">{{ p.heading }}</div>{% endif -%}
+    {{- caller() if caller -}}
+  </div>

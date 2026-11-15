@@ -1,0 +1,3 @@
+.gpa-page > .gpa-backnav + .gpa-pageheader {
+  margin-top: calc(var(--gap-stack-xl) * -1 + var(--gap-stack-sm));
+}

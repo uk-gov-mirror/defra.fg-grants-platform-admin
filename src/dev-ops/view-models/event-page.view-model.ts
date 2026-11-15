@@ -45,6 +45,7 @@ import {
   toTraceHref,
   toValidDate
 } from './event-formats.ts'
+import type { Zone } from './event-formats.ts'
 import { toJsonViewOrNone } from './json-viewer.view-model.ts'
 import type { JsonView } from './json-viewer.view-model.ts'
 import type { PurgeFormError } from './purge-form.ts'
@@ -496,6 +497,7 @@ interface DetailContext {
   event: EventDetail
   state: EventState
   count: AttemptCount | null
+  zone: Zone
 }
 
 /**
@@ -582,7 +584,7 @@ const toRecordLink = (
 const lastKnownAt = (attempts: EventDetail['attemptHistory']): string | null =>
   attempts.findLast((attempt) => attempt.at !== null)?.at ?? null
 
-const toResubmission = ({ event, state }: DetailContext) => {
+const toResubmission = ({ event, state, zone }: DetailContext) => {
   const at = event.lastResubmissionDate
 
   if (at === null || !state.waiting) {
@@ -596,7 +598,7 @@ const toResubmission = ({ event, state }: DetailContext) => {
   const last = lastKnownAt(event.attemptHistory)
 
   return {
-    lastResubmissionDate: toPreciseOrNone(at),
+    lastResubmissionDate: toPreciseOrNone(at, zone),
     lastResubmissionInstant: toAbsoluteInstant(at),
     resubmittedSinceLastAttempt: last === null || isAfter(at, last)
   }
@@ -609,13 +611,13 @@ const noFailure = {
   errorAtInstant: null
 }
 
-const toFailure = (error: EventDetail['lastError']) =>
+const toFailure = (error: EventDetail['lastError'], zone: Zone) =>
   error === null
     ? noFailure
     : {
         errorName: error.name,
         errorMessage: error.message,
-        errorAt: error.at === null ? null : toPreciseOrNone(error.at),
+        errorAt: error.at === null ? null : toPreciseOrNone(error.at, zone),
         errorAtInstant: toAbsoluteInstant(error.at)
       }
 
@@ -682,11 +684,15 @@ const toAttemptRole = (
 const toLastErrorRole = (state: EventState): AttemptRole =>
   state.deadLetter ? 'error' : 'warning'
 
-const toAttemptHistory = ({ event, state }: DetailContext): AttemptEntry[] =>
+const toAttemptHistory = ({
+  event,
+  state,
+  zone
+}: DetailContext): AttemptEntry[] =>
   event.attemptHistory.map((attempt, index, all) => ({
     number: `#${index + 1}`,
     role: toAttemptRole(state, index, all.length),
-    precise: toPreciseOrNone(attempt.at),
+    precise: toPreciseOrNone(attempt.at, zone),
     delta: toAttemptDelta(event, all.slice(0, index), attempt.at),
     name: attempt.name,
     message: toAttemptMessage(
@@ -700,20 +706,20 @@ const toAttemptHistory = ({ event, state }: DetailContext): AttemptEntry[] =>
 
 const undated = { precise: null, delta: null, instant: null }
 
-const toSuccessInstant = (event: EventDetail, at: string) => {
+const toSuccessInstant = (event: EventDetail, at: string, zone: Zone) => {
   const instant = toAbsolute(at)
 
   return instant === null
     ? undated
     : {
-        precise: toPreciseOrNone(at),
+        precise: toPreciseOrNone(at, zone),
         delta: toAttemptDelta(event, event.attemptHistory, at),
         instant
       }
 }
 
 const toAttemptSuccess = (context: DetailContext): AttemptSuccess | null => {
-  const { event, state } = context
+  const { event, state, zone } = context
 
   if (!state.completed) {
     return null
@@ -723,7 +729,7 @@ const toAttemptSuccess = (context: DetailContext): AttemptSuccess | null => {
     number: `#${toCompletedAttempts(context)}`,
     ...(event.completionDate === null
       ? undated
-      : toSuccessInstant(event, event.completionDate))
+      : toSuccessInstant(event, event.completionDate, zone))
   }
 }
 
@@ -859,9 +865,11 @@ const emptyPurgeForm: PurgeFormNotice = {
 
 const toPurgeConfirm = (
   deletionDate: string | null,
-  form: PurgeFormNotice
+  form: PurgeFormNotice,
+  zone: Zone
 ): PurgeConfirm => ({
-  deletionText: deletionDate === null ? null : toPreciseOrNone(deletionDate),
+  deletionText:
+    deletionDate === null ? null : toPreciseOrNone(deletionDate, zone),
   deletionInstant: toAbsoluteInstant(deletionDate),
   reasons: toReasonChoices(form.reasonCode),
   ...toReasonField(form.error),
@@ -892,7 +900,7 @@ const toPurge = (
     canPurge,
     purgeHref: toSelfHref(key, from, ['confirm', 'purge']),
     purgeConfirm: open
-      ? toPurgeConfirm(purgeDeletionDateOf(context.event), form)
+      ? toPurgeConfirm(purgeDeletionDateOf(context.event), form, context.zone)
       : null
   }
 }
@@ -901,7 +909,11 @@ const toShownNote = (note: string | null): string | null =>
   note === null || note === '' ? null : note
 
 /** The row keeps one purge, and keeps it through a redrive, so the label moves rather than the fact. */
-const toPurgedFact = ({ event, state }: DetailContext): PurgedFact | null => {
+const toPurgedFact = ({
+  event,
+  state,
+  zone
+}: DetailContext): PurgedFact | null => {
   const purge = lastPurgeOf(event)
 
   if (purge === null) {
@@ -912,13 +924,16 @@ const toPurgedFact = ({ event, state }: DetailContext): PurgedFact | null => {
     label: state.purged ? 'Purged' : 'Previously purged',
     reason: toPurgeReasonLabel(purge.reasonCode),
     by: purge.by,
-    at: toPreciseOrNone(purge.at),
+    at: toPreciseOrNone(purge.at, zone),
     atInstant: toAbsoluteInstant(purge.at),
     note: toShownNote(purge.note)
   }
 }
 
-const toLastRedriveDetail = (lastRedrive: EventDetail['lastRedrive']) => {
+const toLastRedriveDetail = (
+  lastRedrive: EventDetail['lastRedrive'],
+  zone: Zone
+) => {
   if (lastRedrive === null) {
     return {
       lastRedriveInstant: null,
@@ -929,7 +944,7 @@ const toLastRedriveDetail = (lastRedrive: EventDetail['lastRedrive']) => {
 
   return {
     lastRedriveInstant: toAbsoluteInstant(lastRedrive.at),
-    lastRedriveText: toPreciseOrNone(lastRedrive.at),
+    lastRedriveText: toPreciseOrNone(lastRedrive.at, zone),
     lastRedriveBy: lastRedrive.by
   }
 }
@@ -956,7 +971,7 @@ const toFutileWarning = (context: DetailContext): string | null => {
   }
 
   return (
-    `The last two attempts since the redrive (by ${redrive.by}, ${toPreciseOrNone(redrive.at)}) failed with the identical error — ` +
+    `The last two attempts since the redrive (by ${redrive.by}, ${toPreciseOrNone(redrive.at, context.zone)}) failed with the identical error — ` +
     'redriving again is unlikely to succeed until the underlying cause is fixed.'
   )
 }
@@ -1033,14 +1048,14 @@ const toTrace = (event: EventDetail) => {
 }
 
 /** A dashed "Deletion date" would read as a date this page failed to find. */
-const toExpiry = (event: EventDetail) => {
+const toExpiry = (event: EventDetail, zone: Zone) => {
   const expiresAt = event.expiresAt ?? null
   const date = expiresAt === null ? null : toValidDate(expiresAt)
 
   return date === null
     ? { expiresText: null, expiresInstant: null }
     : {
-        expiresText: toPreciseInstant(date),
+        expiresText: toPreciseInstant(date, zone),
         expiresInstant: toAbsoluteInstant(expiresAt)
       }
 }
@@ -1070,6 +1085,7 @@ interface PageInputs {
   bucket: BucketEntry | null
   /** Handed over by a review or a save, in place of the editor the link opens. */
   edit?: PayloadEditStep
+  zone: Zone
 }
 
 const toEditInput = (
@@ -1118,7 +1134,12 @@ const toPageEventName = (eventType: string | null): EventName | null =>
 const toDetail = (event: EventDetail, key: EventKey, inputs: PageInputs) => {
   const { query, from, form } = inputs
   const state = toEventState(event)
-  const context = { event, state, count: toAttemptCount(event.attempts) }
+  const context = {
+    event,
+    state,
+    count: toAttemptCount(event.attempts),
+    zone: inputs.zone
+  }
   const attempts = toAttemptHistory(context)
 
   return {
@@ -1132,21 +1153,21 @@ const toDetail = (event: EventDetail, key: EventKey, inputs: PageInputs) => {
     segregationRef: event.segregationRef ?? null,
     recordLink: toRecordLink(event.record),
     ...toTrace(event),
-    ...toExpiry(event),
+    ...toExpiry(event, inputs.zone),
     isInbox: key.box === 'inbox',
-    ...toFailure(event.lastError),
+    ...toFailure(event.lastError, inputs.zone),
     errorRole: toLastErrorRole(state),
     ...toAttempts(context, attempts),
     payloadView: toJsonViewOrNone(event.payload),
     originalPayloadView: toOriginalPayloadView(event),
-    editedFact: toEditedFact(event),
+    editedFact: toEditedFact(event, inputs.zone),
     ...toRedrive(state, key, query, from),
     redrivePurgedNote: toRedrivePurgedNote(context),
-    redriveEditedNote: toRedriveEditedNote(event),
+    redriveEditedNote: toRedriveEditedNote(event, inputs.zone),
     ...toPurge(context, key, query, from, form),
     purgedFact: toPurgedFact(context),
     ...toPayloadEdit(context, key, inputs),
-    ...toLastRedriveDetail(event.lastRedrive),
+    ...toLastRedriveDetail(event.lastRedrive, inputs.zone),
     futileWarning: toFutileWarning(context),
     errorSearchHref: toErrorSearchHref(context, attempts, inputs)
   }
@@ -1178,6 +1199,7 @@ export const toEventPage = (
   result: EventResult,
   key: EventKey,
   query: EventPageQuery,
+  zone: Zone,
   notice?: EventNotice,
   form?: PurgeFormNotice,
   edit?: PayloadEditStep,
@@ -1189,7 +1211,8 @@ export const toEventPage = (
     from,
     form: toPurgeForm(key, form),
     bucket,
-    edit
+    edit,
+    zone
   })
   const shell = {
     ...toShell(key, from, toBannerContext(detail), notice),

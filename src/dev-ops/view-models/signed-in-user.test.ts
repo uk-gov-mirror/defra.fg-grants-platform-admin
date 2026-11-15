@@ -11,6 +11,13 @@ describe('toSignedInUser', () => {
     })
   })
 
+  test('writes the name in Title Case', () => {
+    expect(
+      toSignedInUser({ name: 'LOVELACE ada', email: 'ada@example.gov.uk' })
+        ?.name
+    ).toBe('Lovelace Ada')
+  })
+
   test('lets the email stand in for a missing name', () => {
     expect(toSignedInUser({ email: 'ada@example.gov.uk' })).toEqual({
       name: 'ada@example.gov.uk',

@@ -14,7 +14,9 @@ export default defineConfig({
         application: 'src/client/javascripts/application.ts',
         'application-css': 'src/client/stylesheets/application.scss',
         'dev-ops-css': 'src/dev-ops/client/dev-ops.css',
-        'dev-ops': 'src/dev-ops/views/components/index.ts'
+        'dev-ops': 'src/dev-ops/views/legacy/index.ts',
+        'design-system-css': 'src/dev-ops/views/components/index.css',
+        'design-system': 'src/dev-ops/views/components/index.ts'
       }
     },
     sourcemap: true

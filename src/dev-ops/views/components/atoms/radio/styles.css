@@ -1,0 +1,14 @@
+.gpa-radio-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--size-check-md);
+  height: var(--size-check-md);
+  border: var(--border-width-hairline) solid var(--input-border);
+  background: var(--input-bg);
+  color: transparent;
+}
+.gpa-radio-dot {
+  border-radius: var(--radius-full);
+}

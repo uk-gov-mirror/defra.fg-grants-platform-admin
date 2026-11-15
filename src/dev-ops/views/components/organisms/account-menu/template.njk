@@ -1,0 +1,16 @@
+{%- from "../../core/macros.njk" import iconTemplate -%}
+{%- from "../../atoms/avatar/macro.njk" import Avatar -%}
+{%- from "../../atoms/divider/macro.njk" import Divider -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+{%- from "../../atoms/menu-item/macro.njk" import MenuItem -%}
+{%- from "../../molecules/dropdown/macro.njk" import Dropdown -%}
+{%- set trigger -%}{{ Avatar({ name: p.name, size: 'sm', decorative: true }) }}{% if not p.compact %}<span class="gpa-truncate">{{ p.name }}</span>{{ Icon({ name: 'chevron-up' if (p.placement or 'top') == 'top' else 'chevron-down', size: 'sm', classes: 'gpa-chevron gpa-account-chevron' }) }}{% endif %}{%- endset -%}
+  {%- call Dropdown({ trigger: trigger, triggerClasses: 'gpa-account' ~ (' gpa-account-compact' if p.compact else ''), triggerLabel: 'Account: ' ~ p.name, triggerTitle: p.name if p.compact, placement: p.placement or 'top', align: p.align, menuLabel: 'Account', menuWidth: 'md', testId: p.testId, triggerTestId: p.triggerTestId }) -%}
+    <div class="gpa-menu-who"><strong>{{ p.name }}</strong>{% if p.email %}<span>{{ p.email }}</span>{% endif %}</div>{{ Divider() }}
+    {%- for it in p.items %}{{ MenuItem({ text: it.text, href: it.href, icon: it.icon, meta: it.meta, testId: it.testId, attributes: it.attributes }) }}{% endfor -%}
+    {%- if p.themeToggle !== false -%}
+      <gpa-theme-toggle{% if p.themeCookie %} data-cookie="{{ p.themeCookie }}"{% endif %}><button type="button" class="gpa-menuitem" role="menuitemcheckbox" aria-checked="{{ 'true' if p.theme == 'dark' else 'false' }}"{% if p.themeTestId %} data-testid="{{ p.themeTestId }}"{% endif %}>{{ Icon({ name: 'moon', size: 'md' }) }}<span class="gpa-menuitem-label">Dark theme</span><span class="gpa-menuitem-tick gpa-menuitem-tick-end">{% if p.theme == 'dark' %}{{ Icon({ name: 'check', size: 'sm' }) }}{% endif %}</span></button>{{ iconTemplate({ names: ['check'] }) }}</gpa-theme-toggle>
+    {%- endif -%}
+    {%- if (p.themeToggle !== false or (p.items and p.items | length)) and p.signOutHref %}{{ Divider() }}{% endif -%}
+    {%- if p.signOutHref %}{{ MenuItem({ text: 'Sign out', href: p.signOutHref, icon: 'log-out', testId: p.signOutTestId }) }}{% endif -%}
+  {%- endcall -%}

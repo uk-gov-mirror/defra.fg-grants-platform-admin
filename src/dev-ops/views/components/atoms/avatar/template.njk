@@ -1,0 +1,4 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- set words = (p.name or '').split(' ') -%}
+  {%- set initials = ((words[0] | first) ~ ((words | last | first) if words | length > 1 else '')) | upper -%}
+  <span class="{{ cls('gpa-avatar gpa-avatar-' ~ (p.size or 'md'), p) }}"{% if p.decorative %} aria-hidden="true"{% else %} role="img" aria-label="{{ p.name }}"{% endif %}{{ attrs(p) }}><span class="gpa-avatar-initials">{{ initials }}</span></span>

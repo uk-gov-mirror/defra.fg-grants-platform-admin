@@ -4,6 +4,7 @@ import type {
   SourceError
 } from '../use-cases/get-event.use-case.ts'
 import { toEventHref, toTimeCell } from './event-formats.ts'
+import type { Zone } from './event-formats.ts'
 import { toStampedEventName } from './event-names.ts'
 import type { EventName } from './event-names.ts'
 import { isDeadLetterStatus } from './event-state.ts'
@@ -28,9 +29,9 @@ export interface EventRow {
 
 /** One row of a record's table of events; `from` is that table's page, where the event page's Back returns. */
 export const toEventRow =
-  (now: Date, from: string) =>
+  (now: Date, zone: Zone, from: string) =>
   (event: EventRowResponse): EventRow => {
-    const created = toTimeCell(event.createdAt, now)
+    const created = toTimeCell(event.createdAt, now, zone)
 
     return {
       eventHref: `${toEventHref(event)}?${backKey}=${encodeURIComponent(toFittingBack(from))}`,

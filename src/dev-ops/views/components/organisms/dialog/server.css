@@ -1,0 +1,10 @@
+.gpa-dialog-close-form {
+  display: contents;
+}
+
+.gpa-dialog-alert {
+  padding: 0 var(--inset-dialog);
+}
+.gpa-dialog .gpa-plaintext {
+  margin: 0;
+}

@@ -8,8 +8,8 @@ const views = path.resolve(import.meta.dirname)
 
 const templates = [
   'access-tokens.njk',
-  'components/field-error/template.njk',
-  'components/expiry-picker/template.njk'
+  'legacy/field-error/template.njk',
+  'legacy/expiry-picker/template.njk'
 ].map((file) => readFileSync(path.join(views, file), 'utf8'))
 
 const channel = (value: number): number => {

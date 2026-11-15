@@ -21,7 +21,7 @@ import { toBucketPath } from './bucket-nav.ts'
 import { shownFacts, withToggled } from './bucket-toggles.ts'
 import { toUrlQuery } from './bucket-urls.ts'
 import { none, toPreciseOrNone, toTimeCell } from './event-formats.ts'
-import type { TimeCell } from './event-formats.ts'
+import type { TimeCell, Zone } from './event-formats.ts'
 import { toPageHead } from './bucket-tabs.ts'
 import type { PageTab } from './bucket-tabs.ts'
 import { toStampedEventName } from './event-names.ts'
@@ -35,6 +35,8 @@ import type { TimeRange } from './time-range.view-model.ts'
 /** The URL's part of a list; a searched identifier is kept in the session instead. */
 export interface BucketPageQuery {
   filters: BucketFilters
+  /** The zone the person reads times in. */
+  zone: Zone
   cursor?: string
   /** The lists that share this one's page, this one among them; none for a list with a page of its own. */
   mates?: BucketEntry[]
@@ -223,6 +225,7 @@ interface Context {
   filters: BucketFilters
   result: BucketResult | null
   now: Date
+  zone: Zone
 }
 
 /** A fact's values mean nothing under another choice of the fact they are within, so that choice drops them. */
@@ -402,7 +405,12 @@ const toNotes = (context: Context): FilterNote[] =>
       : []
   })
 
-const toBucketTimeRange = ({ bucket, filters, now }: Context): TimeRange => {
+const toBucketTimeRange = ({
+  bucket,
+  filters,
+  now,
+  zone
+}: Context): TimeRange => {
   const query = toUrlQuery(bucket, filters)
 
   return toTimeRange(
@@ -412,7 +420,8 @@ const toBucketTimeRange = ({ bucket, filters, now }: Context): TimeRange => {
       presetTitlePrefix: `${capitalise(bucket.noun.many)} from the last`
     },
     query,
-    now
+    now,
+    zone
   )
 }
 
@@ -584,9 +593,9 @@ const toPosition: Draw = (value, column, context) =>
       }
     : toText(value, column, context)
 
-const toTime: Draw = (value, _column, { now }) => ({
+const toTime: Draw = (value, _column, { now, zone }) => ({
   kind: 'time',
-  time: toTimeCell(String(value), now)
+  time: toTimeCell(String(value), now, zone)
 })
 
 /** A format this page has not heard of is drawn as text, so a new one never breaks a list. */
@@ -694,7 +703,7 @@ const toRow =
       spokenVersion: toSpokenVersion(row),
       subtitle: row.subtitle,
       cells,
-      time: toTimeCell(row.time, context.now),
+      time: toTimeCell(row.time, context.now, context.zone),
       alarming: cells.some(isError)
     }
   }
@@ -725,7 +734,7 @@ const toKeepLooking = (
 
   return href === null
     ? null
-    : { href, searchedTo: toPreciseOrNone(searchedTo) }
+    : { href, searchedTo: toPreciseOrNone(searchedTo, context.zone) }
 }
 
 const noPaging: BucketPaging = {
@@ -812,8 +821,8 @@ export const toBucketPage = (
   now: Date = new Date(),
   attempt?: SearchAttempt
 ): BucketPageModel => {
-  const { filters, mates } = query
-  const context = { bucket, filters, result: read.page, now }
+  const { filters, mates, zone } = query
+  const context = { bucket, filters, result: read.page, now, zone }
   const { searched, searchId } = searchOf(search)
   const rows = read.page === null ? [] : read.page.rows
 

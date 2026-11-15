@@ -1,34 +1,36 @@
-/** The UK wall clock every dev-ops page writes times in. Free of server modules, so the browser can format with it too. */
+/** Wall clocks in the zone a page writes its times in. Free of server modules, so the browser can format with them too. */
 
 /**
- * `Europe/London` rather than a fixed offset, so the display follows the
- * clocks by itself and nothing needs correcting twice a year. No date is
- * rendered with a zone suffix; the instant behind each one is carried by the
- * `<time datetime>` attribute, which stays UTC.
+ * The zones a person can choose to read times in (the account menu's Times).
+ * Named zones rather than fixed offsets, so UK time follows the clocks by
+ * itself. The instant behind each time is carried by the `<time datetime>`
+ * attribute, which stays UTC.
  */
-export const displayZone = 'Europe/London'
+export type Zone = 'UTC' | 'Europe/London'
 
-/** `1 Sep 08:18`: day-first from parts, with `en-US` months because `en-GB` writes `Sept`. */
-const dayClockFormat = new Intl.DateTimeFormat('en-US', {
-  timeZone: displayZone,
-  day: 'numeric',
-  month: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
-  hourCycle: 'h23'
-})
+/** The zone a rule is stated in rather than a choice: GAS and CW end a token's day at 23:59:59 UK time. */
+export const ukZone: Zone = 'Europe/London'
 
-/** `2026-09-16T09:00:00`: the digits a `datetime-local` box carries. */
-const inputFormat = new Intl.DateTimeFormat('en-CA', {
-  timeZone: displayZone,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hourCycle: 'h23'
-})
+const formats = new Map<string, Intl.DateTimeFormat>()
+
+/** One formatter per locale, options and zone, built on first use. */
+export const formatIn = (
+  zone: Zone,
+  locale: string,
+  options: Intl.DateTimeFormatOptions
+): Intl.DateTimeFormat => {
+  const key = `${zone} ${locale} ${JSON.stringify(options)}`
+  const known = formats.get(key)
+
+  if (known) {
+    return known
+  }
+
+  const format = new Intl.DateTimeFormat(locale, { ...options, timeZone: zone })
+  formats.set(key, format)
+
+  return format
+}
 
 export const partsOf = (
   format: Intl.DateTimeFormat,
@@ -41,16 +43,36 @@ export const partsOf = (
       .map((part) => [part.type, part.value])
   )
 
-/** An instant as the display zone's wall clock, `yyyy-mm-ddThh:mm:ss`; whole seconds, which is all a range box carries. */
-export const toZonedInput = (date: Date): string => {
-  const parts = partsOf(inputFormat, date)
+/** `1 Sep 08:18`: day-first from parts, with `en-US` months because `en-GB` writes `Sept`. */
+const dayClockOptions: Intl.DateTimeFormatOptions = {
+  day: 'numeric',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23'
+}
+
+/** `2026-09-16T09:00:00`: the digits a `datetime-local` box carries. */
+const inputOptions: Intl.DateTimeFormatOptions = {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23'
+}
+
+/** An instant as the zone's wall clock, `yyyy-mm-ddThh:mm:ss`; whole seconds, which is all a range box carries. */
+export const toZonedInput = (date: Date, zone: Zone): string => {
+  const parts = partsOf(formatIn(zone, 'en-CA', inputOptions), date)
 
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`
 }
 
-/** `15 Oct 10:04`, in UK time. */
-export const toDayClock = (date: Date): string => {
-  const parts = partsOf(dayClockFormat, date)
+/** `15 Oct 10:04`. */
+export const toDayClock = (date: Date, zone: Zone): string => {
+  const parts = partsOf(formatIn(zone, 'en-US', dayClockOptions), date)
 
   return `${parts.day} ${parts.month} ${parts.hour}:${parts.minute}`
 }
@@ -60,10 +82,10 @@ export const toDayClock = (date: Date): string => {
  * Read at the whole second, because `toZonedInput` spells no milliseconds —
  * subtracting like from like leaves the offset exact for any instant.
  */
-const zoneOffsetMs = (instant: Date): number => {
+const zoneOffsetMs = (instant: Date, zone: Zone): number => {
   const whole = instant.getTime() - instant.getUTCMilliseconds()
 
-  return Date.parse(`${toZonedInput(new Date(whole))}Z`) - whole
+  return Date.parse(`${toZonedInput(new Date(whole), zone)}Z`) - whole
 }
 
 export const msPerSecond = 1000
@@ -83,15 +105,16 @@ export type ZonedEdge = 'earliest' | 'latest'
  * The instants that really are this wall clock: two on the autumn morning the
  * hour repeats, none in the spring hour that never happens, one otherwise.
  */
-const instantsFor = (wallClockMs: number): Date[] => {
+const instantsFor = (wallClockMs: number, zone: Zone): Date[] => {
   const offsets = [-offsetProbeMs, offsetProbeMs].map((shift) =>
-    zoneOffsetMs(new Date(wallClockMs + shift))
+    zoneOffsetMs(new Date(wallClockMs + shift), zone)
   )
 
   return [...new Set(offsets)]
     .map((offset) => new Date(wallClockMs - offset))
     .filter(
-      (instant) => zoneOffsetMs(instant) === wallClockMs - instant.getTime()
+      (instant) =>
+        zoneOffsetMs(instant, zone) === wallClockMs - instant.getTime()
     )
 }
 
@@ -103,16 +126,20 @@ const instantsFor = (wallClockMs: number): Date[] => {
  * so the wall clock is read against the offset in force *before* the change,
  * which lands it just after — 01:30 on a spring morning becomes 02:30.
  */
-export const fromZonedInput = (wallClock: string, edge: ZonedEdge): Date => {
+export const fromZonedInput = (
+  wallClock: string,
+  edge: ZonedEdge,
+  zone: Zone
+): Date => {
   const wallClockMs = Date.parse(`${wallClock}Z`)
-  const instants = instantsFor(wallClockMs)
+  const instants = instantsFor(wallClockMs, zone)
 
   if (instants.length === 0) {
     const provisional = new Date(
-      wallClockMs - zoneOffsetMs(new Date(wallClockMs))
+      wallClockMs - zoneOffsetMs(new Date(wallClockMs), zone)
     )
 
-    return new Date(wallClockMs - zoneOffsetMs(provisional))
+    return new Date(wallClockMs - zoneOffsetMs(provisional, zone))
   }
 
   const pick = edge === 'earliest' ? Math.min : Math.max

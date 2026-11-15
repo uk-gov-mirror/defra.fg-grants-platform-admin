@@ -1,75 +1,47 @@
-{% from "icon/macro.njk" import icon %}
-{% from "theme-toggle/macro.njk" import themeToggle %}
-{% from "user-menu/macro.njk" import userMenu %}
-
-{% macro brand(testId) %}
-  {% if homeHref %}
-    <a class="whitespace-nowrap text-lg font-bold" href="{{ homeHref }}" data-testid="{{ testId }}-brand">Grants Platform</a>
-  {% else %}
-    <span class="whitespace-nowrap text-lg font-bold" data-testid="{{ testId }}-brand">Grants Platform</span>
-  {% endif %}
-  {% if environmentLabel %}
-    {% if environmentIsProduction %}
-      <span class="badge badge-warning badge-outline" title="This is the {{ environmentLabel }} environment" data-testid="{{ testId }}-environment">{{ environmentLabel }}</span>
-    {% else %}
-      <span class="badge badge-ghost" title="This is the {{ environmentLabel }} environment" data-testid="{{ testId }}-environment">{{ environmentLabel }}</span>
-    {% endif %}
-  {% endif %}
-{% endmacro %}
-
-{# A link that stands for several lists is the current one on any of them. #}
-{% macro navItem(item) %}
-  {%- set current = navActive in item.ids -%}
-  <li><a class="gap-3{% if current %} menu-active{% endif %}" href="{{ item.href }}"{% if current %} aria-current="page"{% endif %} data-testid="do-nav-{{ item.id }}">{{ icon({ name: item.icon, class: 'size-4.5 shrink-0' }) }}{% if item.srPrefix %}<span class="sr-only">{{ item.srPrefix }} </span>{% endif %}{{ item.label }}</a></li>
-{% endmacro %}
-
+{% import "components/macros.njk" as gpa %}
+{#- Every Dev Ops page: the app shell, with the sidebar and account menu where there is someone to show. -#}
 <!DOCTYPE html>
-<html lang="en"{% if devOpsTheme %} data-theme="{{ devOpsTheme }}"{% endif %} class="[scrollbar-gutter:stable] [--root-bg:var(--color-base-200)] scroll-pt-14 lg:scroll-pt-0{% block htmlClass %}{% endblock %}">
+<html lang="en"{% if devOpsTheme %} data-theme="{{ devOpsTheme }}"{% endif %}>
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block pageTitle %}{{ pageTitle }} | {{ serviceName }}{% endblock %}</title>
+    <title>{% block pageTitle %}{{ pageTitle }} – {{ productName }}{% endblock %}</title>
     <link rel="icon" sizes="48x48" href="{{ getAssetPath("node_modules/govuk-frontend/dist/govuk/assets/images/favicon.ico") }}">
     <link rel="icon" sizes="any" href="{{ getAssetPath("node_modules/govuk-frontend/dist/govuk/assets/images/favicon.svg") }}" type="image/svg+xml">
+    <link rel="preload" href="{{ getAssetPath('src/dev-ops/views/components/fonts/InterVariable.woff2') }}" as="font" type="font/woff2" crossorigin>
+    {#- A page not yet rebuilt on the design system keeps its old stylesheet and elements; a rebuilt one empties this block.
+        The old stylesheet comes first, so its cascade layers are declared before the design system's `au` and never win over it. -#}
+    {% block oldPage %}
     <link href="{{ getAssetPath('src/dev-ops/client/dev-ops.css') }}" rel="stylesheet">
-  </head>
-  <body class="flex min-h-dvh flex-col bg-base-200">
-    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-3 btn btn-primary">Skip to main content</a>
-    <div class="drawer lg:drawer-open" data-testid="do-drawer">
-      {# Below lg, keyboard users reach the drawer through this checkbox: daisyUI draws its focus ring on the hamburger. #}
-      <input id="do-drawer-toggle" type="checkbox" class="drawer-toggle" aria-label="Show navigation" data-testid="do-drawer-toggle">
-      {# Ahead of the content in the source, though drawn beside it, so the tab order runs skip link, navigation, page. #}
-      <div class="drawer-side z-40" data-testid="do-sidebar">
-        <label for="do-drawer-toggle" aria-label="Close navigation" class="drawer-overlay" data-testid="do-drawer-close"></label>
-        <div class="flex min-h-full w-60 flex-col border-r border-base-300 bg-base-100">
-          <div class="flex min-h-14 items-center gap-2 border-b border-base-300 px-4">{{ brand('do') }}</div>
-          <nav class="flex-1" aria-label="Dev ops" data-testid="do-nav">
-            <ul class="menu w-full gap-0.5 p-3">
-              {% for section in navSections %}
-                <li class="menu-title">{{ section.title }}</li>
-                {% for item in section.items %}
-                  {{ navItem(item) }}
-                {% endfor %}
-              {% endfor %}
-            </ul>
-          </nav>
-          <div class="flex items-center {{ 'justify-between' if signedInUser else 'justify-end' }} gap-2 border-t border-base-300 p-3" data-testid="do-sidebar-foot">
-            {% if signedInUser %}{{ userMenu({ user: signedInUser, signOutHref: logoutPath }) }}{% endif %}
-            {{ themeToggle({ theme: devOpsTheme }) }}
-          </div>
-        </div>
-      </div>
-      <div class="drawer-content flex min-h-dvh flex-col">
-        {# The sidebar stands in for this bar from lg; no list toolbar sticks below lg, so nothing has to clear it. #}
-        <header class="navbar sticky top-0 z-30 min-h-14 gap-2 border-b border-base-300 bg-base-100 px-4 lg:hidden" data-testid="do-bar">
-          <label for="do-drawer-toggle" class="drawer-button btn btn-ghost btn-square btn-sm" aria-label="Open navigation" data-testid="do-drawer-open">{{ icon({ name: 'menu', class: 'size-5' }) }}</label>
-          {{ brand('do-bar') }}
-        </header>
-        <main id="main-content" class="mx-auto flex w-full max-w-[90rem] min-h-0 flex-1 flex-col px-6 py-5">
-          {% block content %}{% endblock %}
-        </main>
-      </div>
-    </div>
+    <script type="module" src="{{ getAssetPath('src/dev-ops/views/legacy/index.ts') }}"></script>
+    {% endblock %}
+    <link href="{{ getAssetPath('src/dev-ops/views/components/index.css') }}" rel="stylesheet">
     <script type="module" src="{{ getAssetPath('src/dev-ops/views/components/index.ts') }}"></script>
+  </head>
+  <body>
+    {%- set offersTimes = shellNav != 'none' and not emptySidebar -%}
+    {%- call gpa.AppShell({
+      nav: shellNav,
+      product: productName,
+      productHref: homeHref,
+      productTestId: 'shell-brand',
+      env: environmentLabel,
+      envTitle: 'This is the ' ~ environmentLabel ~ ' environment',
+      envTestId: 'shell-environment',
+      sections: [] if emptySidebar else sidebarSections(navSections, navActive),
+      navLabel: 'Dev Ops',
+      navTestId: 'shell-nav',
+      footTestId: 'shell-sidebar-foot',
+      sidebarTestId: 'shell-sidebar',
+      userName: signedInUser.name if signedInUser,
+      userEmail: signedInUser.email if signedInUser and signedInUser.email != signedInUser.name,
+      accountItems: [{ text: 'Times', href: timesDialog.href, icon: 'clock', meta: times.label, testId: 'times-item', attributes: { 'data-gpa-open': 'times-dialog' } }] if offersTimes else [],
+      signOutHref: signOutHref,
+      theme: devOpsTheme,
+      themeCookie: themeCookieName
+    }) -%}
+      {% block content %}{% endblock %}
+    {%- endcall -%}
+    {% if offersTimes %}{% include "times-dialog.njk" %}{% endif %}
   </body>
 </html>

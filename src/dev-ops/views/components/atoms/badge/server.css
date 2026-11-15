@@ -1,0 +1,10 @@
+.gpa-badge-note {
+  font-weight: 400;
+}
+.gpa-badge-wrap {
+  height: auto;
+  min-height: var(--size-tag-sm);
+  white-space: normal;
+  text-align: start;
+  text-decoration: none;
+}

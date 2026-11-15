@@ -1,0 +1,31 @@
+{% extends 'layouts/page.njk' %}
+{% import "components/macros.njk" as gpa %}
+
+{% block oldPage %}{% endblock %}
+
+{#- A record's page with nothing of the record to show: not found, unavailable or timed out. -#}
+{% block content %}
+  {%- call gpa.Page() -%}
+    {{ gpa.PageHeader({ title: missing.title, mono: true, back: { href: backHref, text: backLabel, testId: 'record-missing-back' }, titleTestId: 'record-missing-title' }) }}
+
+    {%- if missing.state == 'not-found' -%}
+      {%- set actions -%}
+        {{ gpa.Button({ text: backLabel, href: backHref }) }}
+        {%- if missing.inboxSearch %}{{ gpa.Button({ text: missing.inboxSearch.text, type: 'submit', form: 'record-missing-search', variant: 'primary', testId: 'record-missing-search' }) }}{% endif -%}
+      {%- endset -%}
+      {%- call gpa.Card({ testId: 'record-missing-not-found' }) -%}
+        {{ gpa.EmptyState({ icon: 'search-x', title: missing.message.title, text: missing.message.text, actions: actions }) }}
+      {%- endcall -%}
+      {%- if missing.inboxSearch -%}
+        {#- The search's button is in the empty state above, so its form shows nothing of its own. -#}
+        {{ gpa.Form({ id: 'record-missing-search', action: missing.inboxSearch.action, method: 'post', label: missing.inboxSearch.text, attributes: { hidden: true }, hidden: [{ name: 'ref-kind', value: 'ref' }, { name: 'ref-value', value: missing.inboxSearch.code }] }) }}
+      {%- endif -%}
+    {%- else -%}
+      {%- set actions -%}
+        {{ gpa.Button({ text: 'Try again', size: 'sm', iconStart: 'refresh-cw', href: retryHref, testId: 'record-missing-retry' }) }}
+        {{ gpa.Button({ text: backLabel, size: 'sm', variant: 'tertiary', href: backHref }) }}
+      {%- endset -%}
+      {{ gpa.Alert({ tone: 'danger', title: missing.message.title, text: missing.message.text, actions: actions, testId: 'record-missing-' ~ missing.state }) }}
+    {%- endif -%}
+  {%- endcall -%}
+{% endblock %}

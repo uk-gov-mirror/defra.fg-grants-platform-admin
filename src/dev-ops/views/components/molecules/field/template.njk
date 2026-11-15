@@ -1,0 +1,12 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../atoms/field-message/macro.njk" import FieldMessage -%}
+{%- from "../../atoms/label/macro.njk" import Label -%}
+<div class="{{ cls('gpa-field', p) }}"{{ attrs(p) }}>
+    {%- if p.label %}{{ Label({ for: p.id, text: p.label, optional: p.optional, size: p.size, testId: p.labelTestId }) }}{% endif -%}
+    {%- if p.hint %}{{ FieldMessage({ id: p.id ~ '-hint', text: p.hint, testId: p.hintTestId }) }}{% endif -%}
+    {{- caller() -}}
+    {%- if p.error %}{{ FieldMessage({ id: p.id ~ '-err', tone: 'error', text: p.error, testId: p.errorTestId }) }}
+    {%- elif p.warning %}{{ FieldMessage({ id: p.id ~ '-warn', tone: 'warning', text: p.warning, live: true }) }}{% endif -%}
+    {%- if p.count and p.count.max %}{{ FieldMessage({ id: p.countId, tone: 'count', text: ((p.count.value or '') | length) ~ ' / ' ~ p.count.max, testId: p.countTestId, attributes: { 'data-gpa-count-for': p.id, 'data-max': p.count.max } }) }}
+    {%- elif p.count %}{{ FieldMessage({ id: p.countId, tone: 'count', text: p.count, testId: p.countTestId }) }}{% endif -%}
+  </div>

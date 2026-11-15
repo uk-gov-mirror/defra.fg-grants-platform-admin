@@ -1,0 +1,195 @@
+{%- from "./core/macros.njk" import attrs as _attrs, cls as _cls, body as _body, vh as _vh, describedBy as _describedBy, iconTemplate as _iconTemplate -%}
+{%- set attrs = _attrs -%}
+{%- set cls = _cls -%}
+{%- set body = _body -%}
+{%- set vh = _vh -%}
+{%- set describedBy = _describedBy -%}
+{%- set iconTemplate = _iconTemplate -%}
+{% macro Icon(p) -%}
+  {%- set __html %}{% include "./atoms/icon/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Text(p) -%}
+  {%- set __html %}{% include "./atoms/text/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Button(p) -%}
+  {%- set __html %}{% include "./atoms/button/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro IconButton(p) -%}
+  {%- set __html %}{% include "./atoms/icon-button/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Link(p) -%}
+  {%- set __html %}{% include "./atoms/link/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Spinner(p) -%}
+  {%- set __html %}{% include "./atoms/spinner/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Badge(p) -%}
+  {%- set __html %}{% include "./atoms/badge/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Avatar(p) -%}
+  {%- set __html %}{% include "./atoms/avatar/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Divider(p) -%}
+  {%- set __html %}{% include "./atoms/divider/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Label(p) -%}
+  {%- set __html %}{% include "./atoms/label/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Checkbox(p) -%}
+  {%- set __html %}{% include "./atoms/checkbox/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Radio(p) -%}
+  {%- set __html %}{% include "./atoms/radio/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Tooltip(p) -%}
+  {%- set __html %}{% include "./atoms/tooltip/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro MenuItem(p) -%}
+  {%- set __html %}{% include "./atoms/menu-item/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Field(p) -%}
+  {%- set __html %}{% include "./molecules/field/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro MenuHeading(p) -%}
+  {%- set __html %}{% include "./molecules/menu-heading/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro MenuDivider(p) -%}
+  {%- set __html %}{% include "./molecules/menu-divider/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Menu(p) -%}
+  {%- set __html %}{% include "./molecules/menu/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Dropdown(p) -%}
+  {%- set __html %}{% include "./molecules/dropdown/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro SegmentedControl(p) -%}
+  {%- set __html %}{% include "./molecules/segmented-control/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro BackLink(p) -%}
+  {%- set __html %}{% include "./molecules/back-link/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Alert(p) -%}
+  {%- set __html %}{% include "./molecules/alert/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro EmptyState(p) -%}
+  {%- set __html %}{% include "./molecules/empty-state/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro ThemeToggle(p) -%}
+  {%- set __html %}{% include "./molecules/theme-toggle/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Toast(p) -%}
+  {%- set __html %}{% include "./molecules/toast/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro ToastRegion(p) -%}
+  {%- set __html %}{% include "./molecules/toast-region/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro NavItem(p) -%}
+  {%- set __html %}{% include "./atoms/nav-item/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Sidebar(p) -%}
+  {%- set __html %}{% include "./organisms/sidebar/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro AccountMenu(p) -%}
+  {%- set __html %}{% include "./organisms/account-menu/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro PageHeader(p) -%}
+  {%- set __html %}{% include "./organisms/page-header/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Card(p) -%}
+  {%- set __html %}{% include "./organisms/card/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro CardBody(p) -%}
+  {%- set __html %}{% include "./organisms/card-body/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Dialog(p) -%}
+  {%- set __html %}{% include "./organisms/dialog/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Drawer(p) -%}
+  {%- set __html %}{% include "./organisms/drawer/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro AppShell(p) -%}
+  {%- set __html %}{% include "./templates/app-shell/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Heading(p) -%}
+  {%- set __html %}{% include "./atoms/heading/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro FieldMessage(p) -%}
+  {%- set __html %}{% include "./atoms/field-message/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Code(p) -%}
+  {%- set __html %}{% include "./atoms/code/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro VisuallyHidden(p) -%}
+  {%- set __html %}{% include "./atoms/visually-hidden/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Breadcrumbs(p) -%}
+  {%- set __html %}{% include "./molecules/breadcrumbs/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro RadioGroup(p) -%}
+  {%- set __html %}{% include "./molecules/radio-group/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro HiddenField(p) -%}
+  {%- set __html %}{% include "./layouts/hidden-field/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Form(p) -%}
+  {%- set __html %}{% include "./layouts/form/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Page(p) -%}
+  {%- set __html %}{% include "./templates/page/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro ErrorSummary(p) -%}
+  {%- set __html %}{% include "./molecules/error-summary/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro StatusPage(p) -%}
+  {%- set __html %}{% include "./templates/status-page/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro TopNav(p) -%}
+  {%- set __html %}{% include "./organisms/top-nav/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}

@@ -20,18 +20,20 @@ import {
   toVersionLinkOf
 } from './record-page.view-model.ts'
 import type { Fact, RecordPageModel } from './record-page.view-model.ts'
+import type { Zone } from './zoned-clock.ts'
 
 const toFacts = (
   overview: ApplicationOverview,
   caseHref: string | null,
-  grantHref: string | null
+  grantHref: string | null,
+  zone: Zone
 ): Fact[][] => [
   [
     toVersionedFact('grant', 'Grant', overview, grantHref),
     ...toCounterpartFacts(caseType, caseHref),
-    toDateFact('submitted', 'Submitted', overview.submittedAt),
-    toDateFact('created', 'Created', overview.createdAt),
-    toDateFact('updated', 'Updated', overview.updatedAt)
+    toDateFact('submitted', 'Submitted', overview.submittedAt, zone),
+    toDateFact('created', 'Created', overview.createdAt, zone),
+    toDateFact('updated', 'Updated', overview.updatedAt, zone)
   ],
   [
     toMonoFact('sbi', 'SBI', overview.identifiers.sbi),
@@ -51,6 +53,7 @@ export const toApplicationPage = (
   page: ApplicationPage,
   tab: RecordTab,
   from: string,
+  zone: Zone,
   now: Date = new Date()
 ): RecordPageModel =>
   toRecordPage(
@@ -69,7 +72,8 @@ export const toApplicationPage = (
               page.overview.currentConfigVersion,
               toApplicationHref(page.header),
               from
-            )
+            ),
+            zone
           )
         : null,
       series: page.overview
@@ -91,6 +95,7 @@ export const toApplicationPage = (
       sectionErrors: page.sectionErrors
     },
     tab,
+    zone,
     from,
     now
   )

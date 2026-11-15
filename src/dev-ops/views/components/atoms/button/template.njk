@@ -1,0 +1,26 @@
+{%- from "../../core/macros.njk" import attrs, cls, body, vh -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+{%- from "../../atoms/spinner/macro.njk" import Spinner -%}
+{%- set size = p.size or 'md' -%}
+  {%- set variant = 'tertiary' if p.variant == 'ghost' else (p.variant or 'default') -%}
+  {%- set iconSize = 'sm' if size in ['xs', 'sm'] else 'md' -%}
+  {%- set off = p.disabled or p.loading -%}
+  {%- set start = p.iconStart or p.icon -%}
+  {%- set klass = cls('gpa-btn gpa-btn-' ~ variant ~ ' gpa-btn-' ~ size ~ (' gpa-btn-icon' if p.iconOnly else '') ~ (' gpa-btn-block' if p.block else ''), p) -%}
+  {%- set inner -%}
+    {%- if p.loading %}{{ Spinner({ size: 'sm' }) }}{% elif start %}{{ Icon({ name: start, size: iconSize }) }}{% endif -%}
+    {%- if p.iconOnly %}{{ Icon({ name: p.iconOnly, size: iconSize }) }}{% elif p.text or p.html or caller %}<span>{{ body(p, caller) }}</span>{% endif -%}
+    {%- if p.iconEnd %}{{ Icon({ name: p.iconEnd, size: iconSize, classes: 'gpa-chevron' if p.iconEnd in ['chevron-down', 'chevron-up'] else '' }) }}{% endif -%}
+    {%- if p.external %}{{ vh(' (opens in a new tab)') }}{% endif -%}
+  {%- endset -%}
+  {%- if p.disabledReason and not p.loading -%}
+    {%- set bid = p.id or gpaId('btn') -%}
+    <gpa-tooltip text="{{ p.disabledReason }}"><button type="button" id="{{ bid }}" class="{{ klass }}" aria-disabled="true" aria-describedby="{{ bid }}-why"{% if p.label %} aria-label="{{ p.label }}"{% endif %} data-gpa-off{{ attrs(p) }}>{{ inner | safe }}<span class="gpa-vh" id="{{ bid }}-why">{{ p.disabledReason }}</span></button></gpa-tooltip>
+  {%- else -%}
+  {%- set aria -%}{% if p.label %} aria-label="{{ p.label }}"{% endif %}{% if p.title %} title="{{ p.title }}"{% endif %}{% if p.loading %} aria-busy="true"{% endif %}{% if p.pressed is defined and p.pressed !== null %} aria-pressed="{{ 'true' if p.pressed else 'false' }}"{% endif %}{% if p.expanded is defined and p.expanded !== null %} aria-expanded="{{ 'true' if p.expanded else 'false' }}"{% endif %}{% if p.controls %} aria-controls="{{ p.controls }}"{% endif %}{% if p.haspopup %} aria-haspopup="{{ p.haspopup }}"{% endif %}{% if p.id %} id="{{ p.id }}"{% endif %}{%- endset -%}
+  {%- if p.href -%}
+    <a{% if not off %} href="{{ p.href }}"{% else %} tabindex="-1" aria-disabled="true"{% endif %} class="{{ klass }}"{{ aria | safe }}{% if p.external %} target="_blank" rel="noopener noreferrer"{% endif %}{{ attrs(p) }}>{{ inner | safe }}</a>
+  {%- else -%}
+    <button type="{{ p.type or 'button' }}" class="{{ klass }}"{% if p.name %} name="{{ p.name }}"{% endif %}{% if p.value is defined and p.value !== null %} value="{{ p.value }}"{% endif %}{% if p.form %} form="{{ p.form }}"{% endif %}{{ aria | safe }}{% if off %} disabled{% endif %}{% if p.loadingOnSubmit %} data-gpa-loading-on-submit{% endif %}{{ attrs(p) }}>{{ inner | safe }}</button>
+  {%- endif -%}
+  {%- endif -%}

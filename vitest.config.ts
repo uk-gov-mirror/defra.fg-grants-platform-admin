@@ -27,7 +27,8 @@ export default defineConfig({
         'src/types/**',
         'src/**/__mocks__/**',
         'src/**/test-utils.ts',
-        'src/**/test-fixtures.ts'
+        'src/**/test-fixtures.ts',
+        'src/dev-ops/views/components/**'
       ]
     }
   }

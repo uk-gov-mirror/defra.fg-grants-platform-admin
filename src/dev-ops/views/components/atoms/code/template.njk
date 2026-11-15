@@ -1,0 +1,12 @@
+{%- from "../../core/macros.njk" import attrs, cls, body -%}
+{%- from "./macro.njk" import Code -%}
+{% macro codeBlock(p) -%}
+  {%- set lines = (p.code or '').split('\n') -%}
+  <div class="{{ cls('gpa-code' ~ (' gpa-code-framed' if p.framed else '') ~ (' gpa-code-plain' if p.lineNumbers === false else '') ~ (' gpa-maxh-' ~ p.maxHeight if p.maxHeight else ''), p) }}"{{ attrs(p) }}>
+    {%- if p.lineNumbers !== false -%}
+      <div class="gpa-code-gutter" aria-hidden="true">{% for line in lines %}<div{% if p.errorLine == loop.index %} class="is-error"{% endif %}>{{ loop.index }}</div>{% endfor %}</div>
+    {%- endif -%}
+    <pre class="gpa-code-pre" tabindex="0"{% if p.label %} aria-label="{{ p.label }}"{% endif %}{% if p.preTestId %} data-testid="{{ p.preTestId }}"{% endif %}>{% for line in lines %}<div{% if p.errorLine == loop.index %} class="is-error"{% endif %}>{{ line }}</div>{% endfor %}</pre>
+  </div>
+{%- endmacro %}
+{%- if p.block -%}{{ codeBlock(p) }}{%- else -%}<code class="{{ cls('gpa-code-inline', p) }}"{{ attrs(p) }}>{{ p.code if (p.code and not p.text and not p.html) else body(p, caller) }}</code>{%- endif -%}

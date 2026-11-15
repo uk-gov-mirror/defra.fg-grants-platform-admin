@@ -1,0 +1,30 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../atoms/badge/macro.njk" import Badge -%}
+{%- from "../../atoms/nav-item/macro.njk" import NavItem -%}
+{%- from "../../organisms/account-menu/macro.njk" import AccountMenu -%}
+{%- set rail = p.rail -%}
+  {%- set product = p.product or 'Admin' -%}
+  <aside class="{{ cls('gpa-sidebar' ~ (' is-rail' if rail else ''), p) }}" aria-label="{{ p.asideLabel or 'Sidebar' }}"{{ attrs(p) }}>
+    <div class="gpa-sidebar-brand">
+      {%- if rail -%}
+        {%- set mark = p.productShort -%}
+        {%- if not mark %}{% set mark = '' %}{% for w in product.split(' ') %}{% set mark = mark ~ w[0] %}{% endfor %}{% set mark = mark.slice(0, 2) | upper %}{% endif -%}
+        {%- if p.productHref %}<a class="gpa-sidebar-mark" href="{{ p.productHref }}" aria-label="{{ product }}">{{ mark }}</a>{% else %}<span class="gpa-sidebar-mark" role="img" aria-label="{{ product }}">{{ mark }}</span>{% endif -%}
+      {%- else -%}
+        {%- if p.productHref %}<a class="heading-sm gpa-sidebar-product" href="{{ p.productHref }}"{% if p.productTestId %} data-testid="{{ p.productTestId }}"{% endif %}>{{ product }}</a>{% else %}<span class="heading-sm"{% if p.productTestId %} data-testid="{{ p.productTestId }}"{% endif %}>{{ product }}</span>{% endif -%}
+        {%- if p.env %}{{ Badge({ text: p.env, size: 'sm', tone: p.envTone or ('danger' if p.env == 'prod' else 'neutral'), variant: 'outline', title: p.envTitle, testId: p.envTestId }) }}{% endif -%}
+      {%- endif -%}
+    </div>
+    <nav class="gpa-sidebar-nav" aria-label="{{ p.label or p.navLabel or 'Main' }}"{% if p.navTestId %} data-testid="{{ p.navTestId }}"{% endif %}>
+      {%- for s in p.sections -%}
+        {%- set t = (s.short or s.title) if rail else s.title -%}
+        <div class="gpa-sidebar-section"{% if s.title %} role="group" aria-label="{{ s.title }}"{% endif %}>{% if t %}<div class="gpa-sidebar-title caption"{% if rail and s.short %} aria-hidden="true"{% endif %}>{{ t }}</div>{% endif %}<ul>
+          {%- for it in s.items %}<li>{{ NavItem({ text: (it.short or it.text) if rail else it.text, href: it.href, icon: it.icon, meta: null if rail else it.meta, badge: it.badge, title: it.text if rail, current: it.current or (it.id and it.id == p.active), srPrefix: it.srPrefix, testId: it.testId, attributes: it.attributes }) }}</li>{% endfor -%}
+        </ul></div>
+      {%- endfor -%}
+      {%- if caller %}{{ caller() }}{% endif -%}
+    </nav>
+    <div class="gpa-sidebar-foot"{% if p.footTestId %} data-testid="{{ p.footTestId }}"{% endif %}>
+      {%- if p.account %}{{ p.account | safe }}{% else %}{{ AccountMenu({ name: p.userName or 'Signed-in user', email: p.userEmail, items: p.accountItems, signOutHref: p.signOutHref, theme: p.theme, themeCookie: p.themeCookie, compact: rail }) }}{% endif -%}
+    </div>
+  </aside>

@@ -1,0 +1,9 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- set rid = p.id or gpaId('gpa-radio') -%}
+  {%- set described = [rid ~ '-hint' if p.hint, p.describedBy] | select | join(' ') -%}
+  <label class="{{ cls('gpa-check' ~ (' gpa-check-sm' if p.size == 'sm') ~ (' is-disabled' if p.disabled) ~ (' gpa-check-hinted' if p.hint), p) }}" for="{{ rid }}"{{ attrs(p) }}><input id="{{ rid }}" type="radio"{% if p.name %} name="{{ p.name }}"{% endif %}{% if p.value is defined %} value="{{ p.value }}"{% endif %} class="gpa-check-input"{% if described %} aria-describedby="{{ described }}"{% endif %}{% if p.checked %} checked{% endif %}{% if p.disabled %} disabled{% endif %}><span class="gpa-radio-dot" aria-hidden="true"></span>
+    {%- if p.label or p.html -%}
+      {%- if p.hint %}<span class="gpa-check-text"><span>{{ p.html | safe if p.html else p.label }}</span><span class="gpa-check-hint" id="{{ rid }}-hint">{{ p.hint }}</span></span>
+      {%- else %}<span>{{ p.html | safe if p.html else p.label }}</span>{% endif -%}
+    {%- endif -%}
+  </label>

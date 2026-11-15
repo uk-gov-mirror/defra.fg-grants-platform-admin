@@ -27,8 +27,8 @@ interface NavItem {
   /** Every list the link stands for: it is the current one on any of them. */
   ids: string[]
   label: string
-  /** Read before the label, so two links of one name still tell apart. */
-  srPrefix?: string
+  /** A page every service has (its events, its access tokens): read with its service, as the links are named alike. */
+  perService: boolean
   href: string
   icon: string
 }
@@ -44,10 +44,15 @@ const fallbackIcon = 'folder'
 const toKey = ({ id, page }: BucketEntry): string =>
   page === null ? `list:${id}` : `page:${page.id}`
 
+/** Event lists live under `events/`, whatever the catalogue calls their link. */
+const isEventList = ({ path }: BucketEntry): boolean =>
+  path.startsWith('events/')
+
 const toNavItem = (bucket: BucketEntry): NavItem => ({
   id: bucket.id,
   ids: [],
   label: bucket.page?.shortLabel ?? bucket.shortLabel,
+  perService: isEventList(bucket),
   href: toBucketPath(bucket),
   icon: bucket.icon ?? fallbackIcon
 })
@@ -70,7 +75,7 @@ const toAccessTokensItem = (service: 'gas' | 'cw'): NavItem => ({
   id: toNavActive(service),
   ids: [toNavActive(service)],
   label: 'Access tokens',
-  srPrefix: serviceWords[service].short,
+  perService: true,
   href: toClientsPath(service),
   icon: 'key'
 })
@@ -131,3 +136,13 @@ export const toBackBucket = (
 
   return listAt(buckets, back) ?? listAt(buckets, toInnerBack(back))
 }
+
+/** What the front door is called on a button: the first list's page, or the list itself. */
+export const toHomeLabel = (catalogue: Catalogue | null): string | null => {
+  const [first] = catalogue?.buckets ?? []
+
+  return first ? toPageLabel(first) : null
+}
+
+const toPageLabel = ({ page, label }: BucketEntry): string =>
+  page?.label ?? label

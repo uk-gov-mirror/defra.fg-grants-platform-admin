@@ -1,0 +1,14 @@
+{%- from "../../core/macros.njk" import attrs, cls, body -%}
+{%- from "../../atoms/icon-button/macro.njk" import IconButton -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+{%- set tone = p.tone or 'info' -%}
+  {%- set icons = { info: 'info', success: 'circle-check', warning: 'triangle-alert', danger: 'circle-alert' } -%}
+  <div class="{{ cls('gpa-alert gpa-alert-' ~ tone, p) }}" role="{{ p.role or ('alert' if tone == 'danger' else 'status') }}"{% if p.id %} id="{{ p.id }}"{% endif %}{% if p.focusOnArrival %} tabindex="-1" data-focus-on-arrival{% endif %} data-gpa-dismissable{{ attrs(p) }}>
+    {{- Icon({ name: p.icon or icons[tone], size: 'md', classes: 'gpa-alert-icon' }) -}}
+    <div class="gpa-alert-body">
+      {%- if p.title %}<strong class="gpa-alert-title"{% if p.titleTestId %} data-testid="{{ p.titleTestId }}"{% endif %}>{{ p.title }}</strong>{% endif -%}
+      {%- if p.text or p.html or caller %}<div>{{ body(p, caller) }}</div>{% endif -%}
+      {%- if p.actions %}<div class="gpa-alert-actions">{{ p.actions | safe }}</div>{% endif -%}
+    </div>
+    {%- if p.dismissible %}<gpa-dismiss>{{ IconButton({ icon: 'x', size: 'xs', label: p.dismissLabel or 'Dismiss' }) }}</gpa-dismiss>{% endif -%}
+  </div>

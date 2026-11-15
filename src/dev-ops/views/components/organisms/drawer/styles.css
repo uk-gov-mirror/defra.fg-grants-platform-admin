@@ -1,0 +1,28 @@
+.gpa-drawer:focus {
+  outline-color: transparent;
+}
+.gpa-drawer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: var(--size-drawer);
+  max-width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg-surface-raised);
+  box-shadow: var(--elevation-modal);
+}
+.gpa-drawer-sub {
+  margin-top: var(--gap-stack-xs);
+}
+.gpa-drawer-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-stack-2xl);
+  padding: var(--inset-dialog-head-end) var(--inset-dialog);
+  overflow-y: auto;
+}
+.gpa-drawer-foot {
+  justify-content: flex-start;
+}

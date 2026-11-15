@@ -1,0 +1,3 @@
+{%- from "../../atoms/button/macro.njk" import Button -%}
+{%- set btn = Button({ iconOnly: p.icon, label: p.label, size: p.size or 'md', variant: p.variant or 'tertiary', href: p.href, type: p.type, name: p.name, value: p.value, form: p.form, disabled: p.disabled, id: p.id, classes: p.classes, testId: p.testId, attributes: p.attributes, pressed: p.pressed, expanded: p.expanded }) -%}
+  {%- if p.tooltip === false or not (p.tooltip or p.label) -%}{{ btn }}{%- else -%}<gpa-tooltip text="{{ p.tooltip or p.label }}">{{ btn }}</gpa-tooltip>{%- endif -%}

@@ -14,7 +14,8 @@ import {
   loginCallbackPath,
   loginPath,
   logoutPath,
-  signedOutPath
+  signedOutPath,
+  signedOutPaths
 } from './paths.ts'
 
 const loginRoute: ServerRoute = {
@@ -57,6 +58,10 @@ const loginCallbackRoute: ServerRoute = {
   }
 }
 
+/** Only a signed out page this app serves: `next` is never an open redirect. */
+const toSignedOutPath = (next: unknown): string =>
+  signedOutPaths.find((path) => path === next) ?? signedOutPath
+
 // The Entra ID session is left alone, so a user who logs back in is signed
 // straight in again without re-entering credentials.
 const logoutRoute: ServerRoute = {
@@ -68,7 +73,7 @@ const logoutRoute: ServerRoute = {
   handler(request: Request, h: ResponseToolkit) {
     clearAuthSession(request)
 
-    return h.redirect(signedOutPath)
+    return h.redirect(toSignedOutPath(request.query.next))
   }
 }
 

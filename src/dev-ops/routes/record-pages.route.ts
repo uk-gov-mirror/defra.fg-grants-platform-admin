@@ -46,6 +46,13 @@ import { roles as appRoles } from '../../common/roles.ts'
 import type { RecordType } from '../view-models/record-type.ts'
 import { toVersionPath } from '../view-models/record-type.ts'
 import { toWorkflowPage } from '../view-models/workflow-page.view-model.ts'
+import { shellQuery, timesOf, withoutShellKeys } from '../view-models/times.ts'
+import {
+  missingStatusCodes,
+  toRecordMissing
+} from '../view-models/record-missing.ts'
+import type { MissingState } from '../view-models/record-missing.ts'
+import type { Zone } from '../view-models/zoned-clock.ts'
 import { workflowType } from '../view-models/workflows-page.view-model.ts'
 
 interface RecordPageRoute<K, P, T extends string, N, Q> {
@@ -64,12 +71,11 @@ interface RecordPageRoute<K, P, T extends string, N, Q> {
       query: Q
       catalogue: Catalogue | null
       roles: string[]
+      zone: Zone
     }
   ) => RecordPageModel
   /** Where a write leaves its outcome for the one render after it. */
   noticeKey?: keyof YarFlashes
-  /** Its URL names a config version, so a version the service has not got keeps the page's shell. */
-  versioned?: boolean
 }
 
 type RecordPageQuery<T> = {
@@ -103,8 +109,6 @@ const withNav = <M extends { navActive: string | null }>(
   navActive: string | null
 ): M => ({ ...model, navActive: navActive ?? model.navActive })
 
-const notFound = 404
-
 /** Taken before the read, so it is spent on this render whatever the read then says. */
 const takeNotice = <N>(
   request: Request,
@@ -112,27 +116,33 @@ const takeNotice = <N>(
 ): N | undefined =>
   key ? (request.yar.flash(key) as unknown as N[])[0] : undefined
 
-/** A record that could not be read keeps its shell; with no `back` it goes back to, and sits under, its own list. */
-const unavailableView = (
+/** The record's page with the reason in place of the record; with no `back` it goes back to, and sits under, its own list. */
+const missingView = (
+  request: Request,
   h: ResponseToolkit,
   record: RecordType,
-  ref: string,
   {
     from,
     catalogue,
-    outcome
-  }: { from: string; catalogue: Catalogue | null; outcome: string }
-) =>
-  h.view(record.view, {
-    pageTitle: record.title,
-    record,
-    ref,
-    backHref: from || record.path,
-    backLabel: toRecordBackLabel(catalogue, record, from),
-    navActive: toNavActive(catalogue, from || record.path),
-    unavailable: true,
-    timedOut: outcome === 'timed-out'
-  })
+    state
+  }: { from: string; catalogue: Catalogue | null; state: MissingState }
+) => {
+  const missing = toRecordMissing(record, request.params, state)
+
+  return h
+    .view('record-missing', {
+      pageTitle: missing.pageTitle,
+      missing,
+      backHref: from || record.path,
+      backLabel: toRecordBackLabel(catalogue, record, from),
+      retryHref: `${request.url.pathname}${request.url.search}`,
+      navActive: toNavActive(catalogue, from || record.path)
+    })
+    .code(missingStatusCodes[state])
+}
+
+const toMissingState = (outcome: string): MissingState =>
+  outcome === 'timed-out' ? 'timed-out' : 'unavailable'
 
 /** `tab` and `back` on every record page, then whatever else its tabs read. */
 const toQuerySchema = (
@@ -142,58 +152,17 @@ const toQuerySchema = (
   Joi.object({
     tab: recordTabSchema(record).default('overview'),
     back: backSchema,
-    ...query
+    ...query,
+    ...shellQuery
   })
 
 /** Hapi types the credentials scope as either one role or many. */
 const rolesOf = (request: Request): string[] =>
   [request.auth.credentials.scope ?? []].flat()
 
-/** A version the service has no record of keeps the record's shell, and says where a rejected one went. */
-const missingVersionView = async (
-  h: ResponseToolkit,
-  record: RecordType,
-  { code, version }: { code: string; version: string },
-  from: string
-) => {
-  const catalogue = await getCatalogueUseCase()
-
-  return h
-    .view(record.view, {
-      pageTitle: record.title,
-      record,
-      ref: code,
-      backHref: from || record.path,
-      backLabel: toRecordBackLabel(catalogue, record, from),
-      navActive: toNavActive(catalogue, from || record.path),
-      missingVersion: { source: record.source, code, version }
-    })
-    .code(notFound)
-}
-
-/** A version the service has not got keeps the shell; any other record is GPA's own 404. */
-const notFoundView = (
-  h: ResponseToolkit,
-  record: RecordType,
-  versioned: boolean,
-  request: Request,
-  from: string
-) => {
-  if (!versioned) {
-    throw Boom.notFound()
-  }
-
-  return missingVersionView(
-    h,
-    record,
-    request.params as { code: string; version: string },
-    from
-  )
-}
-
 /**
- * One tab of one record per render. A record GAS has not got is GPA's own 404
- * page; any other failure keeps the page, with the reason in place of the tab.
+ * One tab of one record per render. A record the service has not got, or
+ * could not read, is its page with the reason in place of the record.
  */
 const recordPageRoute = <K, P, T extends string, N = never, Q = object>({
   record,
@@ -201,8 +170,7 @@ const recordPageRoute = <K, P, T extends string, N = never, Q = object>({
   query,
   read,
   toPage,
-  noticeKey,
-  versioned = false
+  noticeKey
 }: RecordPageRoute<K, P, T, N, Q>): ServerRoute => ({
   method: 'GET',
   path: [record.path, ...Object.keys(params).map((name) => `{${name}}`)].join(
@@ -217,13 +185,19 @@ const recordPageRoute = <K, P, T extends string, N = never, Q = object>({
   },
   async handler(request: Request, h: ResponseToolkit) {
     const key = request.params as unknown as K
-    const { tab, back, ...extra } = request.query as RecordPageQuery<T>
+    const { tab, back, ...extra } = withoutShellKeys(
+      request.query as RecordPageQuery<T>
+    )
     const from = toSafeFrom(back)
     const notice = takeNotice<N>(request, noticeKey)
     const { outcome, page } = await read(key, tab)
 
     if (outcome === 'not-found') {
-      return notFoundView(h, record, versioned, request, from)
+      return missingView(request, h, record, {
+        from,
+        catalogue: await getCatalogueUseCase(),
+        state: 'not-found'
+      })
     }
 
     if (outcome === 'hidden') {
@@ -233,10 +207,10 @@ const recordPageRoute = <K, P, T extends string, N = never, Q = object>({
     const catalogue = await getCatalogueUseCase()
 
     if (page === null) {
-      return unavailableView(h, record, request.params[record.titleParam], {
+      return missingView(request, h, record, {
         from,
         catalogue,
-        outcome
+        state: toMissingState(outcome)
       })
     }
 
@@ -244,7 +218,8 @@ const recordPageRoute = <K, P, T extends string, N = never, Q = object>({
       notice,
       query: extra as Q,
       catalogue,
-      roles: rolesOf(request)
+      roles: rolesOf(request),
+      zone: timesOf(request).zone
     })
 
     return h.view(record.view, {
@@ -292,10 +267,10 @@ const currentVersionRoute = ({
     }
 
     if (page === null) {
-      return unavailableView(h, record, asked, {
+      return missingView(request, h, record, {
         from,
         catalogue: await getCatalogueUseCase(),
-        outcome
+        state: toMissingState(outcome)
       })
     }
 
@@ -318,14 +293,15 @@ export const viewApplicationRoute = recordPageRoute({
   record: applicationType,
   params: { code: slugFilterSchema, clientRef: slugFilterSchema },
   read: getApplicationPageUseCase,
-  toPage: (page, tab, from) => toApplicationPage(page, tab, from)
+  toPage: (page, tab, from, { zone }) =>
+    toApplicationPage(page, tab, from, zone)
 })
 
 export const viewCaseRoute = recordPageRoute({
   record: caseType,
   params: { workflowCode: slugFilterSchema, caseRef: slugFilterSchema },
   read: getCasePageUseCase,
-  toPage: (page, tab, from) => toCasePage(page, tab, from)
+  toPage: (page, tab, from, { zone }) => toCasePage(page, tab, from, zone)
 })
 
 export const viewGrantRoute = recordPageRoute<
@@ -344,8 +320,7 @@ export const viewGrantRoute = recordPageRoute<
       ...options,
       canAdministerGrants: roles.includes(appRoles.grantApplicationsAdmin)
     }),
-  noticeKey: definitionFetchNoticeKey,
-  versioned: true
+  noticeKey: definitionFetchNoticeKey
 })
 
 export const viewCurrentGrantRoute = currentVersionRoute({
@@ -360,8 +335,7 @@ export const viewWorkflowRoute = recordPageRoute({
   query: { status: statusSchema },
   read: getWorkflowPageUseCase,
   toPage: toWorkflowPage,
-  noticeKey: definitionFetchNoticeKey,
-  versioned: true
+  noticeKey: definitionFetchNoticeKey
 })
 
 export const viewCurrentWorkflowRoute = currentVersionRoute({

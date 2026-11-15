@@ -17,6 +17,8 @@ const user = { name: 'Ada Lovelace' }
 
 const applicationsAdminRole = 'FCP.GrantApplicationsAdmin'
 
+const refusalSweepMs = 20_000
+
 /** Any value will do: hapi checks auth before it validates a param. */
 const address = (path: string) => path.replace(/\{[^}]+\}/g, 'x')
 
@@ -27,10 +29,14 @@ let server: Server
  * plugin: reading the whole table is what makes a `/dev-ops` route added later
  * fail these tests, wherever in the app it is registered from.
  */
+/** Dev Ops' signed out page is the one route a signed out visitor has to reach. */
+const publicPaths = ['/dev-ops/signed-out']
+
 const devOpsRoutes = (): Route[] =>
   server
     .table()
     .filter(({ path }) => path === '/dev-ops' || path.startsWith('/dev-ops/'))
+    .filter(({ path }) => !publicPaths.includes(path))
     .map(({ method, path }) => ({ method, url: address(path) }))
 
 const answers = async <T extends object>(
@@ -76,14 +82,31 @@ describe('devOps', () => {
     expect(devOpsRoutes()).not.toHaveLength(0)
   })
 
+  test('serves its signed out page to a visitor with no session', async () => {
+    const { statusCode, headers } = await server.inject('/dev-ops/signed-out')
+
+    expect(statusCode).toBe(statusCodes.ok)
+    expect(headers.location).toBeUndefined()
+    expect(
+      server.table().filter(({ path }) => publicPaths.includes(path))
+    ).toHaveLength(1)
+  })
+
   test.each([
     ['holding only the applications admin role', [applicationsAdminRole]],
     ['holding no roles', []]
-  ])('refuses every route under /dev-ops a user %s', async (_name, scope) => {
-    const given = await answers(asUser(scope))
+  ])(
+    'refuses every route under /dev-ops a user %s',
+    async (_name, scope) => {
+      const given = await answers(asUser(scope))
 
-    expect(given).toEqual(sameFor(given, { statusCode: statusCodes.forbidden }))
-  })
+      expect(given).toEqual(
+        sameFor(given, { statusCode: statusCodes.forbidden })
+      )
+    },
+    // Each refusal is a whole Dev Ops page, which hapi compiles afresh on every request outside production.
+    refusalSweepMs
+  )
 
   test('sends an anonymous visitor from every route under /dev-ops to sign in', async () => {
     const given = await answers(anonymously)

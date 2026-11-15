@@ -1,23 +1,24 @@
 import {
-  displayZone,
+  formatIn,
   fromZonedInput,
   partsOf,
-  toZonedInput
+  toZonedInput,
+  ukZone
 } from './zoned-clock.ts'
 
 const hourMs = 3_600_000
 export const dayMs = 24 * hourMs
 
 /** The day it is in the UK at that instant, `yyyy-mm-dd`, as a date box holds it. */
-export const toUkDate = (date: Date): string => toZonedInput(date).slice(0, 10)
+export const toUkDate = (date: Date): string =>
+  toZonedInput(date, ukZone).slice(0, 10)
 
 /** 23:59:59 in the UK on that `yyyy-mm-dd`, summer or winter. */
 export const toUkEndOfDay = (date: string): Date =>
-  fromZonedInput(`${date}T23:59:59`, 'latest')
+  fromZonedInput(`${date}T23:59:59`, 'latest', ukZone)
 
 /** `1 Sep 2027`: day-first from parts, with `en-US` months because `en-GB` writes `Sept`. */
-const dayFormat = new Intl.DateTimeFormat('en-US', {
-  timeZone: displayZone,
+const dayFormat = formatIn(ukZone, 'en-US', {
   day: 'numeric',
   month: 'short',
   year: 'numeric'

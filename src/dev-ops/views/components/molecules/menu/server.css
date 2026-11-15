@@ -1,0 +1,24 @@
+.gpa-menu form {
+  display: contents;
+}
+.gpa-menu-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-stack-sm);
+  padding: var(--inset-menuitem-y) var(--inset-menuitem-x);
+}
+.gpa-menu-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-stack-2xs);
+}
+.gpa-menu-md {
+  width: var(--size-menu-width);
+}
+.gpa-menu-lg {
+  width: calc(var(--size-menu-width) * 1.25);
+}
+.gpa-menu-sm {
+  width: auto;
+  min-width: var(--size-menu-min-width);
+}

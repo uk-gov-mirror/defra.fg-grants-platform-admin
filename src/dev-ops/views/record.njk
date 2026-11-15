@@ -17,7 +17,7 @@
   </div>
 {% endmacro %}
 
-{% block pageTitle %}{{ record.title }} {{ ref }} | {{ serviceName }}{% endblock %}
+{% block pageTitle %}{{ record.title }} {{ ref }} – {{ productName }}{% endblock %}
 
 {% block content %}
   {{ back({ href: backHref or homeHref, list: record.listId, label: backLabel, navLabel: (record.listId | capitalize) ~ " list", testId: record.itemId }) }}
@@ -38,20 +38,6 @@
 
   {% block beforeTabs %}{% endblock %}
 
-  {% if missingVersion %}
-    <div role="alert" class="alert alert-warning alert-soft text-sm" data-testid="{{ record.itemId }}-missing-version">
-      {{ icon({ name: 'exclamation-triangle', class: 'size-4 shrink-0 self-start mt-0.5' }) }}
-      <div class="flex max-w-3xl flex-col gap-2">
-        <p>{{ missingVersion.source }} has no record of <strong>{{ missingVersion.code }} {{ missingVersion.version }}</strong>. Check the version. If it was published and {{ missingVersion.source }} rejected it on arrival, its message is in {{ missingVersion.source }}'s inbox as a dead letter, unless it has been purged.</p>
-        <div>{% call inboxSearch({ service: missingVersion.source, code: missingVersion.code, testId: record.itemId ~ "-missing-version-search" }) %}Search {{ missingVersion.source }}'s inbox for {{ codeText(missingVersion.code) }} ›{% endcall %}</div>
-      </div>
-    </div>
-  {% elif unavailable %}
-    <div role="alert" class="alert alert-error alert-soft text-sm" data-testid="{{ record.itemId }}-error">
-      {{ icon({ name: 'exclamation-circle', class: 'size-4 shrink-0' }) }}
-      <span>{% if timedOut %}This {{ record.title | lower }} could not be loaded: {{ record.source }} timed out waiting for it. Refresh to try again.{% else %}This {{ record.title | lower }} could not be loaded from {{ record.source }}.{% endif %}</span>
-    </div>
-  {% else %}
     <nav class="mb-4" aria-label="Sections" data-testid="{{ record.itemId }}-tabs">
       {# One row that scrolls on a phone, with the open tab brought into view. #}
       <do-tab-strip class="tabs tabs-border flex-nowrap overflow-x-auto [scrollbar-gutter:stable]">
@@ -164,5 +150,4 @@
       {{ noData(record) }}
     {% endif %}
     {% endblock %}
-  {% endif %}
 {% endblock %}

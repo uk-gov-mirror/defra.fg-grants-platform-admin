@@ -1,0 +1,25 @@
+.gpa-spinner {
+  display: inline-block;
+  flex: none;
+  border-radius: var(--radius-full);
+  border: var(--border-width-thick) solid var(--border-strong);
+  border-top-color: currentColor;
+  animation: gpa-spin 800ms linear infinite;
+}
+.gpa-spinner-sm {
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+}
+.gpa-spinner-md {
+  width: var(--size-icon-md);
+  height: var(--size-icon-md);
+}
+.gpa-spinner-lg {
+  width: var(--size-icon-xl);
+  height: var(--size-icon-xl);
+}
+@media (prefers-reduced-motion: reduce) {
+  .gpa-spinner {
+    animation-duration: 2400ms;
+  }
+}

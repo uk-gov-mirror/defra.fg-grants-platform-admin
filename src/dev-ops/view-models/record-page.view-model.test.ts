@@ -1,3 +1,4 @@
+import { ukZone } from './zoned-clock.ts'
 import { applicationType } from './applications-page.view-model.ts'
 import { caseType } from './cases-page.view-model.ts'
 import {
@@ -36,6 +37,7 @@ describe('toRecordPage', () => {
       applicationType,
       data({ sourceErrors: [{ hop: 'CW-BE Cases' }, { hop: 'CW-BE Inbox' }] }),
       'overview',
+      ukZone,
       '',
       now
     )
@@ -69,6 +71,7 @@ describe('toRecordPage', () => {
         )
       }),
       'overview',
+      ukZone,
       '',
       now
     )
@@ -97,6 +100,7 @@ describe('toRecordPage', () => {
         series: seriesOf(null, ['9d3-5b1-e08', 'f02-7d8-a61'], [])
       }),
       'overview',
+      ukZone,
       '',
       now
     )
@@ -115,6 +119,7 @@ describe('toRecordPage', () => {
         )
       }),
       'overview',
+      ukZone,
       '',
       now
     )
@@ -133,6 +138,7 @@ describe('toRecordPage', () => {
         )
       }),
       'overview',
+      ukZone,
       '',
       now
     )
@@ -180,6 +186,7 @@ describe('toRecordPage', () => {
         )
       }),
       'overview',
+      ukZone,
       '',
       now
     )
@@ -192,6 +199,7 @@ describe('toRecordPage', () => {
       caseType,
       data({ series: seriesOf('f02-7d8-a61', ['9d3-5b1-e08', 'f02-7d8-a61']) }),
       'overview',
+      ukZone,
       '',
       now
     )
@@ -204,7 +212,7 @@ describe('toRecordPage', () => {
 
   test('links each tab off the record, marking the open one', () => {
     expect(
-      toRecordPage(caseType, data(), 'raw', '', now).tabs.map(
+      toRecordPage(caseType, data(), 'raw', ukZone, '', now).tabs.map(
         ({ href, active }) => `${href} ${active}`
       )
     ).toEqual([
@@ -221,6 +229,7 @@ describe('toRecordPage', () => {
         sectionErrors: [{ section: 'raw', message: 'too large to show' }]
       }),
       'raw',
+      ukZone,
       '',
       now
     )
@@ -228,6 +237,7 @@ describe('toRecordPage', () => {
       caseType,
       data({ sectionErrors: [{ section: 'raw', message: 'Raw failed' }] }),
       'raw',
+      ukZone,
       '',
       now
     )
@@ -249,6 +259,7 @@ describe('toRecordPage', () => {
         sectionErrors: [{ section: 'overview', message: 'too large to show' }]
       }),
       'overview',
+      ukZone,
       '',
       now
     )
@@ -263,6 +274,7 @@ describe('toRecordPage', () => {
         sectionErrors: [{ section: 'raw', message: 'too large to show' }]
       }),
       'raw',
+      ukZone,
       '',
       now
     )
@@ -276,6 +288,7 @@ describe('toRecordPage', () => {
         caseType,
         data({ raw: { caseRef: 'x' } }),
         'overview',
+        ukZone,
         '',
         now
       ).raw
@@ -288,6 +301,7 @@ describe('toRecordPage', () => {
         caseType,
         data({ events: { rows: [], more: true } }),
         'events',
+        ukZone,
         '',
         now
       ).events
@@ -295,14 +309,16 @@ describe('toRecordPage', () => {
   })
 
   test('leaves the way back to the layout when opened from no list', () => {
-    expect(toRecordPage(caseType, data(), 'overview', '', now)).toMatchObject({
+    expect(
+      toRecordPage(caseType, data(), 'overview', ukZone, '', now)
+    ).toMatchObject({
       backHref: ''
     })
   })
 
   test('goes back to the list it was opened from, and keeps it on every tab', () => {
     const from = '/dev-ops/cases?workflow=woodland'
-    const page = toRecordPage(caseType, data(), 'overview', from, now)
+    const page = toRecordPage(caseType, data(), 'overview', ukZone, from, now)
 
     expect(page.backHref).toBe(from)
     expect(page.tabs.map(({ href }) => href)).toEqual([

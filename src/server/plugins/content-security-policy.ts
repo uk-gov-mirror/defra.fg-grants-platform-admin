@@ -21,7 +21,9 @@ const contentSecurityPolicy = {
     frameAncestors: ['none'],
     formAction: ['self'],
     manifestSrc: ['self'],
-    generateNonces: false
+    // A nonce per response for the <style> a DataTable writes its column
+    // widths in. Scripts are all files from 'self', so they need none.
+    generateNonces: 'style'
   }
 } satisfies ServerRegisterPluginObject<Record<string, unknown>>
 

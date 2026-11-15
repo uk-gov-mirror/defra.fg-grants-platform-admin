@@ -216,6 +216,8 @@ const viewPage = async (url = path, scope = credentials.scope) => {
   const { result, statusCode, headers } = await server.inject({
     method: 'GET',
     url,
+    // UK time, the setting these expectations are written in.
+    headers: { cookie: 'dev-ops-times=uk' },
     auth: { strategy: 'session', credentials: { ...credentials, scope } }
   })
 
@@ -223,6 +225,13 @@ const viewPage = async (url = path, scope = credentials.scope) => {
 }
 
 const part = ($: CheerioAPI, testId: string) => $(`[data-testid="${testId}"]`)
+
+/** An alert's title and text, without its buttons. */
+const alertText = ($: CheerioAPI, testId: string) => {
+  const title = $(`[data-testid="${testId}"] .gpa-alert-title`)
+
+  return flatten(`${title.text()} ${title.next().text()}`)
+}
 
 const textOf = ($: CheerioAPI, testId: string) =>
   flatten(part($, testId).text())
@@ -295,7 +304,7 @@ describe('the application page', () => {
       '/dev-ops/events/gas/outbox'
     )
     expect(textOf($, 'application-back')).toBe('Back to Applications')
-    expect($('[data-testid="do-nav"] [aria-current="page"]')).toHaveLength(0)
+    expect($('[data-testid="shell-nav"] [aria-current="page"]')).toHaveLength(0)
   })
 
   test('links back to the list it was opened from, on every tab, and sits under it in the navigation', async () => {
@@ -304,7 +313,7 @@ describe('the application page', () => {
 
     expect(part($, 'application-back').attr('href')).toBe(from)
     expect(
-      $('[data-testid="do-nav"] [aria-current="page"]').text().trim()
+      $('[data-testid="shell-nav"] [aria-current="page"]').text().trim()
     ).toBe('Applications')
     expect(
       part($, 'application-tab')
@@ -326,14 +335,6 @@ describe('the application page', () => {
 
     expect(part($, 'application-back').attr('href')).toBe(
       '/dev-ops/events/gas/outbox'
-    )
-  })
-
-  test('keeps the scrollbar gutter, so the page does not shift beside the taller lists', async () => {
-    const { $ } = await viewPage()
-
-    expect($('html').attr('class')).toBe(
-      '[scrollbar-gutter:stable] [--root-bg:var(--color-base-200)] scroll-pt-14 lg:scroll-pt-0'
     )
   })
 
@@ -389,34 +390,48 @@ describe('the application page', () => {
     expect(statusCode).toBe(statusCodes.badRequest)
   })
 
-  test("answers GPA's own 404 page for an application GAS does not have", async () => {
+  test('says GAS has no such application, under its reference, in the page shell', async () => {
     vi.mocked(getApplicationPageUseCase).mockResolvedValue({
       outcome: 'not-found',
       page: null
     })
 
     const { statusCode, $ } = await viewPage()
+    const card = part($, 'record-missing-not-found')
 
     expect(statusCode).toBe(statusCodes.notFound)
-    expect($('body').text()).toContain('Page not found')
+    expect($('title').text()).toBe(
+      'Not found – Application a7c-2f1-9e4 – Grants Platform'
+    )
+    expect(textOf($, 'record-missing-title')).toBe('a7c-2f1-9e4')
+    expect(flatten(card.find('.gpa-empty-title').text())).toBe(
+      'GAS has no application a7c-2f1-9e4 for frps-private-beta.'
+    )
+    expect(flatten(card.find('a.gpa-btn').text())).toBe('Back to Applications')
+    expect(part($, 'record-missing-search')).toHaveLength(0)
   })
 
   test.each([
-    ['unavailable', 'This application could not be loaded from GAS.'],
+    [
+      'unavailable',
+      statusCodes.serviceUnavailable,
+      'This application couldn’t be loaded from GAS. GAS answered with an error. Nothing has changed — try again in a moment.'
+    ],
     [
       'timed-out',
-      'This application could not be loaded: GAS timed out waiting for it. Refresh to try again.'
+      statusCodes.gatewayTimeout,
+      'This application couldn’t be loaded: GAS timed out waiting for it. Nothing has changed. Try again in a moment.'
     ]
-  ] as const)('says so when GAS is %s', async (outcome, message) => {
+  ] as const)('says so when GAS is %s', async (outcome, code, message) => {
     vi.mocked(getApplicationPageUseCase).mockResolvedValue({
       outcome,
       page: null
     })
 
     const { statusCode, $ } = await viewPage()
-
-    expect(statusCode).toBe(statusCodes.ok)
-    expect(textOf($, 'application-error')).toBe(message)
+    expect(statusCode).toBe(code)
+    expect(alertText($, `record-missing-${outcome}`)).toBe(message)
+    expect(part($, 'record-missing-retry').attr('href')).toBe(path)
     expect(part($, 'application-tabs')).toHaveLength(0)
   })
 })
@@ -1219,7 +1234,7 @@ describe('the case page', () => {
     )
   })
 
-  test("answers GPA's own 404 page for a case CW does not have", async () => {
+  test('says CW has no such case, under its reference', async () => {
     vi.mocked(getCasePageUseCase).mockResolvedValue({
       outcome: 'not-found',
       page: null
@@ -1228,7 +1243,11 @@ describe('the case page', () => {
     const { statusCode, $ } = await viewPage(casePath)
 
     expect(statusCode).toBe(statusCodes.notFound)
-    expect($('body').text()).toContain('Page not found')
+    expect(
+      flatten(
+        part($, 'record-missing-not-found').find('.gpa-empty-title').text()
+      )
+    ).toBe('CW has no case f02-7d8-a61.')
   })
 
   test('says CW timed out rather than drawing a partial case', async () => {
@@ -1237,12 +1256,15 @@ describe('the case page', () => {
       page: null
     })
 
-    const { $ } = await viewPage(casePath)
+    const { statusCode, $ } = await viewPage(casePath)
 
-    expect(textOf($, 'case-error')).toBe(
-      'This case could not be loaded: CW timed out waiting for it. Refresh to try again.'
-    )
-    expect(textOf($, 'case-title')).toBe('Case f02-7d8-a61')
+    expect(statusCode).toBe(statusCodes.gatewayTimeout)
+    expect(
+      flatten(
+        part($, 'record-missing-timed-out').find('.gpa-alert-title').text()
+      )
+    ).toBe('This case could not be loaded: CW timed out waiting for it.')
+    expect(textOf($, 'record-missing-title')).toBe('f02-7d8-a61')
     expect(part($, 'case-tabs')).toHaveLength(0)
   })
 
@@ -1350,8 +1372,8 @@ describe('the grant page', () => {
     async ({ tab, query }) => {
       const { $ } = await viewPage(`${grantPath}${query}`)
 
-      expect($('title').text().split(' | ')[0]).toBe(
-        `${tab} – Grant woodland-creation 1.2.0`
+      expect($('title').text()).toBe(
+        `${tab} – Grant woodland-creation 1.2.0 – Grants Platform`
       )
     }
   )
@@ -1364,8 +1386,8 @@ describe('the grant page', () => {
 
     const { $ } = await viewPage('/dev-ops/grants/woodland-creation/9.9.9')
 
-    expect($('title').text().split(' | ')[0]).toBe(
-      'Not found – Grant woodland-creation 9.9.9'
+    expect($('title').text()).toBe(
+      'Not found – Grant woodland-creation@9.9.9 – Grants Platform'
     )
   })
 
@@ -1482,7 +1504,7 @@ describe('the grant page', () => {
     expect(part($, 'grant-back').attr('href')).toBe(from)
     expect(textOf($, 'grant-back')).toBe('Back to Grants')
     expect(
-      $('[data-testid="do-nav"] [aria-current="page"]').text().trim()
+      $('[data-testid="shell-nav"] [aria-current="page"]').text().trim()
     ).toBe('Grants')
   })
 
@@ -1492,7 +1514,7 @@ describe('the grant page', () => {
     expect(part($, 'grant-back').attr('href')).toBe('/dev-ops/grants')
     expect(textOf($, 'grant-back')).toBe('Back to Grants')
     expect(
-      $('[data-testid="do-nav"] [aria-current="page"]').text().trim()
+      $('[data-testid="shell-nav"] [aria-current="page"]').text().trim()
     ).toBe('Grants')
   })
 
@@ -1530,23 +1552,27 @@ describe('the grant page', () => {
 
     const { statusCode, $ } = await viewPage('/dev-ops/grants/qa-complex/1.1.1')
 
+    const card = part($, 'record-missing-not-found')
+    const search = $('#record-missing-search')
+
     expect(statusCode).toBe(statusCodes.notFound)
-    expect(textOf($, 'grant-title')).toBe('Grant qa-complex')
-    expect(textOf($, 'grant-back')).toBe('Back to Grants')
-    expect(flatten(part($, 'grant-missing-version').find('p').text())).toBe(
-      "GAS has no record of qa-complex 1.1.1. Check the version. If it was published and GAS rejected it on arrival, its message is in GAS's inbox as a dead letter, unless it has been purged."
+    expect(textOf($, 'record-missing-title')).toBe('qa-complex')
+    expect(textOf($, 'record-missing-back')).toBe('Back to Grants')
+    expect(flatten(card.find('.gpa-empty-title').text())).toBe(
+      'GAS has no record of qa-complex@1.1.1.'
     )
-    expect(part($, 'grant-missing-version').find('strong').text()).toBe(
-      'qa-complex 1.1.1'
+    expect(flatten(card.find('.gpa-empty-body').text())).toBe(
+      'Check the version. If it was published and GAS rejected it on arrival, its message is in GAS’s inbox as a dead letter, unless it has been purged.'
     )
-    expect(part($, 'grant-missing-version-search').attr('action')).toBe(
-      '/dev-ops/events/gas/inbox'
+    expect(textOf($, 'record-missing-search')).toBe('Search GAS’s inbox')
+    expect(part($, 'record-missing-search').attr('form')).toBe(
+      'record-missing-search'
     )
-    expect(
-      part($, 'grant-missing-version-search')
-        .find('input[name="ref-value"]')
-        .attr('value')
-    ).toBe('qa-complex')
+    expect(search.attr('action')).toBe('/dev-ops/events/gas/inbox')
+    expect(search.is('form.gpa-form[hidden][method="post"]')).toBe(true)
+    expect(search.find('input[name="ref-value"]').attr('value')).toBe(
+      'qa-complex'
+    )
     expect(part($, 'grant-tabs')).toHaveLength(0)
   })
 
@@ -1591,22 +1617,30 @@ describe('the grant page', () => {
   })
 
   test.each([
-    ['unavailable', 'This grant could not be loaded from GAS.'],
+    [
+      'unavailable',
+      statusCodes.serviceUnavailable,
+      'This grant could not be loaded from GAS. GAS answered with an error. Nothing has changed — try again in a moment.'
+    ],
     [
       'timed-out',
-      'This grant could not be loaded: GAS timed out waiting for it. Refresh to try again.'
+      statusCodes.gatewayTimeout,
+      'This grant could not be loaded: GAS timed out waiting for it. Nothing has changed. Refresh to try again.'
     ]
-  ] as const)('names the code when GAS is %s', async (outcome, message) => {
-    vi.mocked(getGrantPageUseCase).mockResolvedValue({ outcome, page: null })
+  ] as const)(
+    'names the code when GAS is %s',
+    async (outcome, code, message) => {
+      vi.mocked(getGrantPageUseCase).mockResolvedValue({ outcome, page: null })
 
-    const { statusCode, $ } = await viewPage(grantPath)
+      const { statusCode, $ } = await viewPage(grantPath)
 
-    expect(statusCode).toBe(statusCodes.ok)
-    expect(textOf($, 'grant-error')).toBe(message)
-    expect(textOf($, 'grant-title')).toBe('Grant woodland-creation')
-    expect(part($, 'grant-version')).toHaveLength(0)
-    expect(part($, 'grant-tabs')).toHaveLength(0)
-  })
+      expect(statusCode).toBe(code)
+      expect(alertText($, `record-missing-${outcome}`)).toBe(message)
+      expect(textOf($, 'record-missing-title')).toBe('woodland-creation')
+      expect(part($, 'grant-version')).toHaveLength(0)
+      expect(part($, 'grant-tabs')).toHaveLength(0)
+    }
+  )
 
   test('goes back to, and sits under, its own list when GAS could not answer and no list opened it', async () => {
     vi.mocked(getGrantPageUseCase).mockResolvedValue({
@@ -1616,10 +1650,10 @@ describe('the grant page', () => {
 
     const { $ } = await viewPage(grantPath)
 
-    expect(part($, 'grant-back').attr('href')).toBe('/dev-ops/grants')
-    expect(textOf($, 'grant-back')).toBe('Back to Grants')
+    expect(part($, 'record-missing-back').attr('href')).toBe('/dev-ops/grants')
+    expect(textOf($, 'record-missing-back')).toBe('Back to Grants')
     expect(
-      $('[data-testid="do-nav"] [aria-current="page"]').text().trim()
+      $('[data-testid="shell-nav"] [aria-current="page"]').text().trim()
     ).toBe('Grants')
   })
 
@@ -3779,9 +3813,11 @@ describe('the grant Entitlements tab', () => {
 
     const { $ } = await viewPage(entitlementsPath)
 
-    expect(textOf($, 'grant-error')).toBe(
-      'This grant could not be loaded from GAS.'
-    )
+    expect(
+      flatten(
+        part($, 'record-missing-unavailable').find('.gpa-alert-title').text()
+      )
+    ).toBe('This grant could not be loaded from GAS.')
   })
 })
 
@@ -3860,11 +3896,13 @@ describe('the bare grant URL', () => {
       '/dev-ops/grants/woodland-creation'
     )
 
-    expect(statusCode).toBe(statusCodes.ok)
-    expect(textOf($, 'grant-error')).toBe(
-      'This grant could not be loaded: GAS timed out waiting for it. Refresh to try again.'
-    )
-    expect(textOf($, 'grant-title')).toBe('Grant woodland-creation')
+    expect(statusCode).toBe(statusCodes.gatewayTimeout)
+    expect(
+      flatten(
+        part($, 'record-missing-timed-out').find('.gpa-alert-title').text()
+      )
+    ).toBe('This grant could not be loaded: GAS timed out waiting for it.')
+    expect(textOf($, 'record-missing-title')).toBe('woodland-creation')
   })
 
   test('refuses a tab the grant page has not got', async () => {

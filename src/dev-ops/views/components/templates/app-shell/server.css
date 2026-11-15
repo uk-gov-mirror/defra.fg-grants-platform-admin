@@ -1,0 +1,7 @@
+html:has(.gpa-shell-frame),
+html:has(.gpa-shell-frame) > body {
+  height: 100%;
+}
+.gpa-main:focus {
+  outline-color: transparent;
+}

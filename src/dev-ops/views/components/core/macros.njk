@@ -1,0 +1,17 @@
+{%- from "../atoms/icon/macro.njk" import Icon -%}
+{% macro attrs(p) -%}
+  {%- if p.testId %} data-testid="{{ p.testId }}"{% endif -%}
+  {%- for name, value in p.attributes -%}
+    {%- if value === true %} {{ name }}{% elif value !== false and value !== null and value is defined %} {{ name }}="{{ value }}"{% endif -%}
+  {%- endfor -%}
+{%- endmacro %}
+
+{% macro cls(base, p) -%}{{ base }}{% if p.classes %} {{ p.classes }}{% endif %}{%- endmacro %}
+
+{% macro body(p, from) -%}
+  {%- if from -%}{{ from() }}{%- elif p.html -%}{{ p.html | safe }}{%- else -%}{{ p.text }}{%- endif -%}
+{%- endmacro %}
+
+{% macro vh(text) %}<span class="gpa-vh">{{ text }}</span>{% endmacro %}{% macro describedBy(p) -%}{{ ([p.id ~ '-hint' if p.hint, p.id ~ '-err' if p.error, p.id ~ '-warn' if (p.warning and not p.error), p.extra] | select | join(' ')) }}{%- endmacro %}{% macro iconTemplate(p) -%}
+  <template data-gpa-icons>{% for n in p.names %}{{ Icon({ name: n, size: 'md' }) }}{% endfor %}</template>
+{%- endmacro %}

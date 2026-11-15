@@ -18,7 +18,7 @@ describe('toNavSections', () => {
     id: 'clients-gas',
     ids: ['clients-gas'],
     label: 'Access tokens',
-    srPrefix: 'GAS',
+    perService: true,
     href: '/dev-ops/clients/gas',
     icon: 'key'
   }
@@ -26,7 +26,7 @@ describe('toNavSections', () => {
     id: 'clients-cw',
     ids: ['clients-cw'],
     label: 'Access tokens',
-    srPrefix: 'CW',
+    perService: true,
     href: '/dev-ops/clients/cw',
     icon: 'key'
   }
@@ -46,6 +46,7 @@ describe('toNavSections', () => {
             id: 'gas.outbox',
             ids: ['gas.outbox'],
             label: 'Outbox',
+            perService: true,
             href: '/dev-ops/events/gas/outbox',
             icon: 'activity'
           },
@@ -53,6 +54,7 @@ describe('toNavSections', () => {
             id: 'gas.applications',
             ids: ['gas.applications'],
             label: 'Applications',
+            perService: false,
             href: '/dev-ops/applications',
             icon: 'file-text'
           },
@@ -60,6 +62,7 @@ describe('toNavSections', () => {
             id: 'gas.grants',
             ids: ['gas.grants'],
             label: 'Grants',
+            perService: false,
             href: '/dev-ops/grants',
             icon: 'scroll-text'
           },
@@ -73,6 +76,7 @@ describe('toNavSections', () => {
             id: 'cw.cases',
             ids: ['cw.cases'],
             label: 'Cases',
+            perService: false,
             href: '/dev-ops/cases',
             icon: 'folder'
           },
@@ -80,6 +84,7 @@ describe('toNavSections', () => {
             id: 'cw.workflows',
             ids: ['cw.workflows'],
             label: 'Workflows',
+            perService: false,
             href: '/dev-ops/workflows',
             icon: 'workflow'
           },
@@ -105,6 +110,7 @@ describe('toNavSections', () => {
         id: 'gas.outbox',
         ids: ['gas.outbox', 'gas.inbox'],
         label: 'Events',
+        perService: true,
         href: '/dev-ops/events/gas/outbox',
         icon: 'activity'
       },
@@ -112,6 +118,7 @@ describe('toNavSections', () => {
         id: 'gas.applications',
         ids: ['gas.applications'],
         label: 'Applications',
+        perService: false,
         href: '/dev-ops/applications',
         icon: 'file-text'
       },
@@ -120,6 +127,25 @@ describe('toNavSections', () => {
     expect(sections[1].items.map(({ ids }) => ids)).toEqual([
       ['cw.outbox', 'cw.inbox'],
       ['clients-cw']
+    ])
+  })
+
+  test('marks each service’s event lists as its own, whether or not they have a page, and nothing else from the catalogue', () => {
+    const sections = toNavSections({
+      buckets: [outboxBucket, cwOutbox, applicationsBucket],
+      sourceErrors: []
+    })
+
+    expect(
+      sections.flatMap(({ items }) =>
+        items.map(({ id, label, perService }) => [id, label, perService])
+      )
+    ).toEqual([
+      ['gas.outbox', 'Outbox', true],
+      ['gas.applications', 'Applications', false],
+      ['clients-gas', 'Access tokens', true],
+      ['cw.outbox', 'Outbox', true],
+      ['clients-cw', 'Access tokens', true]
     ])
   })
 

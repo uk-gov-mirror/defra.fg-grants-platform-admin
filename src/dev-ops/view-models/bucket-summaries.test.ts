@@ -1,3 +1,4 @@
+import { ukZone } from './zoned-clock.ts'
 import type {
   SummaryRead,
   SummaryResult
@@ -50,6 +51,7 @@ const sections = (read: SummaryRead = answered(), filters = {}) =>
     summarisedBucket,
     [{ summary: errorsSummary, read }],
     filters,
+    ukZone,
     now
   )
 

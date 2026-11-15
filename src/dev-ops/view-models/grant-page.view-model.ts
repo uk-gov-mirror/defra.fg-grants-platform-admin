@@ -5,6 +5,7 @@ import type {
   GrantVersionRef
 } from '../use-cases/get-grant-page.use-case.ts'
 import type { Catalogue } from '../use-cases/get-catalogue.use-case.ts'
+import type { Zone } from './zoned-clock.ts'
 import { grantTabs, offersTab } from '../use-cases/grant-tabs.ts'
 import type { GrantTabId } from '../use-cases/grant-tabs.ts'
 import { toAdminHref } from '../../grant-ops/view-models/allow-list-page.view-model.ts'
@@ -128,7 +129,8 @@ const toFacts = (
   header: GrantVersionHeader,
   overview: GrantVersionOverview,
   catalogue: Catalogue | null,
-  canAdministerGrants: boolean
+  canAdministerGrants: boolean,
+  zone: Zone
 ): Fact[][] => [
   [
     toTextFact('description', 'Name', overview.description),
@@ -136,9 +138,10 @@ const toFacts = (
       'start-date',
       'Start date (metadata)',
       overview.startDate,
-      'not used by GAS'
+      'not used by GAS',
+      zone
     ),
-    toDateFact('received', 'Received', header.receivedAt),
+    toDateFact('received', 'Received', header.receivedAt, zone),
     toMonoFact('admin-role', 'Admin role', overview.adminRole),
     {
       id: 'definitions',
@@ -293,9 +296,12 @@ const toPhases = (
 const toOverviewFacts = (
   { header, overview }: GrantVersionPage,
   catalogue: Catalogue | null,
-  canAdministerGrants: boolean
+  canAdministerGrants: boolean,
+  zone: Zone
 ): Fact[][] | null =>
-  overview ? toFacts(header, overview, catalogue, canAdministerGrants) : null
+  overview
+    ? toFacts(header, overview, catalogue, canAdministerGrants, zone)
+    : null
 
 export const toGrantPage = (
   page: GrantVersionPage,
@@ -305,13 +311,15 @@ export const toGrantPage = (
     notice,
     query,
     catalogue,
-    canAdministerGrants
+    canAdministerGrants,
+    zone
   }: {
     notice?: DefinitionFetchFlash
     query: GrantPageQuery
     catalogue: Catalogue | null
     /** The session holds the role every Grant Ops page needs. */
     canAdministerGrants: boolean
+    zone: Zone
   },
   now: Date = new Date()
 ): GrantPageModel => {
@@ -324,16 +332,17 @@ export const toGrantPage = (
     trail: [],
     tabs: toTabs(toOfferedGrantType(page.header), href, tab, from),
     tab,
-    facts: toOverviewFacts(page, catalogue, canAdministerGrants),
+    facts: toOverviewFacts(page, catalogue, canAdministerGrants, zone),
     series: null,
     seriesDetailed: false,
-    events: toEvents(page.events, now, toTabHref(href, 'events', from)),
+    events: toEvents(page.events, now, zone, toTabHref(href, 'events', from)),
     ...toTabSection(page.definition, page.sectionErrors, tab, read),
     unavailableSources: toUnavailableSources(page.sourceErrors),
     ...toVersionShell(grantType, page.header, tab, from, {
       notice,
       catalogue,
-      now
+      now,
+      zone
     }),
     notStored: toNotStored(page.header, tab, grantTabs[tab].file),
     phases: toPhases(page, tab, query, href, from),

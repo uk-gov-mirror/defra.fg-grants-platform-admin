@@ -1,0 +1,13 @@
+.gpa-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-stack-xl);
+  width: 100%;
+  min-width: 0;
+}
+.gpa-page > .gpa-pageheader {
+  margin-bottom: var(--gap-stack-md);
+}
+.gpa-page-narrow {
+  max-width: var(--size-measure-md);
+}

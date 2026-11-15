@@ -1,0 +1,9 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+{%- from "../../atoms/link/macro.njk" import Link -%}
+<nav class="{{ cls('gpa-breadcrumbs', p) }}" aria-label="{{ p.label or 'Breadcrumbs' }}"{{ attrs(p) }}><ol>
+    {%- for it in p.items -%}
+      <li>{% if loop.last %}<span aria-current="page">{{ it.text }}</span>{% elif it.href %}{{ Link({ text: it.text, href: it.href, subtle: true, size: 'sm' }) }}{% else %}<a class="gpa-link gpa-link-subtle gpa-link-sm"><span>{{ it.text }}</span></a>{% endif %}
+        {%- if not loop.last %}{{ Icon({ name: 'chevron-right', size: 'xs', classes: 'gpa-breadcrumbs-sep gpa-dir-icon' }) }}{% endif %}</li>
+    {%- endfor -%}
+  </ol></nav>

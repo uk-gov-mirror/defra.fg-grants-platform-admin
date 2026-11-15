@@ -231,9 +231,6 @@
   </tr>
 {% endmacro %}
 
-{# An open drawer or dialog takes the page's scrollbar gutter so it reaches the window's edge, and the page keeps its width as padding; both stay until the close transition is over. #}
-{% block htmlClass %} [transition:background-color_.3s_ease-out,scrollbar-gutter_0s_.5s_allow-discrete,overflow_0s_.5s_allow-discrete] [&>body]:[transition:padding-right_0s_.5s] has-[#token-drawer-toggle:checked,dialog[open]]:[scrollbar-gutter:auto] has-[#token-drawer-toggle:checked,dialog[open]]:transition-none has-[#token-drawer-toggle:checked,dialog[open]]:[&>body]:pr-(--page-gutter) has-[#token-drawer-toggle:checked,dialog[open]]:[&>body]:transition-none{% endblock %}
-
 {% block content %}
   <do-token-drawer class="drawer drawer-end flex-1"{% if openTokenId %} data-open-token="{{ openTokenId }}"{% endif %} data-testid="token-drawer">
     <input class="drawer-toggle" type="checkbox" id="token-drawer-toggle" tabindex="-1" aria-hidden="true" data-drawer-toggle>

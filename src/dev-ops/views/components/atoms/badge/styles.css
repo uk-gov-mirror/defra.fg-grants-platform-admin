@@ -1,0 +1,42 @@
+.gpa-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-inline-xs);
+  height: var(--size-tag-md);
+  padding: 0 var(--inset-field-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  border: var(--border-width-hairline) solid transparent;
+  letter-spacing: var(--tracking-sm);
+}
+.gpa-badge-sm {
+  height: var(--size-tag-sm);
+  padding: 0 var(--inset-tag);
+}
+.gpa-badge-neutral {
+  background: var(--bg-hover);
+  color: var(--fg-muted);
+}
+.gpa-badge-success {
+  background: var(--bg-success-subtle);
+  color: var(--fg-success);
+}
+.gpa-badge-warning {
+  background: var(--bg-warning-subtle);
+  color: var(--fg-warning);
+}
+.gpa-badge-danger {
+  background: var(--bg-danger-subtle);
+  color: var(--fg-danger);
+}
+.gpa-badge-info {
+  background: var(--bg-info-subtle);
+  color: var(--fg-info);
+}
+.gpa-badge-outline {
+  background: transparent;
+  border-color: var(--border-default);
+}

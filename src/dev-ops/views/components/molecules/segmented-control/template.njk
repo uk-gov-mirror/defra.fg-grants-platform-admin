@@ -1,0 +1,11 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+{%- set cur = p.value or ((p.options[0].value if p.options[0].value is defined else p.options[0]) if p.options | length else null) -%}
+  <gpa-segmented{% if p.name %} data-name="{{ p.name }}"{% endif %}><div class="{{ cls('gpa-segmented' ~ (' gpa-segmented-sm' if p.size == 'sm' else ''), p) }}" role="radiogroup"{% if p.label %} aria-label="{{ p.label }}"{% endif %}{{ attrs(p) }}>
+    {%- for o in p.options -%}
+      {%- set v = o.value if o.value is defined else o -%}
+      {%- set inner %}{% if o.icon %}{{ Icon({ name: o.icon, size: 'sm' }) }}{% endif %}{{ o.text or o.label or o }}{% if o.count is defined and o.count !== null %}<span class="gpa-count">{{ o.count }}</span>{% endif %}{% endset -%}
+      {%- if o.href -%}<a href="{{ o.href }}" role="radio" aria-checked="{{ 'true' if v == cur else 'false' }}">{{ inner | safe }}</a>
+      {%- else -%}<button type="{{ 'submit' if p.name else 'button' }}" role="radio" aria-checked="{{ 'true' if v == cur else 'false' }}" data-value="{{ v }}"{% if p.name %} name="{{ p.name }}" value="{{ v }}"{% endif %}{% if p.form %} form="{{ p.form }}"{% endif %}>{{ inner | safe }}</button>{%- endif -%}
+    {%- endfor -%}
+  </div></gpa-segmented>

@@ -24,6 +24,7 @@ import {
   toTextFact
 } from './record-page.view-model.ts'
 import type { Fact, RecordPageModel } from './record-page.view-model.ts'
+import type { Zone } from './zoned-clock.ts'
 import { toFileLines } from './version-banner.ts'
 import { toNotStored, toVersionShell } from './version-page.ts'
 import type { NotStored, VersionShell } from './version-page.ts'
@@ -83,11 +84,12 @@ const toRolesFact = (roles: WorkflowVersionOverview['requiredRoles']): Fact => {
 const toFacts = (
   header: WorkflowVersionHeader,
   overview: WorkflowVersionOverview,
-  catalogue: Catalogue | null
+  catalogue: Catalogue | null,
+  zone: Zone
 ): Fact[][] => [
   [
     toTextFact('scheme-name', 'Scheme name', overview.schemeName),
-    toDateFact('received', 'Received', header.receivedAt),
+    toDateFact('received', 'Received', header.receivedAt, zone),
     toRolesFact(overview.requiredRoles),
     {
       id: 'definition',
@@ -171,8 +173,10 @@ const toPhasesTab = (
 
 const toOverviewFacts = (
   { header, overview }: WorkflowPage,
-  catalogue: Catalogue | null
-): Fact[][] | null => (overview ? toFacts(header, overview, catalogue) : null)
+  catalogue: Catalogue | null,
+  zone: Zone
+): Fact[][] | null =>
+  overview ? toFacts(header, overview, catalogue, zone) : null
 
 export const toWorkflowPage = (
   page: WorkflowPage,
@@ -181,11 +185,13 @@ export const toWorkflowPage = (
   {
     notice,
     query,
-    catalogue
+    catalogue,
+    zone
   }: {
     notice?: DefinitionFetchFlash
     query: WorkflowPageQuery
     catalogue: Catalogue | null
+    zone: Zone
   },
   now: Date = new Date()
 ): WorkflowPageModel => {
@@ -198,16 +204,17 @@ export const toWorkflowPage = (
     trail: [],
     tabs: toTabs(workflowType, href, tab, from),
     tab,
-    facts: toOverviewFacts(page, catalogue),
+    facts: toOverviewFacts(page, catalogue, zone),
     series: null,
     seriesDetailed: false,
-    events: toEvents(page.events, now, toTabHref(href, 'events', from)),
+    events: toEvents(page.events, now, zone, toTabHref(href, 'events', from)),
     ...toTabSection(page.raw, page.sectionErrors, tab, read),
     unavailableSources: toUnavailableSources(page.sourceErrors),
     ...toVersionShell(workflowType, page.header, tab, from, {
       notice,
       catalogue,
-      now
+      now,
+      zone
     }),
     notStored: toNotStored(page.header, tab, workflowTabs[tab].file),
     phases: tab === 'phases' ? toPhasesTab(page, from, query) : null,

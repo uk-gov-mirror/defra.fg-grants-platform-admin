@@ -14,6 +14,7 @@ import {
   toSafeFrom
 } from '../view-models/event-page.view-model.ts'
 import { fromMax } from '../view-models/record-filters.ts'
+import { shellQuery, timesOf } from '../view-models/times.ts'
 
 export const viewEventRoute: ServerRoute = {
   method: 'GET',
@@ -27,7 +28,8 @@ export const viewEventRoute: ServerRoute = {
         // Bounded because it is echoed into every link on the page.
         back: Joi.string().allow('').max(fromMax),
         confirm: Joi.string(),
-        edit: Joi.string()
+        edit: Joi.string(),
+        ...shellQuery
       })
     }
   },
@@ -53,7 +55,16 @@ export const viewEventRoute: ServerRoute = {
 
     return h.view('event', {
       pageTitle: 'Event',
-      ...toEventPage(result, key, query, notice, form, undefined, bucket)
+      ...toEventPage(
+        result,
+        key,
+        query,
+        timesOf(request).zone,
+        notice,
+        form,
+        undefined,
+        bucket
+      )
     })
   }
 }

@@ -46,7 +46,7 @@
   </div>
 {% endmacro %}
 
-{% block pageTitle %}{% if eventName.name %}{{ eventName.name }} {{ (eventId.slice(0, 8) ~ "…" ~ eventId.slice(-4)) if eventId | length > 16 else eventId }}{% else %}{{ pageTitle }}{% endif %} | {{ serviceName }}{% endblock %}
+{% block pageTitle %}{% if eventName.name %}{{ eventName.name }} {{ (eventId.slice(0, 8) ~ "…" ~ eventId.slice(-4)) if eventId | length > 16 else eventId }}{% else %}{{ pageTitle }}{% endif %} – {{ productName }}{% endblock %}
 
 {% block content %}
   {{ back({ href: backHref or homeHref }) }}

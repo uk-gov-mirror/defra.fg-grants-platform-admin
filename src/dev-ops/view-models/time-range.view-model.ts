@@ -8,7 +8,7 @@ import {
   toValidDate,
   toZonedInput
 } from './event-formats.ts'
-import type { ZonedEdge } from './event-formats.ts'
+import type { Zone, ZonedEdge } from './event-formats.ts'
 import { present, toFields, toFilterHref } from './list-filters.ts'
 import type { FilterField, FilterKeys } from './list-filters.ts'
 
@@ -96,7 +96,8 @@ export const timeRangeFilters = {
  */
 const toInstant = (
   value: string | undefined,
-  edge: ZonedEdge
+  edge: ZonedEdge,
+  zone: Zone
 ): string | undefined => {
   if (!value) {
     return undefined
@@ -106,16 +107,16 @@ const toInstant = (
 
   return match === null || !isRealDatetime(value, match[1])
     ? value
-    : fromZonedInput(toWallClock(value, match[1]), edge).toISOString()
+    : fromZonedInput(toWallClock(value, match[1]), edge, zone).toISOString()
 }
 
 /** The window as instants, whether it came from a preset link or the Custom boxes. */
-export const toRangeInstants = ({
-  from,
-  to
-}: TimeRangeQuery): Pick<TimeRangeQuery, 'from' | 'to'> => ({
-  ...present('from', toInstant(from, 'earliest')),
-  ...present('to', toInstant(to, 'latest'))
+export const toRangeInstants = (
+  { from, to }: TimeRangeQuery,
+  zone: Zone
+): Pick<TimeRangeQuery, 'from' | 'to'> => ({
+  ...present('from', toInstant(from, 'earliest', zone)),
+  ...present('to', toInstant(to, 'latest', zone))
 })
 
 /** Every filter the list holds but the window, which the menu sets itself. */
@@ -134,14 +135,14 @@ const toHref = <Q extends TimeRangeQuery>(
  * be the ones the page displays. Writing the UTC wall clock into a control the
  * browser reads as local was an hour out at both edges of a range under BST.
  */
-const toRangeInput = (value: string | undefined): string => {
+const toRangeInput = (value: string | undefined, zone: Zone): string => {
   if (!value) {
     return ''
   }
 
   const date = toValidDate(value)
 
-  return date === null ? value : toZonedInput(date)
+  return date === null ? value : toZonedInput(date, zone)
 }
 
 const timeRangePresets: { key: string; minutes: number }[] = [
@@ -181,22 +182,28 @@ const toPresets = <Q extends TimeRangeQuery>(
   }))
 }
 
-const toAbsoluteMinute = (value: string): string => {
+const toAbsoluteMinute = (value: string, zone: Zone): string => {
   const date = toValidDate(value)
 
   return date === null
     ? value
-    : toZonedInput(date).slice(0, 'yyyy-mm-ddThh:mm'.length).replace('T', ' ')
+    : toZonedInput(date, zone)
+        .slice(0, 'yyyy-mm-ddThh:mm'.length)
+        .replace('T', ' ')
 }
 
-const toAbsoluteRangeLabel = (from?: string, to?: string): string => {
-  const start = from ? toAbsoluteMinute(from) : 'earliest'
-  const end = to ? toAbsoluteMinute(to) : 'now'
+const toAbsoluteRangeLabel = (
+  zone: Zone,
+  from?: string,
+  to?: string
+): string => {
+  const start = from ? toAbsoluteMinute(from, zone) : 'earliest'
+  const end = to ? toAbsoluteMinute(to, zone) : 'now'
 
   return `${start} – ${end}`
 }
 
-const toTimeRangeLabel = (query: TimeRangeQuery): string => {
+const toTimeRangeLabel = (query: TimeRangeQuery, zone: Zone): string => {
   const { from, to } = query
 
   if (!from && !to) {
@@ -205,15 +212,16 @@ const toTimeRangeLabel = (query: TimeRangeQuery): string => {
 
   const preset = toActivePreset(query)
 
-  return preset ? presetLabel(preset.key) : toAbsoluteRangeLabel(from, to)
+  return preset ? presetLabel(preset.key) : toAbsoluteRangeLabel(zone, from, to)
 }
 
 export const toTimeRange = <Q extends TimeRangeQuery>(
   list: TimeRangeList<Q>,
   query: Q,
-  now: Date
+  now: Date,
+  zone: Zone
 ): TimeRange => {
-  const label = toTimeRangeLabel(query)
+  const label = toTimeRangeLabel(query, zone)
 
   return {
     label,
@@ -229,7 +237,7 @@ export const toTimeRange = <Q extends TimeRangeQuery>(
     anyTimeActive: !query.from && !query.to,
     action: list.basePath,
     hiddenFields: toFields(query, otherKeys(list)),
-    fromInput: toRangeInput(query.from),
-    toInput: toRangeInput(query.to)
+    fromInput: toRangeInput(query.from, zone),
+    toInput: toRangeInput(query.to, zone)
   }
 }

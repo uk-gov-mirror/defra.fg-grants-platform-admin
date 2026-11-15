@@ -14,7 +14,8 @@ import {
   toPreciseInstant,
   toStoredTimeCell
 } from './event-formats.ts'
-import type { TimeCell } from './event-formats.ts'
+import type { TimeCell, Zone } from './event-formats.ts'
+import { formatIn } from './zoned-clock.ts'
 import { backKey } from './bucket-links.ts'
 import { toEventRow, toUnavailableSources } from './event-row.ts'
 import type { EventRow } from './event-row.ts'
@@ -201,24 +202,27 @@ export const toSizeFact = (
       }
 
 /** Anything but an ISO instant is shown as stored, so a malformed date is never read as another. */
-const toDateText = (value: string) =>
+const toDateText = (value: string, zone: Zone) =>
   isIsoInstant(value)
-    ? { text: toPreciseInstant(new Date(value)), instant: toAbsolute(value) }
+    ? {
+        text: toPreciseInstant(new Date(value), zone),
+        instant: toAbsolute(value)
+      }
     : { text: value, instant: null }
 
-const dayFormat = new Intl.DateTimeFormat('en-GB', {
+const dayOptions: Intl.DateTimeFormatOptions = {
   day: 'numeric',
   month: 'short',
-  year: 'numeric',
-  timeZone: 'Europe/London'
-})
+  year: 'numeric'
+}
 
 /** "1 Jan 2100", with a muted note after it; anything but an ISO instant is shown as stored. */
 export const toDayFact = (
   id: string,
   label: string,
   value: StoredDate,
-  note: string
+  note: string,
+  zone: Zone
 ): Fact => {
   if (value === null) {
     return toNoneFact(id, label)
@@ -228,7 +232,9 @@ export const toDayFact = (
     id,
     label,
     kind: 'text',
-    text: isIsoInstant(value) ? dayFormat.format(new Date(value)) : value,
+    text: isIsoInstant(value)
+      ? formatIn(zone, 'en-GB', dayOptions).format(new Date(value))
+      : value,
     note
   }
 }
@@ -236,11 +242,12 @@ export const toDayFact = (
 export const toDateFact = (
   id: string,
   label: string,
-  value: StoredDate
+  value: StoredDate,
+  zone: Zone
 ): Fact =>
   value === null
     ? toNoneFact(id, label)
-    : { id, label, kind: 'date', ...toDateText(value) }
+    : { id, label, kind: 'date', ...toDateText(value, zone) }
 
 export const toTextFact = (
   id: string,
@@ -360,25 +367,26 @@ export const toSeriesData = <Member>(
 }
 
 const toSeriesRow =
-  (ref: string, latestRef: string | null, now: Date) =>
+  (ref: string, latestRef: string | null, now: Date, zone: Zone) =>
   (member: SeriesData['members'][number]): SeriesRow => ({
     ref: member.ref,
     href: member.ref === ref ? null : member.href,
     replaced: latestRef !== null && member.ref !== latestRef,
     statusLabel: toStatusLabel(member.position),
     positionLabel: toPositionLabel(member.position),
-    created: toStoredTimeCell(member.createdAt, now),
-    closed: toStoredTimeCell(member.closedAt, now)
+    created: toStoredTimeCell(member.createdAt, now, zone),
+    closed: toStoredTimeCell(member.closedAt, now, zone)
   })
 
 const minSeriesLength = 2
 
 const toSeries = (
   { ref, series }: RecordPageData,
-  now: Date
+  now: Date,
+  zone: Zone
 ): SeriesRow[] | null =>
   series && series.members.length >= minSeriesLength
-    ? series.members.map(toSeriesRow(ref, series.latestRef, now))
+    ? series.members.map(toSeriesRow(ref, series.latestRef, now, zone))
     : null
 
 const isDetailed = ({ series }: RecordPageData): boolean =>
@@ -387,10 +395,11 @@ const isDetailed = ({ series }: RecordPageData): boolean =>
 export const toEvents = (
   events: RecordEvents | null | undefined,
   now: Date,
+  zone: Zone,
   from: string
 ): EventsTab | null =>
   events
-    ? { rows: events.rows.map(toEventRow(now, from)), more: events.more }
+    ? { rows: events.rows.map(toEventRow(now, zone, from)), more: events.more }
     : null
 
 /** GAS's own words for a document it will not show; any other Raw failure is an error like any tab's. */
@@ -439,6 +448,7 @@ export const toRecordPage = (
   record: RecordType,
   data: RecordPageData,
   tab: RecordTab,
+  zone: Zone,
   from: string = '',
   now: Date = new Date()
 ): RecordPageModel => ({
@@ -450,9 +460,14 @@ export const toRecordPage = (
   tabs: toTabs(record, data.href, tab, from),
   tab,
   facts: data.facts,
-  series: toSeries(data, now),
+  series: toSeries(data, now, zone),
   seriesDetailed: isDetailed(data),
-  events: toEvents(data.events, now, toTabHref(data.href, 'events', from)),
+  events: toEvents(
+    data.events,
+    now,
+    zone,
+    toTabHref(data.href, 'events', from)
+  ),
   ...toTabSection(data.raw, data.sectionErrors, tab, tab),
   unavailableSources: toUnavailableSources(data.sourceErrors)
 })

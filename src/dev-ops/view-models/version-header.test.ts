@@ -1,3 +1,4 @@
+import { ukZone } from './zoned-clock.ts'
 import type { VersionSummary } from '../repositories/config-versions.ts'
 import type { GrantVersionHeader } from '../use-cases/get-grant-page.use-case.ts'
 import { catalogue } from '../use-cases/test-fixtures.ts'
@@ -37,7 +38,8 @@ describe('toVersionHeader', () => {
     ['draft', 'Draft', 'neutral']
   ] as const)('shows a %s version as %s', (status, label, role) => {
     expect(
-      toVersionHeader(grantType, header({ status }), 'overview', '').status
+      toVersionHeader(grantType, header({ status }), 'overview', '', ukZone)
+        .status
     ).toEqual({ status: label, role })
   })
 
@@ -48,6 +50,7 @@ describe('toVersionHeader', () => {
         header({ status: 'draft' }),
         'overview',
         '',
+        ukZone,
         catalogue
       ).status
     ).toEqual({
@@ -63,6 +66,7 @@ describe('toVersionHeader', () => {
       header(),
       'overview',
       '',
+      ukZone,
       null,
       new Date('2026-10-22T09:00:00.000Z')
     )
@@ -105,6 +109,7 @@ describe('toVersionHeader', () => {
       header(),
       'overview',
       '',
+      ukZone,
       null,
       new Date('2026-10-15T12:00:00.000Z')
     )
@@ -119,7 +124,8 @@ describe('toVersionHeader', () => {
         versions: [{ version: '1.2.0', status: 'active', receivedAt: 'soon' }]
       }),
       'overview',
-      ''
+      '',
+      ukZone
     )
 
     expect(switcher.items[0].aside).toBe('soon')
@@ -127,7 +133,13 @@ describe('toVersionHeader', () => {
 
   test('keeps the tab and the list it was opened from on every version', () => {
     const from = '/dev-ops/grants?status=draft'
-    const { switcher } = toVersionHeader(grantType, header(), 'raw', from)
+    const { switcher } = toVersionHeader(
+      grantType,
+      header(),
+      'raw',
+      from,
+      ukZone
+    )
 
     expect(switcher.items.map(({ href }) => href)).toEqual([
       '/dev-ops/grants/woodland-creation/2.0.0?tab=raw&back=%2Fdev-ops%2Fgrants%3Fstatus%3Ddraft',
@@ -153,6 +165,7 @@ describe('toVersionHeader', () => {
       header({ versions: [summary] }),
       'overview',
       '',
+      ukZone,
       catalogue
     ).switcher.items[0]
 
@@ -222,7 +235,8 @@ describe('toVersionHeader', () => {
         grantType,
         header({ versions: [withState('fetched', true)] }),
         'overview',
-        ''
+        '',
+        ukZone
       ).switcher.items[0].status
     ).toEqual({ status: 'Active', role: 'success' })
   })
@@ -238,7 +252,8 @@ describe('toVersionHeader', () => {
           }
         }),
         'overview',
-        ''
+        '',
+        ukZone
       ).banner
     ).toBeNull()
   })
@@ -251,7 +266,8 @@ describe('toVersionHeader', () => {
         grantType,
         header({ files: { grant: notStored } }),
         'raw',
-        from
+        from,
+        ukZone
       ).banner?.fetch
     ).toEqual({
       action: '/dev-ops/grants/woodland-creation/1.2.0/fetch',
@@ -267,7 +283,8 @@ describe('toVersionHeader', () => {
         grantType,
         header({ files: { grant: { stored: true, fetchStatus: 'pending' } } }),
         'overview',
-        ''
+        '',
+        ukZone
       ).banner
     ).toMatchObject({ tone: 'info', fetch: null })
   })
@@ -278,7 +295,8 @@ describe('toVersionHeader', () => {
         workflowType,
         { ...header(), files: { workflow: notStored } },
         'raw',
-        ''
+        '',
+        ukZone
       ).banner?.fetch
     ).toMatchObject({
       action: '/dev-ops/workflows/woodland-creation/1.2.0/fetch',
@@ -299,7 +317,8 @@ describe('toVersionHeader', () => {
         ]
       }),
       'phases',
-      ''
+      '',
+      ukZone
     ).banner
 
     expect(banner?.lines.at(-1)).toEqual([
@@ -323,7 +342,8 @@ describe('toVersionHeader', () => {
         ]
       }),
       'overview',
-      ''
+      '',
+      ukZone
     ).banner
 
     expect(banner?.lines.at(-1)).toMatchObject([
@@ -345,7 +365,8 @@ describe('toVersionHeader', () => {
         ]
       },
       'raw',
-      ''
+      '',
+      ukZone
     ).banner
 
     expect(banner?.lines.at(-1)).toEqual([
@@ -369,7 +390,8 @@ describe('toVersionHeader', () => {
           ]
         }),
         'overview',
-        ''
+        '',
+        ukZone
       ).banner?.lines ?? []
 
     expect(lines({ grant: notStored })).toHaveLength(1)

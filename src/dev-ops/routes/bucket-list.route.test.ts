@@ -184,7 +184,10 @@ const cookieOf = (setCookie: string | string[] | undefined): string =>
     .join('; ')
 
 /** The session cookie a request carries, so a search posted earlier is read back. */
-const withCookie = (cookie: string) => (cookie ? { cookie } : {})
+// UK time, the setting these expectations are written in.
+const withCookie = (cookie: string) => ({
+  cookie: [cookie, 'dev-ops-times=uk'].filter(Boolean).join('; ')
+})
 
 const viewPage = async (url = path, cookie = '') => {
   const { result, statusCode, headers } = await server.inject({
@@ -280,9 +283,11 @@ describe('the paths over the lists', () => {
 
       const { statusCode, headers, $ } = await viewPage('/dev-ops')
 
-      expect(statusCode).toBe(statusCodes.ok)
+      expect(statusCode).toBe(statusCodes.serviceUnavailable)
       expect(headers.location).toBeUndefined()
-      expect(textOf($, 'bucket-error')).toBe('Buckets could not be loaded.')
+      expect(part($, 'status-catalogue').find('h1').text()).toBe(
+        'Dev Ops couldn’t read its lists'
+      )
     }
   )
 
@@ -313,8 +318,8 @@ describe('the paths over the lists', () => {
 
     const { statusCode, $ } = await viewPage('/dev-ops/events')
 
-    expect(statusCode).toBe(statusCodes.ok)
-    expect(textOf($, 'bucket-error')).toBe('Buckets could not be loaded.')
+    expect(statusCode).toBe(statusCodes.serviceUnavailable)
+    expect(part($, 'status-catalogue')).toHaveLength(1)
     expect(part($, 'bucket-table')).toHaveLength(0)
   })
 
@@ -340,32 +345,32 @@ describe('the navigation', () => {
     const { $ } = await viewPage()
 
     expect(
-      part($, 'do-nav')
-        .find('.menu-title')
+      part($, 'shell-nav')
+        .find('[role="group"]')
         .toArray()
-        .map((title) => $(title).text())
-    ).toEqual(['GAS', 'CW'])
-    expect(part($, 'do-nav-gas.outbox').attr('href')).toBe(path)
-    expect(part($, 'do-nav-gas.outbox').text().trim()).toBe('Outbox')
+        .map((group) => $(group).attr('aria-label'))
+    ).toEqual(['Grant Application Service', 'Caseworking'])
+    expect(part($, 'shell-nav-gas.outbox').attr('href')).toBe(path)
+    expect(part($, 'shell-nav-gas.outbox').text().trim()).toBe(
+      'Grant Application Service Outbox'
+    )
     expect(part($, 'bucket-title').text()).toBe('GAS outbox')
-    expect(part($, 'do-nav-gas.applications').attr('href')).toBe(
+    expect(part($, 'shell-nav-gas.applications').attr('href')).toBe(
       applicationsPath
     )
+    expect(part($, 'shell-nav-gas.outbox').find('svg').attr('data-icon')).toBe(
+      'radio-tower'
+    )
     expect(
-      part($, 'do-nav-gas.outbox').find('[data-testid="do-icon-activity"]')
-    ).toHaveLength(1)
-    expect(
-      part($, 'do-nav-gas.applications').find(
-        '[data-testid="do-icon-file-text"]'
-      )
-    ).toHaveLength(1)
+      part($, 'shell-nav-gas.applications').find('svg').attr('data-icon')
+    ).toBe('file-text')
   })
 
   test('marks the bucket on show', async () => {
     const { $ } = await viewPage(applicationsPath)
 
     expect(
-      $('[data-testid="do-nav"] [aria-current="page"]').text().trim()
+      $('[data-testid="shell-nav"] [aria-current="page"]').text().trim()
     ).toBe('Applications')
   })
 })
@@ -401,8 +406,8 @@ describe('a bucket list', () => {
 
     const { statusCode, $ } = await viewPage()
 
-    expect(statusCode).toBe(statusCodes.ok)
-    expect(textOf($, 'bucket-error')).toBe('Buckets could not be loaded.')
+    expect(statusCode).toBe(statusCodes.serviceUnavailable)
+    expect(part($, 'status-catalogue')).toHaveLength(1)
     expect(queryBucketUseCase).not.toHaveBeenCalled()
   })
 
@@ -1410,25 +1415,25 @@ describe('the version lists', () => {
     const { $ } = await viewPage(grantsPath)
 
     expect(
-      part($, 'do-nav')
+      part($, 'shell-nav')
         .find('a')
         .toArray()
         .map((link) => $(link).attr('data-testid'))
     ).toEqual([
-      'do-nav-gas.outbox',
-      'do-nav-gas.applications',
-      'do-nav-gas.grants',
-      'do-nav-clients-gas',
-      'do-nav-cw.cases',
-      'do-nav-cw.workflows',
-      'do-nav-clients-cw'
+      'shell-nav-gas.outbox',
+      'shell-nav-gas.applications',
+      'shell-nav-gas.grants',
+      'shell-nav-clients-gas',
+      'shell-nav-cw.cases',
+      'shell-nav-cw.workflows',
+      'shell-nav-clients-cw'
     ])
+    expect(part($, 'shell-nav-gas.grants').find('svg').attr('data-icon')).toBe(
+      'landmark'
+    )
     expect(
-      part($, 'do-nav-gas.grants').find('[data-testid="do-icon-scroll-text"]')
-    ).toHaveLength(1)
-    expect(
-      part($, 'do-nav-cw.workflows').find('[data-testid="do-icon-workflow"]')
-    ).toHaveLength(1)
+      part($, 'shell-nav-cw.workflows').find('svg').attr('data-icon')
+    ).toBe('workflow')
   })
 
   test('head the table with grant, version, definition, status and received, at set widths, with Status hidden on phones', async () => {
@@ -1732,8 +1737,8 @@ describe('a list GAS would not or could not read', () => {
     expect(textOf($, 'bucket-error')).toBe('GAS outbox could not be loaded.')
     expect(part($, 'bucket-error').attr('role')).toBe('alert')
     expect(
-      part($, 'do-nav').find(
-        'a[data-testid^="do-nav-gas."], a[data-testid^="do-nav-cw."]'
+      part($, 'shell-nav').find(
+        'a[data-testid^="shell-nav-gas."], a[data-testid^="shell-nav-cw."]'
       )
     ).toHaveLength(catalogue.buckets.length)
   })
@@ -2076,13 +2081,13 @@ describe('the lists that share a page', () => {
     const inbox = await viewPage(inboxPath)
 
     for (const { $ } of [outbox, inbox]) {
-      const link = part($, 'do-nav-gas.outbox')
+      const link = part($, 'shell-nav-gas.outbox')
 
-      expect(link.text().trim()).toBe('Events')
+      expect(link.text().trim()).toBe('Grant Application Service Events')
       expect(link.attr('href')).toBe(path)
       expect(link.attr('aria-current')).toBe('page')
-      expect(part($, 'do-nav-gas.inbox')).toHaveLength(0)
-      expect(part($, 'do-nav').find('ul ul')).toHaveLength(0)
+      expect(part($, 'shell-nav-gas.inbox')).toHaveLength(0)
+      expect(part($, 'shell-nav').find('ul ul')).toHaveLength(0)
     }
   })
 

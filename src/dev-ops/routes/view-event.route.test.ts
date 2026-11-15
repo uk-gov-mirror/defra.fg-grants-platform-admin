@@ -90,10 +90,12 @@ const xss = '<script>alert(1)</script>'
 
 const flatten = (text: string) => text.replace(/\s+/g, ' ').trim()
 
-const viewPage = async (url = path) => {
+/** Read in UK time, the setting these expectations are written in. */
+const viewPage = async (url = path, times = 'uk') => {
   const { result, statusCode } = await server.inject({
     method: 'GET',
     url,
+    headers: { cookie: `dev-ops-times=${times}` },
     auth: { strategy: 'session', credentials }
   })
 
@@ -224,7 +226,9 @@ describe('viewEventRoute', () => {
   test('titles the tab with the event name and the ends of its id', async () => {
     const { $ } = await viewPage()
 
-    expect($('title').text()).toContain('CaseStatusUpdated 3f2c1a0e…6666 |')
+    expect($('title').text()).toContain(
+      'CaseStatusUpdated 3f2c1a0e…6666 – Grants Platform'
+    )
   })
 
   test('writes no UTC label anywhere on the page', async () => {
@@ -769,7 +773,7 @@ describe('viewEventRoute', () => {
 
     expect(payload.find('script')).toHaveLength(0)
     expect(payload.text()).toContain(xss)
-    expect($('script')).toHaveLength(1)
+    expect($('script:not([src^="/public/"])')).toHaveLength(0)
   })
 
   test('renders a payload key carrying markup as text', async () => {
@@ -778,7 +782,7 @@ describe('viewEventRoute', () => {
     const { $ } = await viewPage()
 
     expect($('[data-testid="event-payload"]').find('script')).toHaveLength(0)
-    expect($('script')).toHaveLength(1)
+    expect($('script:not([src^="/public/"])')).toHaveLength(0)
   })
 
   test('says so when the event carries no payload at all', async () => {
@@ -976,14 +980,14 @@ describe('viewEventRoute', () => {
     const { $ } = await viewPage(listedPath)
 
     expect(
-      $('[data-testid="do-nav"] [aria-current="page"]').text().trim()
-    ).toBe('Outbox')
+      $('[data-testid="shell-nav"] [aria-current="page"]').text().trim()
+    ).toBe('Grant Application Service Outbox')
   })
 
   test('marks no list in the navigation for an event opened cold', async () => {
     const { $ } = await viewPage()
 
-    expect($('[data-testid="do-nav"] [aria-current="page"]')).toHaveLength(0)
+    expect($('[data-testid="shell-nav"] [aria-current="page"]')).toHaveLength(0)
   })
 
   test('shows no banner on a page nothing redirected to', async () => {
@@ -1009,8 +1013,8 @@ describe('viewEventRoute', () => {
     expect(statusCode).toBe(statusCodes.ok)
     expect($('[data-testid="event-not-found"]').text()).toBe('Event not found')
     expect(
-      $('[data-testid="do-nav"] [aria-current="page"]').text().trim()
-    ).toBe('Outbox')
+      $('[data-testid="shell-nav"] [aria-current="page"]').text().trim()
+    ).toBe('Grant Application Service Outbox')
     expect($('[data-testid="event-back"]').attr('href')).toBe(listPath)
     expect($('[data-testid="event-payload-card"]')).toHaveLength(0)
   })
@@ -1097,7 +1101,7 @@ describe('viewEventRoute', () => {
     const { $ } = await viewPage(inboxPath)
 
     expect($('main script')).toHaveLength(0)
-    expect($('script')).toHaveLength(1)
+    expect($('script:not([src^="/public/"])')).toHaveLength(0)
     expect($('main').text()).toContain(xss)
   })
 
@@ -1116,7 +1120,7 @@ describe('viewEventRoute', () => {
     const { $ } = await viewPage()
 
     expect($('main script')).toHaveLength(0)
-    expect($('script')).toHaveLength(1)
+    expect($('script:not([src^="/public/"])')).toHaveLength(0)
     expect(
       $(
         '[data-testid="event-header-status"] [data-testid="do-status-badge"]'
@@ -1135,7 +1139,7 @@ describe('viewEventRoute', () => {
 
     const { $ } = await viewPage()
 
-    expect($('script')).toHaveLength(1)
+    expect($('script:not([src^="/public/"])')).toHaveLength(0)
     expect($('main [onclick]')).toHaveLength(0)
     expect($('main script')).toHaveLength(0)
   })
@@ -2699,7 +2703,7 @@ describe('a purged event', () => {
     const { $ } = await viewPage()
 
     expect($('main script')).toHaveLength(0)
-    expect($('script')).toHaveLength(1)
+    expect($('script:not([src^="/public/"])')).toHaveLength(0)
     expect(valueOf($, 'event-purged-note')).toContain(xss)
   })
 })

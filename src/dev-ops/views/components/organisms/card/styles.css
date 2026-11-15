@@ -1,0 +1,22 @@
+.gpa-card {
+  overflow: hidden;
+  border: var(--border-width-hairline) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+.gpa-card-body {
+  padding: var(--inset-card) var(--inset-card-wide);
+}
+.gpa-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-inline-xl);
+  min-height: var(--size-row);
+  padding-block: var(--inset-card-head-y) var(--inset-card-head-y);
+  padding-inline: var(--inset-card) var(--inset-card-head-end);
+  border-bottom: var(--border-width-hairline) solid var(--border-subtle);
+}
+.gpa-card-head :is(h2, h3, h4, h5, h6) {
+  margin: 0;
+}

@@ -1,0 +1,2 @@
+{%- from "../../core/macros.njk" import attrs, cls, body -%}
+<label class="{{ cls('gpa-label' ~ (' gpa-label-sm' if p.size == 'sm' else ''), p) }}"{% if p.for %} for="{{ p.for }}"{% endif %}{{ attrs(p) }}>{{ body(p, caller) }}{% if p.optional %}<span class="gpa-label-optional"> (optional)</span>{% endif %}</label>

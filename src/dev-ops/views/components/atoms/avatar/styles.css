@@ -1,0 +1,31 @@
+.gpa-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: var(--radius-full);
+  background: var(--bg-emphasis);
+  color: var(--fg-on-emphasis);
+  font-weight: 600;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.gpa-avatar-initials {
+  text-box: trim-both cap alphabetic;
+}
+.gpa-avatar-sm {
+  width: var(--size-avatar-sm);
+  height: var(--size-avatar-sm);
+  font-size: var(--font-size-xs);
+}
+.gpa-avatar-md {
+  width: var(--size-avatar-md);
+  height: var(--size-avatar-md);
+  font-size: var(--font-size-sm);
+  letter-spacing: var(--tracking-sm);
+}
+.gpa-avatar-lg {
+  width: var(--size-avatar-lg);
+  height: var(--size-avatar-lg);
+  font-size: var(--font-size-md);
+}

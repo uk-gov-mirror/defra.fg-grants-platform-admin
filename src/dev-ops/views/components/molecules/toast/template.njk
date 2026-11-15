@@ -1,0 +1,9 @@
+{%- from "../../core/macros.njk" import attrs, cls, body -%}
+{%- from "../../atoms/button/macro.njk" import Button -%}
+{%- from "../../atoms/icon-button/macro.njk" import IconButton -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+{%- set icons = { info: 'info', success: 'circle-check', warning: 'triangle-alert', danger: 'circle-alert' } -%}
+  <gpa-toast class="{{ cls('gpa-toast gpa-toast-' ~ (p.tone or 'success'), p) }}" role="{{ 'alert' if p.tone == 'danger' else 'status' }}"{% if p.timeout is defined %} data-timeout="{{ p.timeout }}"{% endif %}{{ attrs(p) }}>{{ Icon({ name: p.icon or icons[p.tone or 'success'], size: 'md', classes: 'gpa-toast-icon' }) }}<span class="gpa-toast-text">{{ body(p, caller) }}</span>
+    {%- if p.action %}{{ Button({ text: p.action, href: p.actionHref, variant: 'tertiary', size: 'sm', classes: 'gpa-toast-action' }) }}{% endif -%}
+    {%- if p.dismissible !== false %}{{ IconButton({ icon: 'x', size: 'xs', label: p.dismissLabel or 'Dismiss', classes: 'gpa-toast-close', attributes: { 'data-gpa-dismiss': true } }) }}{% endif -%}
+  </gpa-toast>

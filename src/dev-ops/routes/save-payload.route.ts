@@ -26,6 +26,7 @@ import {
 } from '../view-models/payload-edit-page.ts'
 import { seeOther } from '../view-models/see-other.ts'
 import { fromMax } from '../view-models/record-filters.ts'
+import { timesOf } from '../view-models/times.ts'
 
 /** Four times the limit the form enforces: past 500 is the operator's mistake, to be shown with the note in front of them. */
 const noteMax = 2000
@@ -63,7 +64,10 @@ const rerender = async (
     toSafeFrom(submission.from)
   )
 
-  return h.view('event', toPayloadPage(result, key, submission, bucket))
+  return h.view(
+    'event',
+    toPayloadPage(result, key, submission, timesOf(request).zone, bucket)
+  )
 }
 
 /**
@@ -112,7 +116,11 @@ export const savePayloadRoute: ServerRoute = {
     if (actor === undefined) {
       return h.view(
         'event',
-        toUnattributedPage(key, { text, revision, from, note: check.edit.note })
+        toUnattributedPage(
+          key,
+          { text, revision, from, note: check.edit.note },
+          timesOf(request).zone
+        )
       )
     }
 

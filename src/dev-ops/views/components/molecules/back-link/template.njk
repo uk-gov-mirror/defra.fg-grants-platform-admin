@@ -1,0 +1,3 @@
+{%- from "../../core/macros.njk" import attrs, cls, body -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+<a href="{{ p.href }}" class="{{ cls('gpa-backlink', p) }}"{{ attrs(p) }}>{{ Icon({ name: 'arrow-left', size: 'sm', classes: 'gpa-dir-icon' }) }}<span>{{ body(p, caller) }}</span></a>

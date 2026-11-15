@@ -1,0 +1,9 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../layouts/hidden-field/macro.njk" import HiddenField -%}
+{%- from "../../molecules/error-summary/macro.njk" import ErrorSummary -%}
+<form class="{{ cls('gpa-form' ~ (' gpa-form-wide' if p.wide else ''), p) }}"{% if p.action %} action="{{ p.action }}"{% endif %} method="{{ p.method or 'post' }}"{% if p.id %} id="{{ p.id }}"{% endif %}{% if p.enctype %} enctype="{{ p.enctype }}"{% endif %}{% if p.novalidate !== false %} novalidate{% endif %}{% if p.label %} aria-label="{{ p.label }}"{% endif %}{{ attrs(p) }}>
+    {%- if p.csrf %}<input type="hidden" name="{{ p.csrf.name }}" value="{{ p.csrf.value }}">{% endif -%}
+    {%- for f in p.hidden %}{{ HiddenField(f) }}{% endfor -%}
+    {{- ErrorSummary({ errors: p.errors, title: p.errorTitle }) -}}
+    {{- caller() if caller -}}
+  </form>

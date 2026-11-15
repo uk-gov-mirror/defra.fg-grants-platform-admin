@@ -150,7 +150,7 @@ describe('the access tokens page', () => {
     const { statusCode, $ } = await get(`/dev-ops/clients/${service}`)
 
     expect(statusCode).toBe(statusCodes.ok)
-    expect($('title').text()).toBe(`${title} | ${config.get('serviceName')}`)
+    expect($('title').text()).toBe(`${title} – Grants Platform`)
     expect($('h1').text()).toBe(title)
     expect(listAccessTokensUseCase).toHaveBeenCalledWith(service)
   })
@@ -161,21 +161,25 @@ describe('the access tokens page', () => {
     expect(headers['cache-control']).toBe('no-store')
   })
 
-  test('marks its own service in the navigation, with names that tell the two apart', async () => {
+  test("marks its own service in the navigation, each link in its service's group", async () => {
     const { $ } = await get('/dev-ops/clients/cw')
 
-    expect($('[data-testid="do-nav-clients-cw"]').attr('aria-current')).toBe(
+    expect($('[data-testid="shell-nav-clients-cw"]').attr('aria-current')).toBe(
       'page'
     )
     expect(
-      $('[data-testid="do-nav-clients-gas"]').attr('aria-current')
+      $('[data-testid="shell-nav-clients-gas"]').attr('aria-current')
     ).toBeUndefined()
-    expect(flatten($('[data-testid="do-nav-clients-gas"]').text())).toBe(
-      'GAS Access tokens'
-    )
-    expect(flatten($('[data-testid="do-nav-clients-cw"]').text())).toBe(
-      'CW Access tokens'
-    )
+    expect(
+      $('[data-testid="shell-nav-clients-gas"]')
+        .closest('[role="group"]')
+        .attr('aria-label')
+    ).toBe('Grant Application Service')
+    expect(
+      $('[data-testid="shell-nav-clients-cw"]')
+        .closest('[role="group"]')
+        .attr('aria-label')
+    ).toBe('Caseworking')
   })
 
   test('draws one row per token, sorted, with the hint masked and the token in use tagged', async () => {
@@ -1190,9 +1194,10 @@ describe('the drawer and dialogs, as the design and QA settled them', () => {
       ])
 
       const { $ } = await get(`/dev-ops/clients/${service}`)
-      const dialogs = flatten($('dialog').text())
+      const tokenDialogs = $('dialog').not('#times-dialog')
+      const dialogs = flatten(tokenDialogs.text())
 
-      expect($('dialog')).toHaveLength(4)
+      expect(tokenDialogs).toHaveLength(4)
       expect(
         flatten($(`[data-testid="token-${tokenId}-expiry-currently"]`).text())
       ).toBe('Currently: 1 Feb 2027')

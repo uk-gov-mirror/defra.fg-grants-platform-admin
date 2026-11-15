@@ -1,0 +1,21 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../atoms/field-message/macro.njk" import FieldMessage -%}
+{%- set gid = p.id or p.name -%}
+  {%- set groupDescribedBy = [gid ~ '-hint' if p.hint, gid ~ '-note' if (p.note and not p.error), gid ~ '-err' if p.error] | select | join(' ') -%}
+  <fieldset class="{{ cls('gpa-field gpa-group', p) }}"{% if groupDescribedBy %} aria-describedby="{{ groupDescribedBy }}"{% endif %}{% if p.error %} aria-invalid="true"{% endif %}{{ attrs(p) }}>
+    <legend class="gpa-label{{ ' gpa-label-sm' if p.size == 'sm' }}">{{ p.legendHtml | safe if p.legendHtml else p.label }}{% if p.optional %}<span class="gpa-label-optional"> (optional)</span>{% endif %}</legend>
+    {%- if p.hint %}{{ FieldMessage({ id: gid ~ '-hint', text: p.hint }) }}{% endif -%}
+    <div class="gpa-group-options{{ ' gpa-group-row' if p.direction == 'row' }}">
+      {%- for o in p.options -%}
+        {%- set o = { value: o, text: o } if o is string else o -%}
+        {%- set oid = o.id or (gid ~ '-' ~ loop.index) -%}
+        {%- set off = o.disabled or p.disabled -%}
+        {%- set optDescribedBy = [oid ~ '-hint' if o.hint, oid ~ '-why' if (off and o.reason)] | select | join(' ') -%}
+        <label class="gpa-check{{ ' gpa-check-sm' if p.size == 'sm' }}{{ ' is-disabled' if off }}{{ ' gpa-check-hinted' if o.hint }}" for="{{ oid }}"{% if o.testId %} data-testid="{{ o.testId }}"{% endif %}><input id="{{ oid }}" type="radio" name="{{ p.name }}" class="gpa-check-input" value="{{ o.value }}"{% if optDescribedBy %} aria-describedby="{{ optDescribedBy }}"{% endif %}{% if o.checked or (p.value is defined and p.value !== null and o.value == p.value) %} checked{% endif %}{% if off %} disabled{% endif %}{% for k, v in o.attributes %}{% if v === true %} {{ k }}{% elif v !== false and v !== null %} {{ k }}="{{ v }}"{% endif %}{% endfor %}><span class="gpa-radio-dot" aria-hidden="true"></span>{% if o.hint %}<span class="gpa-check-text"><span>{{ o.text or o.label }}</span><span class="gpa-check-hint" id="{{ oid }}-hint">{{ o.hint }}</span></span>{% else %}<span>{{ o.text or o.label }}</span>{% endif %}</label>
+        {%- if off and o.reason %}{{ FieldMessage({ id: oid ~ '-why', text: o.reason, classes: 'gpa-check-reason' }) }}{% endif -%}
+        {%- if o.conditionalHtml %}<div class="gpa-check-conditional" id="{{ oid }}-conditional">{{ o.conditionalHtml | safe }}</div>{% endif -%}
+      {%- endfor -%}
+    </div>
+    {%- if p.error %}{{ FieldMessage({ id: gid ~ '-err', tone: 'error', text: p.error, testId: p.errorTestId }) }}
+    {%- elif p.note %}{{ FieldMessage({ id: gid ~ '-note', text: p.note, live: true, classes: 'gpa-group-note' }) }}{% endif -%}
+  </fieldset>

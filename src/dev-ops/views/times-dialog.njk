@@ -1,0 +1,8 @@
+{% import "components/macros.njk" as gpa %}
+{#- The account menu's Times, over any page. Its item opens it in place; without a script the item asks for this page with the dialog open, and the server draws it so. -#}
+{%- set timesDone %}{{ gpa.Button({ text: 'Done', variant: 'primary', type: 'submit', form: 'times-form', testId: 'times-done' }) }}{% endset -%}
+{%- call gpa.Dialog({ id: 'times-dialog', title: 'Times', size: 'sm', actions: timesDone, open: timesDialog.open, resetOnOpen: true, closeHref: timesDialog.closeHref, testId: 'times-dialog' }) -%}
+  {%- call gpa.Form({ action: timesDialog.action, method: 'post', id: 'times-form', label: 'Times' }) -%}
+    {{ gpa.RadioGroup({ id: 'times-choice', name: 'times', label: 'Show times in', options: timesOptions }) }}
+  {%- endcall -%}
+{%- endcall -%}

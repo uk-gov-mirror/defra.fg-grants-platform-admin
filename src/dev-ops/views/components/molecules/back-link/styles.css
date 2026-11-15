@@ -1,0 +1,33 @@
+.gpa-backlink {
+  position: relative;
+}
+.gpa-backlink::after {
+  content: "";
+  position: absolute;
+  inset-inline-start: calc(var(--inset-tag-xs) * -1);
+  inset-inline-end: calc(var(--inset-tag-xs) * -1);
+  top: 50%;
+  height: var(--size-target-min);
+  transform: translateY(-50%);
+}
+
+.gpa-backlink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-inline-sm);
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-md);
+  text-decoration: none;
+  cursor: pointer;
+}
+.gpa-backlink:hover:where(
+    :not(:disabled, [aria-disabled="true"], .is-disabled)
+  ) {
+  color: var(--fg-default);
+}

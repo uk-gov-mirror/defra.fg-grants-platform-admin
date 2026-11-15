@@ -140,7 +140,10 @@ const viewPage = async (url = path, cookie?: string) => {
   const { result, statusCode, headers } = await server.inject({
     method: 'GET',
     url,
-    headers: cookie ? { cookie } : {},
+    // UK time, the setting these expectations are written in.
+    headers: {
+      cookie: [cookie, 'dev-ops-times=uk'].filter(Boolean).join('; ')
+    },
     auth: { strategy: 'session', credentials }
   })
 
@@ -235,8 +238,8 @@ describe('the workflow page', () => {
     async ({ tab, query }) => {
       const { $ } = await viewPage(`${path}${query}`)
 
-      expect($('title').text().split(' | ')[0]).toBe(
-        `${tab} – Workflow woodland-creation 1.2.0`
+      expect($('title').text()).toBe(
+        `${tab} – Workflow woodland-creation 1.2.0 – Grants Platform`
       )
     }
   )
@@ -249,8 +252,8 @@ describe('the workflow page', () => {
 
     const { $ } = await viewPage('/dev-ops/workflows/woodland-creation/9.9.9')
 
-    expect($('title').text().split(' | ')[0]).toBe(
-      'Not found – Workflow woodland-creation 9.9.9'
+    expect($('title').text()).toBe(
+      'Not found – Workflow woodland-creation@9.9.9 – Grants Platform'
     )
   })
 
@@ -326,7 +329,7 @@ describe('the workflow page', () => {
     expect(part($, 'workflow-back').attr('href')).toBe(listed)
     expect(textOf($, 'workflow-back')).toBe('Back to Workflows')
     expect(
-      $('[data-testid="do-nav"] [aria-current="page"]').text().trim()
+      $('[data-testid="shell-nav"] [aria-current="page"]').text().trim()
     ).toBe('Workflows')
   })
 
@@ -367,14 +370,19 @@ describe('the workflow page', () => {
   })
 
   test.each([
-    ['unavailable', 'This workflow could not be loaded from CW.'],
+    [
+      'unavailable',
+      statusCodes.serviceUnavailable,
+      'This workflow couldn’t be loaded from CW.'
+    ],
     [
       'timed-out',
-      'This workflow could not be loaded: CW timed out waiting for it. Refresh to try again.'
+      statusCodes.gatewayTimeout,
+      'This workflow couldn’t be loaded: CW timed out waiting for it.'
     ]
   ] as const)(
     'says so, as a case page does, when CW is %s',
-    async (outcome, message) => {
+    async (outcome, code, message) => {
       vi.mocked(getWorkflowPageUseCase).mockResolvedValue({
         outcome,
         page: null
@@ -382,9 +390,13 @@ describe('the workflow page', () => {
 
       const { statusCode, $ } = await viewPage()
 
-      expect(statusCode).toBe(statusCodes.ok)
-      expect(textOf($, 'workflow-error')).toBe(message)
-      expect(textOf($, 'workflow-title')).toBe('Workflow woodland-creation')
+      expect(statusCode).toBe(code)
+      expect(
+        flatten(
+          part($, `record-missing-${outcome}`).find('.gpa-alert-title').text()
+        )
+      ).toBe(message)
+      expect(textOf($, 'record-missing-title')).toBe('woodland-creation')
       expect(part($, 'workflow-tabs')).toHaveLength(0)
     }
   )
@@ -1316,10 +1328,12 @@ describe('the bare workflow URL', () => {
       '/dev-ops/workflows/woodland-creation'
     )
 
-    expect(statusCode).toBe(statusCodes.ok)
-    expect(textOf($, 'workflow-error')).toBe(
-      'This workflow could not be loaded from CW.'
-    )
+    expect(statusCode).toBe(statusCodes.serviceUnavailable)
+    expect(
+      flatten(
+        part($, 'record-missing-unavailable').find('.gpa-alert-title').text()
+      )
+    ).toBe('This workflow couldn’t be loaded from CW.')
   })
 })
 

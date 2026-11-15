@@ -176,6 +176,27 @@ To update dependencies use [npm-check-updates](https://github.com/raineorshine/n
 ncu --interactive --format group
 ```
 
+### Dev Ops components
+
+`src/dev-ops/views/components` is a copy of the design system's components
+that the Dev Ops views use, with every class, custom property, element,
+attribute and global prefixed `gpa`. It is never edited here: a change goes
+to the design system, and the copy is taken again. To take it again (to
+update it, or after views start using another component), run this from a
+checkout of the design system at the commit to take (after `npm install` in
+`source/parity`, for Prettier), then review the diff:
+
+```bash
+views=~/path/to/fg-grants-platform-admin/src/dev-ops/views
+node source/add.cjs --views "$views" --to "$views" --prefix gpa
+```
+
+It writes `src/dev-ops/views/components` only. Its `manifest.json` records
+the version, the commit, the prefix and a checksum for each file;
+`node source/add.cjs --to "$views" --check` lists any file changed since it
+was copied. The fonts' and icons' notices
+are in `THIRD-PARTY-NOTICES`.
+
 ### Formatting
 
 #### Windows prettier issue

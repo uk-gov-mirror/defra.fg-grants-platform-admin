@@ -1,0 +1,8 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../atoms/link/macro.njk" import Link -%}
+{%- from "../../molecules/alert/macro.njk" import Alert -%}
+{%- set errs = p.errors or [] -%}
+  {%- if errs | length -%}
+    {%- set list -%}<ul class="gpa-errorsummary-list">{% for e in errs %}<li>{% if e.id %}{{ Link({ text: e.text or e.message, href: '#' ~ e.id }) }}{% else %}{{ e.text or e.message }}{% endif %}</li>{% endfor %}</ul>{%- endset -%}
+    <gpa-error-summary><div class="{{ cls('gpa-errorsummary', p) }}" tabindex="-1"{{ attrs(p) }}>{{ Alert({ tone: 'danger', title: p.title or ('There’s a problem with 1 field' if errs | length == 1 else 'There are problems with ' ~ (errs | length) ~ ' fields'), html: list }) }}</div></gpa-error-summary>
+  {%- endif -%}

@@ -1,0 +1,22 @@
+.gpa-segment {
+  display: inline-flex;
+  align-items: center;
+  height: var(--size-control-sm);
+  padding: 0 var(--inset-control-sm);
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+  font-weight: 500;
+  cursor: pointer;
+}
+.gpa-segment:has(:checked) {
+  background: var(--bg-surface-raised);
+  color: var(--fg-default);
+  box-shadow: var(--elevation-raised);
+}
+.gpa-segment:has(:focus-visible) {
+  outline: var(--focus-ring-width) solid var(--border-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+.gpa-segmented:has(.gpa-segment) {
+  flex-wrap: wrap;
+}

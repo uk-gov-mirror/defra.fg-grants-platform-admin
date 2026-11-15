@@ -1,0 +1,14 @@
+{%- from "../../core/macros.njk" import attrs, cls, body -%}
+{%- from "../../atoms/code/macro.njk" import Code -%}
+{%- from "../../atoms/heading/macro.njk" import Heading -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+{%- set K = { 'not-found': ['file-question-mark', 'Page not found', 'The link may be out of date, or the page was moved or deleted.', '404'], 'no-access': ['lock', 'You don’t have access', 'Ask an admin of this workspace to give you access.', '403'], 'error': ['circle-alert', 'Something went wrong', 'Nothing was changed. Try again; if it keeps happening, contact support with the reference below.', '500'], 'offline': ['wifi-off', 'You’re offline', 'Check your connection. Changes you make will be lost until you’re back online.', null], 'maintenance': ['wrench', 'Down for maintenance', 'We’ll be back shortly.', null] } -%}
+  {%- set k = K[p.kind or 'not-found'] or K['not-found'] -%}
+  <div class="{{ cls('gpa-statuspage', p) }}"{{ attrs(p) }}>
+    <span class="gpa-empty-icon gpa-statuspage-icon">{{ Icon({ name: p.icon or k[0], size: 'xl' }) }}</span>
+    {%- if p.code !== false and (p.code or k[3]) %}<span class="gpa-statuspage-code">{{ p.code or k[3] }}</span>{% endif -%}
+    {{ Heading({ level: 1, variant: 'heading-lg', text: p.title or k[1] }) }}
+    <p class="gpa-statuspage-body">{{ body(p, caller) if (p.text or p.html or caller) else k[2] }}</p>
+    {%- if p.actions %}<div class="gpa-actions gpa-justify-center">{{ p.actions | safe }}</div>{% endif -%}
+    {%- if p.reference %}<p class="gpa-statuspage-ref">Reference: {{ Code({ text: p.reference }) }}</p>{% endif -%}
+  </div>

@@ -1,0 +1,50 @@
+.gpa-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-inline-lg);
+  min-height: var(--size-control-lg);
+  padding-block: var(--inset-field-y) var(--inset-field-y);
+  padding-inline: var(--inset-alert-x) var(--inset-field-y);
+  border-radius: var(--radius-md);
+  background: var(--bg-inverse);
+  color: var(--fg-inverse);
+  box-shadow: var(--elevation-floating);
+  font-size: var(--font-size-md);
+}
+.gpa-toast-text {
+  min-width: 0;
+}
+.gpa-toast .gpa-toast-action,
+.gpa-toast .gpa-toast-close {
+  color: inherit;
+}
+.gpa-toast .gpa-toast-action {
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.gpa-toast .gpa-toast-close {
+  opacity: var(--opacity-muted);
+}
+.gpa-toast
+  .gpa-btn:hover:where(:not(:disabled, [aria-disabled="true"], .is-disabled)) {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  color: inherit;
+  opacity: 1;
+}
+.gpa-toast
+  .gpa-btn:active:where(:not(:disabled, [aria-disabled="true"], .is-disabled)) {
+  background: color-mix(in srgb, currentColor 22%, transparent);
+}
+.gpa-toast .gpa-btn:focus-visible {
+  outline-color: currentColor;
+}
+.gpa-toast-warning .gpa-toast-icon {
+  color: var(--status-warning);
+}
+.gpa-toast-danger .gpa-toast-icon {
+  color: var(--status-danger);
+}
+.gpa-toast-info .gpa-toast-icon {
+  color: var(--status-info, currentColor);
+}

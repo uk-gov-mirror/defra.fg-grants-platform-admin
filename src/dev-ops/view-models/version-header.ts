@@ -5,6 +5,7 @@ import type {
   Catalogue
 } from '../use-cases/get-catalogue.use-case.ts'
 import { toClock, toPreciseInstant, toValidDate } from './event-formats.ts'
+import type { Zone } from './event-formats.ts'
 import { toTabHref } from './record-page.view-model.ts'
 import { toVersionPath } from './record-type.ts'
 import type { RecordType } from './record-type.ts'
@@ -221,12 +222,16 @@ const toBadges = (
 /** Anything but a date is shown as stored. */
 const toReceived = (
   receivedAt: string,
-  now: Date
+  now: Date,
+  zone: Zone
 ): Pick<SwitcherItem, 'aside' | 'asideTitle'> => {
   const date = toValidDate(receivedAt)
 
   return date
-    ? { aside: toClock(date, now), asideTitle: toPreciseInstant(date) }
+    ? {
+        aside: toClock(date, now, zone),
+        asideTitle: toPreciseInstant(date, zone)
+      }
     : { aside: receivedAt, asideTitle: null }
 }
 
@@ -235,6 +240,7 @@ export const toVersionHeader = (
   header: VersionPageHeader,
   tab: string,
   from: string,
+  zone: Zone,
   catalogue: Catalogue | null = null,
   now: Date = new Date()
 ): VersionHeader => {
@@ -254,7 +260,7 @@ export const toVersionHeader = (
       items: header.versions.map((summary) => ({
         label: summary.version,
         ...toBadges(record, values, summary),
-        ...toReceived(summary.receivedAt, now),
+        ...toReceived(summary.receivedAt, now, zone),
         href: toTabHref(
           toVersionPath(record, {
             code: header.code,

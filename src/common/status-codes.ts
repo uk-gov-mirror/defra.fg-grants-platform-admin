@@ -1,3 +1,6 @@
+/** Hapi's message when a user lacks the role a route declares. */
+export const insufficientScope = 'Insufficient scope'
+
 export const statusCodes = {
   ok: 200,
   noContent: 204,
