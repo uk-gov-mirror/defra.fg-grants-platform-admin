@@ -329,12 +329,9 @@ export const toGrantPage = (
   return {
     record: grantType,
     ref: page.header.code,
-    trail: [],
     tabs: toTabs(toOfferedGrantType(page.header), href, tab, from),
     tab,
     facts: toOverviewFacts(page, catalogue, canAdministerGrants, zone),
-    series: null,
-    seriesDetailed: false,
     events: toEvents(page.events, now, zone, toTabHref(href, 'events', from)),
     ...toTabSection(page.definition, page.sectionErrors, tab, read),
     unavailableSources: toUnavailableSources(page.sourceErrors),

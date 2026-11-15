@@ -23,7 +23,6 @@ export const grantType: RecordType = {
   title: 'Grant',
   path: grantsPath,
   source: 'GAS',
-  showClosed: false,
   linkLabel: 'View grant',
   tabs: grantTabIds.map((id) => ({ id, label: grantTabLabels[id] })),
   view: 'grant',

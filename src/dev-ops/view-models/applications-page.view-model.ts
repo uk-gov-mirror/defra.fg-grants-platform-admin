@@ -10,10 +10,9 @@ export const applicationType: RecordType = {
   title: 'Application',
   path: applicationsPath,
   source: 'GAS',
-  showClosed: false,
   linkLabel: 'View application',
   tabs: recordTabEntries,
-  view: 'record',
+  view: 'application',
   titleParam: 'clientRef'
 }
 

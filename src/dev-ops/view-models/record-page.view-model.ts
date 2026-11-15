@@ -1,28 +1,18 @@
-import type { BadgeRole, SourceError } from '../use-cases/get-event.use-case.ts'
+import type { BadgeRole } from '../use-cases/get-event.use-case.ts'
 import type {
   Counterpart,
-  Position,
   RecordEvents,
   RecordSectionError,
-  RecordSeries,
-  RecordTab,
   StoredDate
 } from '../use-cases/record-reads.ts'
-import {
-  isIsoInstant,
-  toAbsolute,
-  toPreciseInstant,
-  toStoredTimeCell
-} from './event-formats.ts'
-import type { TimeCell, Zone } from './event-formats.ts'
+import { isIsoInstant, toAbsolute, toPreciseInstant } from './event-formats.ts'
+import type { Zone } from './event-formats.ts'
 import { formatIn } from './zoned-clock.ts'
 import { backKey } from './bucket-links.ts'
-import { toEventRow, toUnavailableSources } from './event-row.ts'
+import { toEventRow } from './event-row.ts'
 import type { EventRow } from './event-row.ts'
 import { toJsonView } from './json-viewer.view-model.ts'
 import type { JsonView } from './json-viewer.view-model.ts'
-import { toPositionLabel, toPositionTrail, toStatusLabel } from './position.ts'
-import type { PositionStep } from './position.ts'
 import { toFittingBack } from './record-filters.ts'
 import type { RecordType } from './record-type.ts'
 
@@ -56,33 +46,6 @@ export interface FactLine {
   note?: string | null
 }
 
-/** One member of the record's series. */
-export interface SeriesMember {
-  ref: string
-  position: Position
-  createdAt: StoredDate
-  closedAt: StoredDate
-}
-
-interface SeriesData {
-  latestRef: string | null
-  members: (SeriesMember & { href: string })[]
-  /** GAS sent the members' facts, not only their refs. */
-  detailed: boolean
-}
-
-interface SeriesRow {
-  ref: string
-  /** Null on the page's own record. */
-  href: string | null
-  replaced: boolean
-  statusLabel: string | null
-  positionLabel: string
-  /** Null where nothing is stored. */
-  created: TimeCell | null
-  closed: TimeCell | null
-}
-
 interface SectionTab {
   id: string
   label: string
@@ -101,19 +64,6 @@ export interface RawTab {
   tooLarge: boolean
 }
 
-/** One record's page, as the service-specific view model reads it out of GAS's answer. */
-export interface RecordPageData {
-  ref: string
-  href: string
-  position: Position
-  facts: Fact[][] | null
-  series?: SeriesData | null
-  events?: RecordEvents | null
-  raw?: object | null
-  sourceErrors: SourceError[]
-  sectionErrors: RecordSectionError[]
-}
-
 export interface RecordPageModel {
   record: RecordType
   ref: string
@@ -121,13 +71,9 @@ export interface RecordPageModel {
   backHref: string
   /** The bucket the page was opened from, which is where it sits in the navigation. */
   navActive: string | null
-  trail: PositionStep[]
   tabs: SectionTab[]
   tab: string
   facts: Fact[][] | null
-  /** Two or more members, or none at all. */
-  series: SeriesRow[] | null
-  seriesDetailed: boolean
   events: EventsTab | null
   raw: RawTab | null
   sectionError: string | null
@@ -151,18 +97,6 @@ export const toTabHref = (
 
   return params.size ? `${href}?${params}` : href
 }
-
-/** A version's page, told to come back to this record's Overview; null without a version to link to. */
-export const toVersionLinkOf = (
-  toVersionHref: (ref: { code: string; version: string }) => string,
-  code: string,
-  version: string | null,
-  recordHref: string,
-  from: string
-): string | null =>
-  version
-    ? `${toVersionHref({ code, version })}?${backKey}=${encodeURIComponent(toFittingBack(toTabHref(recordHref, 'overview', from)))}`
-    : null
 
 export const toTabs = (
   { tabs }: RecordType,
@@ -282,30 +216,6 @@ export const toMonoFact = (
     ? toNoneFact(id, label)
     : { id, label, kind: 'mono', text: value, from: null, href: null }
 
-interface Versions {
-  code: string
-  currentConfigVersion: string | null
-  originalConfigVersion: string | null
-}
-
-/** `frps-private-beta@1.4.2`, and where it started when that was another version. */
-export const toVersionedFact = (
-  id: string,
-  label: string,
-  { code, currentConfigVersion, originalConfigVersion }: Versions,
-  href: string | null
-): Fact => ({
-  id,
-  label,
-  kind: 'mono',
-  text: currentConfigVersion ? `${code}@${currentConfigVersion}` : code,
-  from:
-    originalConfigVersion && originalConfigVersion !== currentConfigVersion
-      ? originalConfigVersion
-      : null,
-  href
-})
-
 /** The other record as a fact named for its type; no row at all when there is no link to follow. */
 export const toCounterpartFacts = (
   { itemId, title, linkLabel }: RecordType,
@@ -329,68 +239,6 @@ export const toReleaseCounterpartFacts = (
     ? toCounterpartFacts(type, href)
     : [toTextFact(type.itemId, type.title, 'None')]
 }
-
-const noFacts = {
-  position: { phase: null, stage: null, status: null },
-  createdAt: null,
-  closedAt: null
-}
-
-/** Every ref in the series is a row, oldest first, with whatever GAS sent of its member. */
-export const toSeriesData = <Member>(
-  series: RecordSeries<Member> | null,
-  toMember: (member: Member) => SeriesMember,
-  hrefOf: (ref: string) => string
-): SeriesData | null => {
-  if (series === null) {
-    return null
-  }
-
-  const byRef = new Map(
-    (series.members ?? []).map((member) => {
-      const known = toMember(member)
-
-      return [known.ref, known]
-    })
-  )
-
-  return {
-    latestRef: series.latestRef,
-    members: series.refs.map((ref) => ({
-      ...noFacts,
-      ...byRef.get(ref),
-      ref,
-      href: hrefOf(ref)
-    })),
-    detailed: series.members !== undefined
-  }
-}
-
-const toSeriesRow =
-  (ref: string, latestRef: string | null, now: Date, zone: Zone) =>
-  (member: SeriesData['members'][number]): SeriesRow => ({
-    ref: member.ref,
-    href: member.ref === ref ? null : member.href,
-    replaced: latestRef !== null && member.ref !== latestRef,
-    statusLabel: toStatusLabel(member.position),
-    positionLabel: toPositionLabel(member.position),
-    created: toStoredTimeCell(member.createdAt, now, zone),
-    closed: toStoredTimeCell(member.closedAt, now, zone)
-  })
-
-const minSeriesLength = 2
-
-const toSeries = (
-  { ref, series }: RecordPageData,
-  now: Date,
-  zone: Zone
-): SeriesRow[] | null =>
-  series && series.members.length >= minSeriesLength
-    ? series.members.map(toSeriesRow(ref, series.latestRef, now, zone))
-    : null
-
-const isDetailed = ({ series }: RecordPageData): boolean =>
-  series?.detailed ?? false
 
 export const toEvents = (
   events: RecordEvents | null | undefined,
@@ -442,32 +290,4 @@ export const toTabSection = (
   raw: tab === 'raw' ? toRaw(document, sectionErrors, section) : null,
   sectionError: toSectionError(sectionErrors, section),
   tooLarge: tab !== 'raw' && toTooLarge(sectionErrors, section)
-})
-
-export const toRecordPage = (
-  record: RecordType,
-  data: RecordPageData,
-  tab: RecordTab,
-  zone: Zone,
-  from: string = '',
-  now: Date = new Date()
-): RecordPageModel => ({
-  record,
-  ref: data.ref,
-  backHref: from,
-  navActive: null,
-  trail: toPositionTrail(data.position),
-  tabs: toTabs(record, data.href, tab, from),
-  tab,
-  facts: data.facts,
-  series: toSeries(data, now, zone),
-  seriesDetailed: isDetailed(data),
-  events: toEvents(
-    data.events,
-    now,
-    zone,
-    toTabHref(data.href, 'events', from)
-  ),
-  ...toTabSection(data.raw, data.sectionErrors, tab, tab),
-  unavailableSources: toUnavailableSources(data.sourceErrors)
 })

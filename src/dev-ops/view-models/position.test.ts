@@ -1,4 +1,4 @@
-import { toHumanCode, toPositionTrail, toStatusLabel } from './position.ts'
+import { toHumanCode, toPositionTrail } from './position.ts'
 
 describe('toHumanCode', () => {
   test.each([
@@ -30,11 +30,5 @@ describe('toPositionTrail', () => {
     expect(
       toPositionTrail({ phase: null, stage: null, status: 'STATUS_NEW' })
     ).toEqual([{ label: 'New', current: true }])
-  })
-})
-
-describe('toStatusLabel', () => {
-  test('is nothing for a record with no status', () => {
-    expect(toStatusLabel({ phase: null, stage: null, status: null })).toBeNull()
   })
 })

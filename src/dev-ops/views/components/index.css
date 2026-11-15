@@ -59,6 +59,7 @@
 @import "./layouts/inline/styles.css" layer(gpa);
 @import "./layouts/grid/styles.css" layer(gpa);
 @import "./layouts/columns/styles.css" layer(gpa);
+@import "./layouts/section/styles.css" layer(gpa);
 @import "./layouts/form/styles.css" layer(gpa);
 @import "./layouts/form-actions/styles.css" layer(gpa);
 @import "./templates/page/styles.css" layer(gpa);

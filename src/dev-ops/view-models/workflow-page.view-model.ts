@@ -201,12 +201,9 @@ export const toWorkflowPage = (
   return {
     record: workflowType,
     ref: page.header.code,
-    trail: [],
     tabs: toTabs(workflowType, href, tab, from),
     tab,
     facts: toOverviewFacts(page, catalogue, zone),
-    series: null,
-    seriesDetailed: false,
     events: toEvents(page.events, now, zone, toTabHref(href, 'events', from)),
     ...toTabSection(page.raw, page.sectionErrors, tab, read),
     unavailableSources: toUnavailableSources(page.sourceErrors),

@@ -1,0 +1,49 @@
+{% extends 'layouts/page.njk' %}
+{% import "components/macros.njk" as gpa %}
+{% from "partials/record-tabs.njk" import recordAlert, recordTime, tabNotice, whereCard, counterpartCard, seriesSection, versionFact, eventsTab, rawTab with context %}
+
+{% block oldPage %}{% endblock %}
+
+{% block pageTitle %}{{ record.title }} {{ ref }} – {{ productName }}{% endblock %}
+
+{#- One case: its header, then one tab, with Details beside Overview. -#}
+{% block content %}
+  {%- set shown = overview and overview.kind == 'shown' -%}
+  {%- if shown -%}
+    {%- set closed = overview.details.closed -%}
+    {%- set closedHtml -%}
+      {%- if closed.kind == 'at' %}{{ recordTime(closed.time) }}{% elif closed.kind == 'open' %}{{ gpa.Text({ text: 'Still open', tone: 'subtle' }) }}{% endif -%}
+    {%- endset -%}
+    {%- set aside = gpa.FactsCard({ title: 'Details', testId: 'case-details', facts: [
+      { label: 'Grant', html: versionFact(overview.details.grantVersion) if overview.details.grantVersion },
+      { label: 'Created', html: recordTime(overview.details.created) if overview.details.created },
+      { label: 'Closed', html: closedHtml if closed.kind != 'unknown' }
+    ] }) -%}
+  {%- endif -%}
+
+  {%- call gpa.RecordPage({
+    title: ref,
+    mono: true,
+    titleTestId: 'record-title',
+    back: { href: backHref, text: backLabel, testId: 'record-back' },
+    meta: [gpa.StatusDot({ text: status, tone: 'neutral' })] if status else [],
+    actions: gpa.CopyButton({ value: ref, text: 'Copy reference' }),
+    alert: recordAlert(alert) if alert,
+    tabs: { label: 'Case', items: tabs },
+    aside: aside if shown
+  }) -%}
+    {%- if tab == 'overview' -%}
+      {%- if shown -%}
+        {{ whereCard('Where the case is', overview.where) }}
+        {%- if overview.application %}{{ counterpartCard(overview.application) }}{% endif -%}
+        {%- if overview.series %}{{ seriesSection(overview.series) }}{% endif -%}
+      {%- else -%}
+        {{ tabNotice(overview) }}
+      {%- endif -%}
+    {%- elif tab == 'events' -%}
+      {{ eventsTab(events) }}
+    {%- else -%}
+      {{ rawTab(raw) }}
+    {%- endif -%}
+  {%- endcall -%}
+{% endblock %}

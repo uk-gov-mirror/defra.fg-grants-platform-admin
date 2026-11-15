@@ -162,13 +162,6 @@ export const toTimeCell = (value: string, now: Date, zone: Zone): TimeCell =>
       }
     : { text: value || '""', instant: '', precise: '', clock: '' }
 
-/** Null when nothing is stored, which a list draws as a dash. */
-export const toStoredTimeCell = (
-  value: string | null,
-  now: Date,
-  zone: Zone
-): TimeCell | null => (value === null ? null : toTimeCell(value, now, zone))
-
 /** The shared CDP logs pattern, so one link shows the trace across every service. */
 const indexPattern = 'e55f3890-5d4a-11ee-8f40-670c9b0b8093'
 

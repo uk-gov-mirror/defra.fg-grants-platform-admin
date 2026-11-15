@@ -10,10 +10,9 @@ export const caseType: RecordType = {
   title: 'Case',
   path: casesPath,
   source: 'CW',
-  showClosed: true,
   linkLabel: 'View case',
   tabs: recordTabEntries,
-  view: 'record',
+  view: 'case',
   titleParam: 'caseRef'
 }
 

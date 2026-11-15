@@ -6,6 +6,7 @@ import type {
 } from './definition-fetch.ts'
 import { toVersionPath } from './record-type.ts'
 import type { RecordType } from './record-type.ts'
+import { toBackHref } from './record-view.ts'
 import type { VersionFiles, VersionFileType } from './version-banner.ts'
 import { toVersionHeader } from './version-header.ts'
 import type { VersionHeader } from './version-header.ts'
@@ -54,7 +55,7 @@ export const toVersionShell = (
     zone: Zone
   }
 ): VersionShell => ({
-  backHref: from || record.path,
+  backHref: toBackHref(record, from),
   navActive: ownLists[record.itemId],
   versionHeader: toVersionHeader(
     record,

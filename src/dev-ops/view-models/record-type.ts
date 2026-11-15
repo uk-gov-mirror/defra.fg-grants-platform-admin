@@ -13,7 +13,6 @@ export interface RecordType {
   path: string
   /** The service a failed read is blamed on. */
   source: string
-  showClosed: boolean
   linkLabel: string
   /** In the order they are offered. */
   tabs: readonly RecordTabEntry[]

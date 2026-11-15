@@ -15,9 +15,6 @@ export const toHumanCode = (code: string): string => {
   return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
-export const toStatusLabel = ({ status }: Position): string | null =>
-  status === null ? null : toHumanCode(status)
-
 /** Phase › stage › status, leaving out any step the record has not got, the status last. */
 export const toPositionTrail = ({
   phase,

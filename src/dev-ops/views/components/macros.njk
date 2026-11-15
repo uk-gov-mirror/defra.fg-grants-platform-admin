@@ -301,6 +301,10 @@
   {%- set __html %}{% include "./layouts/columns/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
 {%- endmacro %}
+{% macro Section(p) -%}
+  {%- set __html %}{% include "./layouts/section/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
 {% macro HiddenField(p) -%}
   {%- set __html %}{% include "./layouts/hidden-field/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}

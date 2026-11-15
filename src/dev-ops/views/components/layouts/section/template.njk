@@ -1,0 +1,9 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../atoms/heading/macro.njk" import Heading -%}
+  {%- set sid = (p.id ~ '-title') if p.id else gpaId('section') -%}
+  <section class="{{ cls('gpa-section', p) }}"{% if p.id %} id="{{ p.id }}"{% endif %}{% if p.title %} aria-labelledby="{{ sid }}"{% endif %}{{ attrs(p) }}>
+    {%- if p.title -%}
+      <div class="gpa-section-head"><div class="gpa-section-titles">{{ Heading({ level: p.headingLevel or 2, text: p.title, id: sid, testId: p.headingTestId }) }}{% if p.description %}<p class="gpa-section-desc">{{ p.description }}</p>{% endif %}</div>{% if p.actions %}<div class="gpa-actions gpa-actions-sm">{{ p.actions | safe }}</div>{% endif %}</div>
+    {%- endif -%}
+    {{ caller() }}
+  </section>

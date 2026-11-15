@@ -1,0 +1,150 @@
+{% import "components/macros.njk" as gpa %}
+{#- What an application's and a case's pages draw alike: the alert, the Overview's cards, and the Events and Raw tabs. -#}
+
+{#- A stored time: a `<time>` for an instant, as stored for anything else, the sign for a missing value for none. -#}
+{% macro recordTime(time) -%}
+  {%- if not time -%}{{ gpa.NoValue() }}
+  {%- elif time.datetime -%}{{ gpa.Time({ datetime: time.datetime, text: time.text, title: time.title }) }}
+  {%- else -%}{{ time.text }}{%- endif -%}
+{%- endmacro %}
+
+{% macro recordAlert(alert) -%}
+  {%- set actions = gpa.Button({ text: alert.action.text, size: 'sm', iconEnd: 'arrow-right', href: alert.action.href }) if alert.action else '' -%}
+  {{ gpa.Alert({ tone: 'info', title: alert.title, text: alert.text, actions: actions, testId: 'record-alert' }) }}
+{%- endmacro %}
+
+{#- A tab with nothing to show: why it failed, with Try again, or that the source sent nothing. -#}
+{% macro tabNotice(notice) -%}
+  {%- if notice.kind == 'error' -%}
+    {{ gpa.Alert({ tone: 'danger', title: notice.error.title, text: notice.error.text, testId: 'record-tab-error',
+      actions: gpa.Button({ text: 'Try again', size: 'sm', iconStart: 'refresh-cw', href: notice.error.retryHref }) }) }}
+  {%- else -%}
+    {{ gpa.Alert({ tone: 'info', title: notice.title, testId: 'record-tab-nothing' }) }}
+  {%- endif -%}
+{%- endmacro %}
+
+{#- Where the record is: the phases as steps and its stage; without the phases to place it in, the facts alone. -#}
+{% macro whereCard(title, where) -%}
+  {%- if where.kind == 'stepper' -%}
+    {%- call gpa.Card({ padded: true, title: title, testId: 'record-where' }) -%}
+      {%- call gpa.Stack({ gap: 'xl' }) -%}
+        {{ gpa.Stepper({ label: 'Phase', steps: where.steps, current: where.current }) }}
+        {%- call gpa.FactsList() -%}{{ gpa.Fact({ label: 'Stage', text: where.stage }) }}{%- endcall -%}
+      {%- endcall -%}
+    {%- endcall -%}
+  {%- else -%}
+    {{ gpa.FactsCard({ title: title, facts: where.facts, testId: 'record-where' }) }}
+  {%- endif -%}
+{%- endmacro %}
+
+{#- The other service's record: a way to open it, or why there's none. -#}
+{% macro counterpartCard(card) -%}
+  {%- call gpa.Card({ title: card.title, testId: 'record-counterpart' }) -%}
+    {%- if card.kind == 'link' -%}
+      {%- call gpa.CardBody() -%}
+        {%- call gpa.Inline({ between: true }) -%}
+          {{ gpa.Text({ text: card.text }) }}
+          {{ gpa.Button({ text: card.button.text, size: 'sm', iconEnd: 'arrow-right', href: card.button.href }) }}
+        {%- endcall -%}
+      {%- endcall -%}
+    {%- else -%}
+      {%- set actions = gpa.Button({ text: card.button.text, size: 'sm', href: card.button.href }) if card.button else '' -%}
+      {{ gpa.EmptyState({ compact: true, icon: card.empty.icon, title: card.empty.title, text: card.empty.text, actions: actions }) }}
+    {%- endif -%}
+  {%- endcall -%}
+{%- endmacro %}
+
+{#- Records that replace one another, oldest first. Rows don't open: the references are the links. -#}
+{% macro seriesSection(series) -%}
+  {%- set columns = [{ key: 'ref', label: 'Reference', width: 'auto' }] -%}
+  {%- if series.detailed -%}
+    {%- set columns = (columns.push({ key: 'created', label: 'Created', width: 'max-content', align: 'right' }), columns) -%}
+    {%- if series.showClosed %}{% set columns = (columns.push({ key: 'closed', label: 'Closed', width: 'max-content', align: 'right' }), columns) %}{% endif -%}
+  {%- endif -%}
+  {%- call gpa.Section({ title: 'Series', description: series.description, testId: 'record-series' }) -%}
+    {%- call gpa.DataTable({ styleNonce: styleNonce, label: 'Series', columns: columns }) -%}
+      {%- for row in series.rows -%}
+        {%- call gpa.TableRow({ selected: row.current }) -%}
+          <td role="cell">
+            {%- call gpa.Inline({ gap: 'sm', wrap: false }) -%}
+              {%- if row.current -%}
+                {{ gpa.Text({ text: row.ref, mono: true, variant: 'label-md' }) }}
+                {{ gpa.Badge({ text: 'Viewing', size: 'sm', tone: 'info', variant: 'outline' }) }}
+              {%- else -%}
+                {{ gpa.Link({ href: row.href, html: gpa.Text({ text: row.ref, mono: true, tone: 'link' }) }) }}
+                {%- if row.replaced %}{{ gpa.Badge({ text: 'Replaced', size: 'sm' }) }}{% endif -%}
+              {%- endif -%}
+            {%- endcall -%}
+          </td>
+          {%- if series.detailed -%}
+            <td role="cell" class="gpa-right">{{ recordTime(row.created) }}</td>
+            {%- if series.showClosed -%}
+              <td role="cell" class="gpa-right">{% if row.closed or not row.known %}{{ recordTime(row.closed) }}{% else %}{{ gpa.Text({ text: 'Still open', tone: 'subtle' }) }}{% endif %}</td>
+            {%- endif -%}
+          {%- endif -%}
+        {%- endcall -%}
+      {%- endfor -%}
+    {%- endcall -%}
+  {%- endcall -%}
+{%- endmacro %}
+
+{#- The grant version a record is on: a link to it, or the code alone. -#}
+{% macro versionFact(version) -%}
+  {%- if version.href -%}
+    {{ gpa.Link({ href: version.href, html: gpa.Text({ text: version.text, mono: true, tone: 'link' }) }) }}
+  {%- else -%}
+    {{ gpa.Text({ text: version.text, tone: 'subtle' }) }}
+  {%- endif -%}
+{%- endmacro %}
+
+{#- Every event either service holds for the record, newest first. -#}
+{% macro eventsTab(events) -%}
+  {%- if events.kind == 'table' -%}
+    {%- call gpa.Stack({ gap: 'lg' }) -%}
+      {%- if events.unavailable -%}
+        {{ gpa.Alert({ tone: 'warning', title: 'Some event sources are unavailable: ' + events.unavailable + '.', text: 'Showing the rest.', testId: 'record-events-partial' }) }}
+      {%- endif -%}
+      {%- call gpa.DataTable({
+        styleNonce: styleNonce,
+        label: 'Events',
+        link: true,
+        testId: 'record-events',
+        empty: events.empty if not events.rows.length,
+        after: gpa.ListFooter({ state: 'end', text: events.more }) if events.more,
+        columns: [
+          { key: 'type', label: 'Event', width: 'auto' },
+          { key: 'queue', label: 'Queue', width: 'auto' },
+          { key: 'status', label: 'Status', width: 'auto' },
+          { key: 'created', label: 'Created', width: 'max-content', align: 'right' }
+        ]
+      }) -%}
+        {%- for row in events.rows -%}
+          {%- call gpa.TableRow({ link: true }) -%}
+            <td role="cell">{{ gpa.RowLink({ text: row.type, href: row.href }) }}</td>
+            <td role="cell">{{ row.queue }}</td>
+            <td role="cell">{{ gpa.StatusDot({ text: row.status.text, tone: row.status.tone }) }}</td>
+            <td role="cell" class="gpa-right">{{ recordTime(row.created) }}</td>
+            {{ gpa.RowChevron() }}
+          {%- endcall -%}
+        {%- endfor -%}
+      {%- endcall -%}
+    {%- endcall -%}
+  {%- else -%}
+    {{ tabNotice(events) }}
+  {%- endif -%}
+{%- endmacro %}
+
+{#- The document as stored, or why it isn't shown. -#}
+{% macro rawTab(raw) -%}
+  {%- if raw.kind == 'document' -%}
+    {%- call gpa.Card({ title: 'Stored document', actions: gpa.CopyButton({ value: raw.json, text: 'Copy' }), testId: 'record-raw' }) -%}
+      {{ gpa.Code({ block: true, code: raw.json, label: 'Stored document' }) }}
+    {%- endcall -%}
+  {%- elif raw.kind == 'too-large' -%}
+    {%- call gpa.Card({ testId: 'record-raw' }) -%}
+      {{ gpa.EmptyState({ icon: 'file-exclamation-point', title: 'Too large to show', text: raw.text }) }}
+    {%- endcall -%}
+  {%- else -%}
+    {{ tabNotice(raw) }}
+  {%- endif -%}
+{%- endmacro %}

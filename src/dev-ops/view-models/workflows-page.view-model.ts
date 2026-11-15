@@ -21,7 +21,6 @@ export const workflowType: RecordType = {
   title: 'Workflow',
   path: workflowsPath,
   source: 'CW',
-  showClosed: false,
   linkLabel: 'View workflow',
   tabs: workflowTabIds.map((id) => ({ id, label: workflowTabLabels[id] })),
   view: 'workflow',

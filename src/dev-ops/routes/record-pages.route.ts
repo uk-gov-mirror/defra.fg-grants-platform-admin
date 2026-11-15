@@ -5,7 +5,14 @@ import Joi from 'joi'
 import type { Schema } from 'joi'
 
 import { getApplicationPageUseCase } from '../use-cases/get-application-page.use-case.ts'
+import type { ApplicationRef } from '../use-cases/get-application-page.use-case.ts'
 import { getCasePageUseCase } from '../use-cases/get-case-page.use-case.ts'
+import type { CaseRef } from '../use-cases/get-case-page.use-case.ts'
+import {
+  readApplicationPositionNames,
+  readCasePositionNames,
+  withPositionNames
+} from '../use-cases/read-position-names.use-case.ts'
 import { getGrantPageUseCase } from '../use-cases/get-grant-page.use-case.ts'
 import type {
   GrantVersionPage,
@@ -15,7 +22,11 @@ import type { GrantTabId } from '../use-cases/grant-tabs.ts'
 import { getGrantVersionsUseCase } from '../use-cases/get-grant-versions.use-case.ts'
 import { getWorkflowPageUseCase } from '../use-cases/get-workflow-page.use-case.ts'
 import { getWorkflowVersionsUseCase } from '../use-cases/get-workflow-versions.use-case.ts'
-import type { HiddenTab, RecordResult } from '../use-cases/record-reads.ts'
+import type {
+  HiddenTab,
+  RecordResult,
+  RecordTab
+} from '../use-cases/record-reads.ts'
 import { toApplicationPage } from '../view-models/application-page.view-model.ts'
 import { applicationType } from '../view-models/applications-page.view-model.ts'
 import { getCatalogueUseCase } from '../use-cases/get-catalogue.use-case.ts'
@@ -44,9 +55,11 @@ import { toTabHref } from '../view-models/record-page.view-model.ts'
 import type { RecordPageModel } from '../view-models/record-page.view-model.ts'
 import { roles as appRoles } from '../../common/roles.ts'
 import type { RecordType } from '../view-models/record-type.ts'
+import { toBackHref } from '../view-models/record-view.ts'
 import { toVersionPath } from '../view-models/record-type.ts'
 import { toWorkflowPage } from '../view-models/workflow-page.view-model.ts'
 import { shellQuery, timesOf, withoutShellKeys } from '../view-models/times.ts'
+import type { Times } from '../view-models/times.ts'
 import {
   missingStatusCodes,
   toRecordMissing
@@ -55,7 +68,14 @@ import type { MissingState } from '../view-models/record-missing.ts'
 import type { Zone } from '../view-models/zoned-clock.ts'
 import { workflowType } from '../view-models/workflows-page.view-model.ts'
 
-interface RecordPageRoute<K, P, T extends string, N, Q> {
+interface RecordPageRoute<
+  K,
+  P,
+  T extends string,
+  N,
+  Q,
+  M extends { navActive: string | null }
+> {
   record: RecordType
   /** Each URL param after the record's path, in order, with its schema. */
   params: Record<keyof K & string, Schema>
@@ -72,8 +92,9 @@ interface RecordPageRoute<K, P, T extends string, N, Q> {
       catalogue: Catalogue | null
       roles: string[]
       zone: Zone
+      times: Times
     }
-  ) => RecordPageModel
+  ) => M
   /** Where a write leaves its outcome for the one render after it. */
   noticeKey?: keyof YarFlashes
 }
@@ -88,6 +109,13 @@ const toNavActive = (
   catalogue: Catalogue | null,
   from: string
 ): string | null => toBackBucket(catalogue, from)?.id ?? null
+
+/** Opened from no list, a record sits under its own. */
+const toRecordNav = (
+  catalogue: Catalogue | null,
+  record: RecordType,
+  from: string
+): string | null => toNavActive(catalogue, toBackHref(record, from))
 
 /** What the Back link says: where `back` leads, else the record's own list. */
 const labelAt = (catalogue: Catalogue | null, href: string): string | null =>
@@ -133,10 +161,10 @@ const missingView = (
     .view('record-missing', {
       pageTitle: missing.pageTitle,
       missing,
-      backHref: from || record.path,
+      backHref: toBackHref(record, from),
       backLabel: toRecordBackLabel(catalogue, record, from),
       retryHref: `${request.url.pathname}${request.url.search}`,
-      navActive: toNavActive(catalogue, from || record.path)
+      navActive: toNavActive(catalogue, toBackHref(record, from))
     })
     .code(missingStatusCodes[state])
 }
@@ -164,14 +192,21 @@ const rolesOf = (request: Request): string[] =>
  * One tab of one record per render. A record the service has not got, or
  * could not read, is its page with the reason in place of the record.
  */
-const recordPageRoute = <K, P, T extends string, N = never, Q = object>({
+const recordPageRoute = <
+  K,
+  P,
+  T extends string,
+  N = never,
+  Q = object,
+  M extends { navActive: string | null } = RecordPageModel
+>({
   record,
   params,
   query,
   read,
   toPage,
   noticeKey
-}: RecordPageRoute<K, P, T, N, Q>): ServerRoute => ({
+}: RecordPageRoute<K, P, T, N, Q, M>): ServerRoute => ({
   method: 'GET',
   path: [record.path, ...Object.keys(params).map((name) => `{${name}}`)].join(
     '/'
@@ -214,17 +249,19 @@ const recordPageRoute = <K, P, T extends string, N = never, Q = object>({
       })
     }
 
+    const times = timesOf(request)
     const model = toPage(page, tab, from, {
       notice,
       query: extra as Q,
       catalogue,
       roles: rolesOf(request),
-      zone: timesOf(request).zone
+      zone: times.zone,
+      times
     })
 
     return h.view(record.view, {
       pageTitle: record.title,
-      ...withNav(model, toNavActive(catalogue, from)),
+      ...withNav(model, toRecordNav(catalogue, record, from)),
       backLabel: toRecordBackLabel(catalogue, record, from)
     })
   }
@@ -292,16 +329,36 @@ const currentVersionRoute = ({
 export const viewApplicationRoute = recordPageRoute({
   record: applicationType,
   params: { code: slugFilterSchema, clientRef: slugFilterSchema },
-  read: getApplicationPageUseCase,
-  toPage: (page, tab, from, { zone }) =>
-    toApplicationPage(page, tab, from, zone)
+  read: async (ref: ApplicationRef, tab: RecordTab) =>
+    withPositionNames(
+      await getApplicationPageUseCase(ref, tab),
+      ({ overview }) =>
+        overview
+          ? { code: overview.code, version: overview.currentConfigVersion }
+          : null,
+      readApplicationPositionNames
+    ),
+  toPage: (page, tab, from, { times, catalogue }) =>
+    toApplicationPage(page, tab, { from, times, catalogue })
 })
 
 export const viewCaseRoute = recordPageRoute({
   record: caseType,
   params: { workflowCode: slugFilterSchema, caseRef: slugFilterSchema },
-  read: getCasePageUseCase,
-  toPage: (page, tab, from, { zone }) => toCasePage(page, tab, from, zone)
+  read: async (ref: CaseRef, tab: RecordTab) =>
+    withPositionNames(
+      await getCasePageUseCase(ref, tab),
+      ({ overview }) =>
+        overview
+          ? {
+              code: overview.workflowCode,
+              version: overview.currentConfigVersion
+            }
+          : null,
+      readCasePositionNames
+    ),
+  toPage: (page, tab, from, { times, catalogue }) =>
+    toCasePage(page, tab, { from, times, catalogue })
 })
 
 export const viewGrantRoute = recordPageRoute<

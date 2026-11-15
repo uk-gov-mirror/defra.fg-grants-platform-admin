@@ -8,7 +8,6 @@
 {% from "icon/macro.njk" import icon %}
 {% from "inbox-search/macro.njk" import inboxSearch %}
 {% from "json-viewer/macro.njk" import jsonViewer %}
-{% from "record-row/macro.njk" import recordItem, recordRow %}
 
 {% macro noData(record) %}
   <div role="alert" class="alert alert-warning alert-soft text-sm" data-testid="{{ record.itemId }}-no-data">
@@ -24,16 +23,7 @@
 
   <header class="mt-2 mb-5" data-testid="{{ record.itemId }}-header">
     <h1 class="flex flex-wrap items-baseline gap-x-2 text-xl font-semibold break-words" data-testid="{{ record.itemId }}-title"><span>{{ record.title }}</span> <span class="font-mono text-sm font-normal break-all {{ muted }} select-all" data-testid="{{ record.itemId }}-ref">{{ ref }}</span></h1>
-    {% block recordHeader %}
-    {% if trail | length %}
-      <p class="mt-2 flex flex-wrap items-center gap-x-1.5 text-sm" data-testid="{{ record.itemId }}-position">
-        {% for step in trail %}
-          <span{% if step.current %} class="font-semibold"{% endif %} data-testid="{{ record.itemId }}-position-step">{{ step.label }}</span>{% if not loop.last %}<span class="sr-only">,</span>
-          {{ icon({ name: 'chevron-down', class: 'size-3.5 shrink-0 -rotate-90 text-base-content/50' }) }}{% endif %}
-        {% endfor %}
-      </p>
-    {% endif %}
-    {% endblock %}
+    {% block recordHeader %}{% endblock %}
   </header>
 
   {% block beforeTabs %}{% endblock %}
@@ -60,39 +50,7 @@
       </div>
     {% elif tab == "overview" and facts %}
       {{ factsCard({ facts: facts, label: 'Overview', testId: record.itemId }) }}
-      {% if series %}
-        {% set seriesPrefix = record.itemId ~ "-series" %}
-        <section class="card card-border mt-4 bg-base-100" aria-labelledby="{{ seriesPrefix }}-title" data-testid="{{ seriesPrefix }}">
-          <div class="card-body gap-3 p-5">
-            <h2 class="card-title text-base" id="{{ seriesPrefix }}-title" data-testid="{{ seriesPrefix }}-heading">Series</h2>
-            <div class="hidden w-full overflow-x-auto sm:block">
-              <table class="table w-full table-fixed" data-testid="{{ seriesPrefix }}-table">
-                <thead>
-                  <tr data-testid="{{ seriesPrefix }}-head">
-                    <th scope="col">Reference</th>
-                    {% if seriesDetailed %}
-                      <th scope="col">Status</th>
-                      {% if record.showClosed %}<th scope="col" class="text-right">Closed</th>{% endif %}
-                      <th scope="col" class="text-right">Created</th>
-                    {% endif %}
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for member in series %}
-                    {{ recordRow({ row: member, prefix: seriesPrefix, showClosed: record.showClosed, detailed: seriesDetailed }) }}
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-            <ul class="list sm:hidden" data-testid="{{ seriesPrefix }}-list">
-              {% for member in series %}
-                {{ recordItem({ row: member, prefix: seriesPrefix, detailed: seriesDetailed }) }}
-              {% endfor %}
-            </ul>
-          </div>
-        </section>
-      {% endif %}
-    {% elif tab == "events" and events %}
+    {% elif tab == "events" and events and versionEvents %}
       {% if unavailableSources %}
         <div role="alert" class="alert alert-warning alert-soft mb-3 text-sm" data-testid="{{ record.itemId }}-events-partial">
           {{ icon({ name: 'exclamation-triangle', class: 'size-4 shrink-0' }) }}
@@ -117,9 +75,9 @@
             </table>
           </div>
           {% if events.more %}
-            <p class="border-t border-base-300 px-4 py-3 text-sm {{ muted }}" data-testid="{{ record.itemId }}-events-more">{% if versioned %}Showing the newest 50 from {{ versioned.source }}'s inbox.{% else %}Showing the newest 50 from each {{ record.source }} queue.{% endif %}</p>
+            <p class="border-t border-base-300 px-4 py-3 text-sm {{ muted }}" data-testid="{{ record.itemId }}-events-more">Showing the newest 50 from {{ versioned.source }}'s inbox.</p>
           {% endif %}
-        {% elif versioned %}
+        {% else %}
           <div class="px-4 py-10 text-center text-sm {{ muted }}" data-testid="{{ record.itemId }}-events-empty">
             {# An unread source cannot be said to hold nothing: the alert above says why the table is empty. #}
             {% if not unavailableSources %}
@@ -127,8 +85,6 @@
             {% endif %}
             <div>{% call inboxSearch({ service: versioned.source, code: versioned.code, testId: record.itemId ~ "-events-search" }) %}Search {{ versioned.source }}'s inbox for {{ codeText(versioned.code) }} to see every version's events ›{% endcall %}</div>
           </div>
-        {% else %}
-          <p class="px-4 py-10 text-center text-sm {{ muted }}" data-testid="{{ record.itemId }}-events-empty">No events found.</p>
         {% endif %}
       </div>
     {% elif tab == "raw" and raw %}
