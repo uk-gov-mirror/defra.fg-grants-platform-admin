@@ -1,0 +1,2 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+<div id="{{ p.id }}" role="tabpanel"{% if p.label %} aria-label="{{ p.label }}"{% endif %} tabindex="0" class="{{ cls('gpa-tabpanel', p) }}"{{ attrs(p) }}>{{ caller() }}</div>

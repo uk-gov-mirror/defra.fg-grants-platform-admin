@@ -1,0 +1,85 @@
+.gpa-textarea {
+  border: var(--border-width-hairline) solid var(--input-border);
+  border-radius: var(--radius-md);
+  background: var(--input-bg);
+  color: var(--fg-default);
+  box-shadow: var(--elevation-raised);
+  transition:
+    border-color var(--duration-normal) ease,
+    background-color var(--duration-normal) ease,
+    var(--transition-focus);
+}
+.gpa-textarea:hover:where(
+    :not(:disabled, [aria-disabled="true"], .is-disabled)
+  ) {
+  border-color: var(--input-border-hover);
+}
+.gpa-textarea:focus-visible {
+  border-color: var(--input-border-focus);
+  outline: var(--focus-ring-width) solid var(--border-focus);
+  outline-offset: var(--focus-ring-offset);
+}
+.gpa-textarea.is-invalid {
+  border-color: var(--input-border-invalid);
+}
+.gpa-textarea.is-invalid:focus-visible {
+  border-color: var(--input-border-invalid);
+  outline-color: var(--input-border-invalid);
+}
+.gpa-textarea:disabled {
+  background: var(--input-bg-disabled);
+  border-color: var(--border-default);
+  box-shadow: var(--elevation-flat);
+  color: var(--fg-disabled);
+  cursor: not-allowed;
+}
+.gpa-textarea:read-only:not(:disabled) {
+  background: var(--input-bg-disabled);
+  box-shadow: var(--elevation-flat);
+}
+.gpa-textarea::placeholder {
+  color: var(--input-placeholder);
+  opacity: 1;
+}
+.gpa-textarea {
+  display: block;
+  width: 100%;
+  min-height: calc(var(--size-control-md) * 2);
+  padding: var(--inset-field-y) var(--inset-field);
+  font: inherit;
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-md);
+  resize: vertical;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.gpa-textarea::-webkit-resizer {
+  background: transparent;
+}
+.gpa-textarea-sm {
+  min-height: calc(var(--size-control-sm) * 2);
+  padding: var(--inset-tag-xs) var(--inset-field-sm);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+  letter-spacing: var(--tracking-sm);
+}
+.gpa-textarea.gpa-mono {
+  font-family: var(--font-code);
+  font-feature-settings: var(--font-code-features);
+  font-variant-ligatures: none;
+  font-size: var(--code-block-size);
+  line-height: var(--code-block-line-height);
+  white-space: pre;
+  letter-spacing: 0;
+  tab-size: 2;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gpa-textarea {
+    transition: none;
+  }
+}
+@supports (-webkit-touch-callout: none) {
+  .gpa-textarea {
+    font-size: var(--font-size-lg);
+  }
+}

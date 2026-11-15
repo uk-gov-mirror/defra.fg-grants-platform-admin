@@ -1,0 +1,36 @@
+.gpa-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+}
+.gpa-inline.gpa-nowrap {
+  flex-wrap: nowrap;
+}
+.gpa-inline.gpa-gap-none {
+  gap: 0;
+}
+.gpa-inline.gpa-gap-2xs {
+  gap: var(--gap-inline-2xs);
+}
+.gpa-inline.gpa-gap-xs {
+  gap: var(--gap-inline-xs);
+}
+.gpa-inline.gpa-gap-sm {
+  gap: var(--gap-inline-sm);
+}
+.gpa-inline.gpa-gap-md {
+  gap: var(--gap-inline-md);
+}
+.gpa-inline.gpa-gap-lg {
+  gap: var(--gap-inline-lg);
+}
+.gpa-inline.gpa-gap-xl {
+  gap: var(--gap-inline-xl);
+}
+.gpa-inline.gpa-gap-2xl {
+  gap: var(--gap-stack-xl);
+}
+.gpa-inline.gpa-gap-section {
+  gap: var(--gap-section);
+}

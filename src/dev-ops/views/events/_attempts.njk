@@ -1,0 +1,62 @@
+{% import "components/macros.njk" as gpa %}
+{#- The attempts: the one error they failed with and its stack, then each attempt on asking. -#}
+{%- if attempts -%}
+  {%- set errorsAction -%}
+    {%- if attempts.errorsHref %}{{ gpa.Button({ text: 'Events with this error', size: 'sm', variant: 'tertiary', iconEnd: 'arrow-right', href: attempts.errorsHref, testId: 'event-errors-link' }) }}{% endif -%}
+  {%- endset -%}
+  {%- call gpa.Card({ padded: true, title: 'Attempts', count: attempts.count, actions: errorsAction, testId: 'event-attempts', countTestId: 'event-attempts-count' }) -%}
+    {%- call gpa.Stack({ gap: 'md' }) -%}
+      {%- if attempts.redriven -%}
+        {%- set redriven -%}Redriven {% if attempts.redriven.at %}{{ gpa.Time(attempts.redriven.at) }}{% endif %} by {{ attempts.redriven.by }} — waiting for {{ attempts.redriven.service }}’s poller. No attempts since.{%- endset -%}
+        {{ gpa.Text({ html: redriven, testId: 'event-redriven' }) }}
+        {%- if attempts.redriven.error -%}
+          {{ gpa.Text({ tone: 'muted', text: 'Before the redrive, all ' ~ attempts.redriven.allowed ~ ' attempts failed with:' if attempts.redriven.allowed else 'Before the redrive, the attempts failed with:' }) }}
+          {{ gpa.Code({ block: true, framed: true, lineNumbers: false, code: attempts.redriven.error, label: 'Error' }) }}
+        {%- endif -%}
+      {%- else -%}
+        {%- if attempts.lead -%}
+          {%- call gpa.Inline({ gap: 'sm', wrap: true }) -%}
+            {{ gpa.Text({ variant: 'label-md', text: attempts.lead, testId: 'event-attempts-lead' }) }}
+            {%- if attempts.lastAt -%}
+              {%- set lastAt %}the last at {{ gpa.Time(attempts.lastAt) }}{% endset -%}
+              {{ gpa.Text({ tone: 'subtle', html: lastAt }) }}
+            {%- endif -%}
+          {%- endcall -%}
+        {%- endif -%}
+        {%- if attempts.block -%}
+          {{ gpa.Code({ block: true, framed: true, lineNumbers: false, maxHeight: 200, code: attempts.block, label: 'Last error and stack trace', testId: 'event-last-error' }) }}
+        {%- endif -%}
+        {%- if attempts.items.length -%}
+          {%- call gpa.Disclosure({ text: 'Show each attempt', hideText: 'Hide attempts', summaryTestId: 'event-attempts-toggle' }) -%}
+            {%- call gpa.Timeline({ label: 'Attempts' }) -%}
+              {%- for item in attempts.items -%}
+                {%- set meta -%}{% if item.clock %}{{ gpa.Time(item.clock) }}{% if item.gap %}, {% endif %}{% endif %}{{ item.gap or '' }}{%- endset -%}
+                {%- if item.differs or item.sameAsLast -%}
+                  {%- call gpa.TimelineItem({ tone: item.tone, title: item.title, metaHtml: meta, testId: 'event-attempt' }) -%}
+                    {%- if item.differs -%}
+                      {%- call gpa.Stack({ gap: 'xs' }) -%}
+                        {{ gpa.Text({ text: item.differs.message, mono: true, tone: 'danger' }) }}
+                        {%- if item.differs.stack -%}
+                          {%- call gpa.Disclosure({ text: 'Stack trace', hideText: 'Hide stack trace' }) -%}
+                            {{ gpa.Code({ block: true, framed: true, code: item.differs.stack, label: 'Stack trace' }) }}
+                          {%- endcall -%}
+                        {%- endif -%}
+                      {%- endcall -%}
+                    {%- else -%}
+                      {{ gpa.Text({ tone: 'subtle', text: 'Same as the last error' }) }}
+                    {%- endif -%}
+                  {%- endcall -%}
+                {%- else -%}
+                  {{ gpa.TimelineItem({ tone: item.tone, title: item.title, metaHtml: meta, testId: 'event-attempt' }) }}
+                {%- endif -%}
+              {%- endfor -%}
+            {%- endcall -%}
+          {%- endcall -%}
+        {%- endif -%}
+      {%- endif -%}
+      {%- if attempts.noAttemptsSinceEdit -%}
+        {{ gpa.Text({ tone: 'muted', text: 'No attempts since the payload was edited.', testId: 'event-no-attempts-since-edit' }) }}
+      {%- endif -%}
+    {%- endcall -%}
+  {%- endcall -%}
+{%- endif -%}

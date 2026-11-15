@@ -1,0 +1,67 @@
+{% import "components/macros.njk" as gpa %}
+{#- Redrive and purge: each opens from its button with a script, and arrives open from the address without one. -#}
+
+{%- macro shortLine(d) -%}
+  {%- call gpa.Stack({ gap: 'sm' }) -%}
+    {%- if d.prod -%}
+      {%- call gpa.Inline({ gap: 'sm', align: 'center' }) -%}
+        {{ gpa.Badge({ text: 'prod', size: 'sm', tone: 'danger', variant: 'outline' }) }}{{ gpa.Text({ text: 'This changes production.', variant: 'label-md' }) }}
+      {%- endcall -%}
+    {%- endif -%}
+    {%- call gpa.Inline({ gap: 'sm' }) -%}
+      {{ gpa.Text({ text: d.short.name, tone: 'subtle' }) }}{{ gpa.Divider({ vertical: true }) }}{{ gpa.Text({ text: d.short.id, mono: true, tone: 'subtle' }) }}
+    {%- endcall -%}
+  {%- endcall -%}
+{%- endmacro -%}
+
+{%- if redriveDialog -%}
+  {%- set d = redriveDialog -%}
+  {%- set redriveActions -%}
+    {{ gpa.Button({ text: 'Cancel', href: d.closeHref, attributes: { 'data-gpa-close': true } }) }}
+    {{ gpa.Button({ text: 'Redrive', variant: 'primary', type: 'submit', form: 'redrive-form', loadingOnSubmit: true, testId: 'redrive-submit' }) }}
+  {%- endset -%}
+  {%- call gpa.Dialog({ id: d.id, title: 'Redrive this event?', open: d.open, closeHref: d.closeHref, actions: redriveActions, testId: 'redrive-dialog' }) -%}
+    {%- call gpa.Stack({ gap: 'lg' }) -%}
+      {{ shortLine(d) }}
+      {{ gpa.Text({ text: d.service ~ '’s poller picks it up again and retries it up to ' ~ d.allowed ~ ' times. The attempt count starts again. This is audited.' if d.allowed else d.service ~ '’s poller picks it up again and retries it. The attempt count starts again. This is audited.' }) }}
+      {%- if d.futile -%}
+        {%- set futileAction -%}
+          {%- if d.futile.editHref %}{{ gpa.Button({ text: 'Edit the payload instead', size: 'sm', href: d.futile.editHref, testId: 'redrive-edit-instead' }) }}{% endif -%}
+        {%- endset -%}
+        {{ gpa.Alert({ tone: 'warning', title: 'This will probably fail again.', text: 'All ' ~ d.futile.count ~ ' attempts failed with the same error and the payload hasn’t changed. Fix the cause first — in the payload or in the service it calls.', actions: futileAction, testId: 'redrive-futile' }) }}
+      {%- endif -%}
+      {%- if d.edited -%}
+        {%- set editedText %}It will use the payload edited by {{ d.edited.by }}{% if d.edited.at %} on {{ gpa.Time(d.edited.at) }}{% endif %}, not the original.{% endset -%}
+        {{ gpa.Alert({ tone: 'info', html: editedText, testId: 'redrive-edited' }) }}
+      {%- endif -%}
+      {%- if d.purged -%}
+        {%- set purgedText %}It was purged{% if d.purged.at %} on {{ gpa.Time(d.purged.at) }}{% endif %} by {{ d.purged.by }}. Redriving brings it back to the queue; the purge stays in its history.{% endset -%}
+        {{ gpa.Alert({ tone: 'info', html: purgedText, testId: 'redrive-purged' }) }}
+      {%- endif -%}
+      {{ gpa.Form({ id: 'redrive-form', action: d.action, label: 'Redrive this event', hidden: [{ name: 'back', value: d.back }] }) }}
+    {%- endcall -%}
+  {%- endcall -%}
+{%- endif -%}
+
+{%- if purgeDialog -%}
+  {%- set d = purgeDialog -%}
+  {%- set purgeActions -%}
+    {{ gpa.Button({ text: 'Cancel', href: d.closeHref, attributes: { 'data-gpa-close': true } }) }}
+    {{ gpa.Button({ text: 'Purge event', variant: 'danger-solid', type: 'submit', form: 'purge-form', loadingOnSubmit: true, testId: 'purge-submit' }) }}
+  {%- endset -%}
+  {%- call gpa.Dialog({ id: d.id, title: 'Purge this event?', tone: 'danger', open: d.open, resetOnOpen: true, closeHref: d.closeHref, actions: purgeActions, testId: 'purge-dialog' }) -%}
+    {%- call gpa.Stack({ gap: 'lg' }) -%}
+      {{ shortLine(d) }}
+      {%- set deleted %}It won’t be processed or retried, and it leaves the dead-letter list. {% if d.deletionDay %}It’s deleted on {{ gpa.Time(d.deletionDay) }} — you can still redrive it until then. {% endif %}This is audited.{% endset -%}
+      {{ gpa.Text({ html: deleted }) }}
+      {%- call gpa.Form({ id: 'purge-form', action: d.action, label: 'Purge this event', hidden: [{ name: 'back', value: d.back }] }) -%}
+        {%- call gpa.Stack({ gap: 'lg' }) -%}
+          {{ gpa.RadioGroup({ name: 'reasonCode', id: 'purge-reason', label: 'Reason', options: d.reasons, error: d.reasonError, errorTestId: 'purge-reason-error' }) }}
+          {%- call gpa.Field({ id: 'purge-note', label: 'Note', hint: 'Required when the reason is Other. Shown on the event; don’t include personal data.', error: d.noteError, count: { max: d.noteMax, value: d.note }, countId: 'purge-note-count', errorTestId: 'purge-note-error' }) -%}
+            {{ gpa.Textarea({ id: 'purge-note', name: 'note', rows: 3, value: d.note, invalid: d.noteError, maxlength: d.noteMax, describedBy: gpa.describedBy({ id: 'purge-note', hint: true, error: d.noteError, extra: 'purge-note-count' }), testId: 'purge-note' }) }}
+          {%- endcall -%}
+        {%- endcall -%}
+      {%- endcall -%}
+    {%- endcall -%}
+  {%- endcall -%}
+{%- endif -%}

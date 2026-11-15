@@ -1,0 +1,15 @@
+{%- from "../../core/macros.njk" import attrs, cls, vh -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+{%- set d = p if p.lines else gpaDiff(p.before, p.after, 3 if p.context is not defined else p.context) -%}
+  <div class="{{ cls('gpa-diff' ~ (' gpa-code-framed' if p.framed !== false else '') ~ (' gpa-maxh-' ~ p.maxHeight if p.maxHeight else ''), p) }}"{{ attrs(p) }}>
+    <div class="gpa-diff-summary"><span class="gpa-diff-count-add">{{ d.added }} {{ 'line' if d.added == 1 else 'lines' }} added</span><span class="gpa-diff-count-del">{{ d.removed }} {{ 'line' if d.removed == 1 else 'lines' }} removed</span></div>
+    <div class="gpa-diff-body" tabindex="0" role="region" aria-label="{{ p.label or 'Changes' }}">
+      {%- if d.added + d.removed == 0 %}<div class="gpa-diff-none">No changes.</div>{% else %}<div class="gpa-diff-rows">
+      {%- for l in d.lines -%}
+        {%- if l.kind == 'gap' -%}<div class="gpa-diff-line is-gap"><span class="gpa-diff-num"></span><span class="gpa-diff-num"></span><span class="gpa-diff-sign"></span><span class="gpa-diff-text">{{ l.text }}</span></div>
+        {%- else -%}<div class="gpa-diff-line is-{{ l.kind }}"><span class="gpa-diff-num" aria-hidden="true">{{ l.before }}</span><span class="gpa-diff-num" aria-hidden="true">{{ l.after }}</span><span class="gpa-diff-sign">{% if l.kind == 'add' %}{{ Icon({ name: 'plus', size: 'xs' }) }}{{ vh('Added: ') }}{% elif l.kind == 'del' %}{{ Icon({ name: 'minus', size: 'xs' }) }}{{ vh('Removed: ') }}{% endif %}</span><span class="gpa-diff-text">{{ l.text or ' ' }}</span></div>
+        {%- endif -%}
+      {%- endfor -%}
+      </div>{% endif -%}
+    </div>
+  </div>

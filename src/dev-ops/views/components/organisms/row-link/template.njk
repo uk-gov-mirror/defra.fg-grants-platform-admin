@@ -1,0 +1,2 @@
+{%- from "../../core/macros.njk" import attrs, cls, body -%}
+<a href="{{ p.href }}" class="{{ cls('gpa-rowlink' ~ (' gpa-mono' if p.mono else ''), p) }}"{% if p.title %} title="{{ p.title }}"{% endif %}{{ attrs(p) }}>{{ body(p, caller) }}</a>

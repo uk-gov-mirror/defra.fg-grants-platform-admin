@@ -1,0 +1,9 @@
+.gpa-skeleton {
+  display: block;
+  border-radius: var(--radius-sm);
+  background: var(--bg-hover);
+  animation: gpa-pulse 1600ms ease-in-out infinite;
+}
+.gpa-skeleton-circle {
+  border-radius: var(--radius-full);
+}

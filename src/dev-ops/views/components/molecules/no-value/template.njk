@@ -1,0 +1,2 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+<span class="{{ cls('gpa-fact-empty', p or {}) }}" aria-label="{{ (p and p.label) or 'Not set' }}"{{ attrs(p or {}) }}>—</span>

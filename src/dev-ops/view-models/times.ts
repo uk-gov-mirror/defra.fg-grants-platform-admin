@@ -93,6 +93,38 @@ export const toTime = (instant: Date, times: Times): TimeText => {
   }
 }
 
+/** `13 Oct 2026 14:53:24`: where the order within a minute matters. */
+export const toSecondsTime = (instant: Date, times: Times): TimeText => {
+  const time = toTime(instant, times)
+
+  return { ...time, text: keepDayWithMonth(time.title.replace(/ \S+$/, '')) }
+}
+
+/** `2 Feb 2027`: a day, as a deletion date is. */
+export const toDayTime = (instant: Date, times: Times): TimeText => {
+  const time = toTime(instant, times)
+
+  return { ...time, text: time.text.replace(/ \d{2}:\d{2}$/, '') }
+}
+
+const msOptions: Intl.DateTimeFormatOptions = {
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23'
+}
+
+/** `14:53:22.635`: the clock alone, to the millisecond, for attempts a fraction of a second apart. */
+export const toClockTime = (instant: Date, times: Times): TimeText => {
+  const parts = partsOf(formatIn(times.zone, 'en-GB', msOptions), instant)
+  const ms = String(instant.getUTCMilliseconds()).padStart(3, '0')
+
+  return {
+    ...toTime(instant, times),
+    text: `${parts.hour}:${parts.minute}:${parts.second}.${ms}`
+  }
+}
+
 /** The setting a request carries in its cookie. */
 export const timesOf = (request: { state?: Record<string, unknown> }): Times =>
   toTimes(request.state?.[timesCookieName])

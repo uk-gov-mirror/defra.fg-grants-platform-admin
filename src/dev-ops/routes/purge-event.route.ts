@@ -8,6 +8,7 @@ import { purgeEventUseCase } from '../use-cases/purge-event.use-case.ts'
 import { eventAddress, toEventKey } from '../view-models/event-address.ts'
 import { toEventHref } from '../view-models/event-formats.ts'
 import {
+  eventBannerId,
   purgeFormKey,
   redriveNoticeKey,
   toSafeFrom
@@ -44,9 +45,9 @@ const toQuery = (from: string, reopen: boolean): string => {
   return params.size ? `?${params}` : ''
 }
 
-/** A rejected form reopens the panel on the payload card, so the alert it sends focus to is on screen. */
+/** A rejected form is handed back in the dialog, drawn open; a purge lands on the banner that says how it went. */
 const toRedirect = (key: EventKey, from: string, reopen: boolean): string =>
-  `${toEventHref(key)}${toQuery(from, reopen)}${reopen ? '#payload' : ''}`
+  `${toEventHref(key)}${toQuery(from, reopen)}${reopen ? '' : `#${eventBannerId}`}`
 
 /** The same gate the page draws the button behind. */
 const isPurgeable = (event: EventDetail): boolean =>

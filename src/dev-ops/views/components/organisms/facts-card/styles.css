@@ -1,0 +1,24 @@
+.gpa-factscard {
+  display: flex;
+  flex-wrap: wrap;
+  overflow: hidden;
+}
+.gpa-factscard > .gpa-facts {
+  flex: 1 1 var(--size-facts-column);
+  min-width: 0;
+  padding: var(--space-4) 0;
+  box-shadow:
+    calc(var(--border-width-hairline) * -1) 0 0 var(--border-subtle),
+    0 calc(var(--border-width-hairline) * -1) 0 var(--border-subtle);
+}
+.gpa-factscard > .gpa-facts {
+  grid-template-columns:
+    calc(var(--size-facts-label) + var(--inset-card))
+    minmax(0, 1fr);
+}
+.gpa-factscard > .gpa-facts dt {
+  padding-inline-start: var(--inset-card);
+}
+.gpa-factscard > .gpa-facts dd {
+  padding-inline-end: var(--inset-card);
+}

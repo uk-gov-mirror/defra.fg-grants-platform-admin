@@ -1,7 +1,7 @@
 import { toFilterHref } from './list-filters.ts'
 
 interface ListQuery {
-  code?: string
+  code?: string | string[]
   q?: string
   from?: string
 }
@@ -30,6 +30,26 @@ describe('toFilterHref', () => {
         new URLSearchParams({ cursor: 'A' })
       )
     ).toBe('/dev-ops/applications?cursor=A&code=woodland&q=smith')
+  })
+
+  test('repeats the key of a filter with several values, in their order', () => {
+    expect(
+      toFilterHref<ListQuery>('/dev-ops/applications', keys, {
+        code: ['woodland', '', 'grasslands'],
+        q: 'smith'
+      })
+    ).toBe('/dev-ops/applications?code=woodland&code=grasslands&q=smith')
+  })
+
+  test('a filter it carries replaces the same key among the params', () => {
+    expect(
+      toFilterHref<ListQuery>(
+        '/dev-ops/applications',
+        keys,
+        { code: ['woodland', 'grasslands'] },
+        new URLSearchParams([['code', 'old']])
+      )
+    ).toBe('/dev-ops/applications?code=woodland&code=grasslands')
   })
 
   test('leaves out the filters that are unset or blank', () => {

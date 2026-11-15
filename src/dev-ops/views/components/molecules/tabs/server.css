@@ -1,0 +1,10 @@
+.gpa-tab {
+  text-decoration: none;
+}
+.gpa-tab[aria-current="page"] {
+  color: var(--fg-default);
+  border-bottom-color: var(--border-selected);
+}
+do-tab-strip.gpa-tabs {
+  display: flex;
+}

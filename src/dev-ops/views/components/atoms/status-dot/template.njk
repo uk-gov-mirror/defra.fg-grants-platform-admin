@@ -1,0 +1,2 @@
+{%- from "../../core/macros.njk" import attrs, cls, body -%}
+<span class="{{ cls('gpa-status' ~ (' gpa-status-sm' if p.size == 'sm' else ''), p) }}"{% if p.title %} title="{{ p.title }}"{% endif %}{{ attrs(p) }}><span class="gpa-dot gpa-dot-{{ p.tone or 'neutral' }}" aria-hidden="true"></span>{% if p.text or p.html or caller %}<span>{{ body(p, caller) }}</span>{% endif %}</span>

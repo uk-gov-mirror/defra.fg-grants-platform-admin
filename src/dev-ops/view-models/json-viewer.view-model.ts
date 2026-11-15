@@ -130,12 +130,6 @@ const viewOf = (parsed: unknown): JsonView => {
 }
 
 /** A JSON text, drawn as `JSON.stringify(JSON.parse(text), null, 2)` prints it. */
-export const toJsonTextView = (text: string): JsonView =>
-  viewOf(JSON.parse(text))
-
 /** Read through a JSON round trip first, so what is drawn is exactly what `JSON.stringify` would print. */
 export const toJsonView = (value: unknown): JsonView =>
   viewOf(JSON.parse(JSON.stringify(value)))
-
-export const toJsonViewOrNone = (value: unknown): JsonView | null =>
-  value === undefined ? null : toJsonView(value)

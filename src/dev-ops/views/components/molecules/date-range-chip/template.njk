@@ -1,0 +1,26 @@
+{%- from "../../core/macros.njk" import attrs, iconTemplate -%}
+{%- from "../../atoms/button/macro.njk" import Button -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+{%- set id = p.id or gpaId('gpa-range') -%}
+  {%- set text = p.value or (gpaFormatRange(p.start, p.end) if (p.start and p.end) else (p.allLabel or 'Any time')) -%}
+  {%- set isSet = p.value or (p.start and p.end) -%}
+  <gpa-date-range-chip{% if p.min %} data-min="{{ p.min }}"{% endif %}{% if p.max %} data-max="{{ p.max }}"{% endif %}{% if p.hint %} data-hint="{{ p.hint }}"{% endif %}{{ attrs(p) }}><div class="gpa-dropdown">
+    <button type="button" class="gpa-chip{{ ' is-set' if isSet }}" popovertarget="{{ id }}" aria-haspopup="dialog"><span class="gpa-chip-label">{{ p.label }}:</span><span class="gpa-chip-value">{{ text }}</span>{{ Icon({ name: 'chevron-down', size: 'sm', classes: 'gpa-chevron' }) }}</button>
+    <div class="gpa-float gpa-popover gpa-popover-padded" popover id="{{ id }}" role="dialog" aria-label="{{ p.label }}"><div class="gpa-range">
+      <div class="gpa-range-presets" role="group" aria-label="Quick ranges">
+        {%- for pr in p.presets -%}
+          {%- if pr.href %}<a class="gpa-btn gpa-btn-{{ 'secondary' if pr.checked else 'tertiary' }} gpa-btn-sm" href="{{ pr.href }}"{% if pr.checked %} aria-current="true"{% endif %}><span>{{ pr.text }}</span></a>
+          {%- else %}<button type="submit" class="gpa-btn gpa-btn-{{ 'secondary' if pr.checked else 'tertiary' }} gpa-btn-sm" name="{{ p.name }}" value="{{ pr.value }}"{% if p.form %} form="{{ p.form }}"{% endif %} aria-pressed="{{ 'true' if pr.checked else 'false' }}"><span>{{ pr.text }}</span></button>{% endif -%}
+        {%- endfor -%}
+      </div>
+      {%- if p.startName and p.endName -%}
+        <div class="gpa-range-cal">
+          {%- if not p.form %}<form method="get"{% if p.action %} action="{{ p.action }}"{% endif %} class="gpa-stack gpa-gap-sm">{% for f in p.hidden %}<input type="hidden" name="{{ f.name }}" value="{{ f.value }}">{% endfor %}{% else %}<div class="gpa-stack gpa-gap-sm">{% endif -%}
+            <label class="gpa-label gpa-label-sm gpa-range-native-label">From <input type="date" data-gpa-range="start" name="{{ p.startName }}" value="{{ p.start or '' }}"{% if p.form %} form="{{ p.form }}"{% endif %}{% if p.min %} min="{{ p.min }}"{% endif %}{% if p.max %} max="{{ p.max }}"{% endif %}></label>
+            <label class="gpa-label gpa-label-sm gpa-range-native-label">To <input type="date" data-gpa-range="end" name="{{ p.endName }}" value="{{ p.end or '' }}"{% if p.form %} form="{{ p.form }}"{% endif %}{% if p.min %} min="{{ p.min }}"{% endif %}{% if p.max %} max="{{ p.max }}"{% endif %}></label>
+            {{- Button({ text: 'Apply', size: 'sm', type: 'submit', form: p.form }) -}}
+          {%- if not p.form %}</form>{% else %}</div>{% endif -%}
+        </div>
+      {%- endif -%}
+    </div></div>
+  </div>{{ iconTemplate({ names: ['chevron-left', 'chevron-right', 'chevron-down'] }) }}</gpa-date-range-chip>

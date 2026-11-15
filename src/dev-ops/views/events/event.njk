@@ -1,0 +1,79 @@
+{% extends 'layouts/page.njk' %}
+{% import "components/macros.njk" as gpa %}
+
+{% block oldPage %}{% endblock %}
+
+{#- The Details card: each fact once, in a fixed order. -#}
+{% macro details(facts) -%}
+  {%- set cards = [] -%}
+  {%- for fact in facts -%}
+    {%- set html -%}
+      {%- set v = fact.value -%}
+      {%- if v.kind == 'text' -%}
+        {{ v.text }}
+      {%- elif v.kind == 'time' -%}
+        {{ gpa.Time(v.time) }}
+      {%- elif v.kind == 'link' -%}
+        {{ gpa.Link({ text: v.text, href: v.href }) }}
+      {%- elif v.kind == 'logs' -%}
+        {%- call gpa.Stack({ gap: '2xs' }) -%}
+          {%- if v.href %}{{ gpa.Link({ text: 'OpenSearch', href: v.href, external: true, testId: 'event-logs' }) }}{% endif -%}
+          {%- call gpa.Inline({ gap: 'xs', wrap: false }) -%}
+            {{ gpa.Text({ text: v.traceId, mono: true, tone: 'subtle', truncate: true, title: 'Trace ID ' ~ v.traceId }) }}{{ gpa.CopyButton({ value: v.traceId, label: 'Copy trace ID' }) }}
+          {%- endcall -%}
+        {%- endcall -%}
+      {%- else -%}
+        {%- call gpa.Stack({ gap: '2xs' }) -%}
+          {%- set line -%}{% if v.time %}{{ gpa.Time(v.time) }}{% else %}{{ gpa.NoValue() }}{% endif %} by {{ v.by }}{{ v.after }}{%- endset -%}
+          {{ gpa.Text({ html: line }) }}
+          {%- if v.note %}{{ gpa.Text({ text: v.note, tone: 'muted' }) }}{% endif -%}
+        {%- endcall -%}
+      {%- endif -%}
+    {%- endset -%}
+    {%- set cards = (cards.push({ label: fact.label, html: html }), cards) -%}
+  {%- endfor -%}
+  {{ gpa.FactsCard({ title: 'Details', facts: cards, testId: 'event-details' }) }}
+{%- endmacro %}
+
+{#- One event: its status and id, what went wrong, its payload, and the redrive and purge that act on it. -#}
+{% block content %}
+  {%- if missing -%}
+    {% include "events/_missing.njk" %}
+  {%- else -%}
+    {%- set idLine -%}
+      {%- call gpa.Inline({ gap: 'xs', wrap: false }) -%}
+        {{ gpa.Text({ text: eventId, mono: true, tone: 'subtle', testId: 'event-id' }) }}{{ gpa.CopyButton({ value: eventId, label: 'Copy event ID' }) }}
+      {%- endcall -%}
+    {%- endset -%}
+
+    {%- set actions -%}
+      {%- if purgeHref %}{{ gpa.Button({ text: 'Purge', variant: 'danger', href: purgeHref, attributes: { 'data-gpa-open': purgeDialog.id }, testId: 'event-purge' }) }}{% endif -%}
+      {%- if redriveHref %}{{ gpa.Button({ text: 'Redrive', variant: 'primary', iconStart: 'refresh-cw', href: redriveHref, attributes: { 'data-gpa-open': redriveDialog.id }, testId: 'event-redrive' }) }}{% endif -%}
+    {%- endset -%}
+
+    {%- set bannerHtml -%}
+      {%- if banner -%}
+        {%- set bannerActions -%}
+          {%- if banner.redriveHref %}{{ gpa.Button({ text: 'Redrive now', size: 'sm', variant: 'primary', href: banner.redriveHref, attributes: { 'data-gpa-open': redriveDialog.id }, testId: 'event-banner-redrive' }) }}{% endif -%}
+        {%- endset -%}
+        {{ gpa.Alert({ id: 'event-banner', tone: banner.tone, title: banner.title, text: banner.text, actions: bannerActions, dismissible: true, focusOnArrival: true, testId: 'event-banner' }) }}
+      {%- endif -%}
+    {%- endset -%}
+
+    {%- call gpa.RecordPage({
+      title: title,
+      mono: titleMono,
+      back: { href: back.href, text: back.text, testId: 'event-back' },
+      meta: [gpa.StatusDot({ text: status.text, tone: status.tone, testId: 'event-status' }), idLine],
+      actions: actions,
+      alert: bannerHtml,
+      aside: details(facts),
+      titleTestId: 'event-title'
+    }) -%}
+      {% include "events/_attempts.njk" %}
+      {% include "events/_payload.njk" %}
+    {%- endcall -%}
+
+    {% include "events/_dialogs.njk" %}
+  {%- endif -%}
+{% endblock %}

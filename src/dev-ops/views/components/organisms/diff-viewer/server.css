@@ -1,0 +1,7 @@
+.gpa-diff-gap {
+  padding: var(--space-2) var(--inset-code-x);
+  color: var(--fg-subtle);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  background: var(--bg-sunken);
+}

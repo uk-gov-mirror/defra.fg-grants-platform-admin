@@ -1,0 +1,4 @@
+{%- from "../../core/macros.njk" import attrs -%}
+{%- from "../../atoms/button/macro.njk" import Button -%}
+{%- from "../../atoms/icon-button/macro.njk" import IconButton -%}
+<gpa-copy data-value="{{ p.value }}"{{ attrs(p) }}>{% if p.text %}{{ Button({ text: p.text, iconStart: 'copy', size: p.size or 'sm', attributes: { 'data-gpa-copy': true } }) }}{% else %}{{ IconButton({ icon: 'copy', label: p.label or 'Copy', size: p.size or 'xs', attributes: { 'data-gpa-copy': true } }) }}{% endif %}</gpa-copy>

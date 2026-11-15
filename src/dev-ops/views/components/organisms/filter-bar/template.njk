@@ -1,0 +1,16 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../atoms/link/macro.njk" import Link -%}
+{%- from "../../atoms/tag/macro.njk" import Tag -%}
+<div class="{{ cls('gpa-filterbar', p) }}" role="group" aria-label="{{ p.label or 'Filters' }}"{{ attrs(p) }}>
+    <div class="gpa-filterbar-row"{% if p.rowTestId %} data-testid="{{ p.rowTestId }}"{% endif %}>{{ caller() if caller }}</div>
+    {%- if (p.applied and p.applied | length) or p.filtered or (p.total is defined and p.total !== null) -%}
+      <div class="gpa-filterbar-applied"{% if p.appliedTestId %} data-testid="{{ p.appliedTestId }}"{% endif %}>
+        {%- for a in (p.applied or []) -%}
+          {%- set label -%}{{ a.label }} is <strong{% if a.mono %} class="gpa-mono"{% endif %}>{{ a.value }}</strong>{%- endset -%}
+          {{ Tag({ html: label, removeHref: a.removeHref, removeName: a.removeName, removeValue: a.removeValue, removeForm: a.removeForm, removeLabel: 'Remove ' ~ a.label ~ ' filter', testId: a.testId, removeTestId: a.removeTestId }) }}
+        {%- endfor -%}
+        {%- if p.clearAllHref and ((p.applied and p.applied | length > 1) or p.filtered) %}{{ Link({ text: 'Clear all', href: p.clearAllHref, size: 'sm', testId: p.clearAllTestId }) }}{% endif -%}
+        {%- if p.total is defined and p.total !== null %}<span class="gpa-filterbar-total" role="status">{{ p.total }}</span>{% endif -%}
+      </div>
+    {%- endif -%}
+  </div>

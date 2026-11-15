@@ -2,7 +2,7 @@ import {
   casesBucket,
   catalogue,
   outboxBucket,
-  toggledBucket
+  auditedOutbox
 } from '../use-cases/test-fixtures.ts'
 import { toBucketHref, toRowHref, toVersionListHref } from './bucket-links.ts'
 
@@ -15,17 +15,17 @@ describe('toBucketHref', () => {
     expect(toBucketHref(outboxBucket, {})).toBe('/dev-ops/events/gas/outbox')
   })
 
-  test('spells each fact by its URL key, a toggle that is on as on, and leaves out an unset one', () => {
+  test('spells each fact by its URL key, repeats one with several values, and leaves out an unset one', () => {
     expect(
-      toBucketHref(toggledBucket, {
+      toBucketHref(auditedOutbox, {
+        status: ['DEAD_LETTER', 'FAILED'],
         'lastError.name': 'TypeError',
         grantCode: undefined,
-        show: 'eventType',
         from: '2026-10-08T12:00:00.000Z',
         range: '24h'
       })
     ).toBe(
-      '/dev-ops/events/gas/outbox?error=TypeError&audit=on&from=2026-10-08T12%3A00%3A00.000Z&range=24h'
+      '/dev-ops/events/gas/outbox?status=DEAD_LETTER&status=FAILED&error=TypeError&from=2026-10-08T12%3A00%3A00.000Z&range=24h'
     )
   })
 

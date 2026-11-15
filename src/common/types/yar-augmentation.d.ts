@@ -6,10 +6,8 @@ import type {
 } from '../../dev-ops/view-models/stored-search.ts'
 import type { TokenNotice } from '../../dev-ops/view-models/access-token-toasts.ts'
 import type { DefinitionFetchFlash } from '../../dev-ops/view-models/definition-fetch.ts'
-import type {
-  EventNotice,
-  PurgeFormNotice
-} from '../../dev-ops/view-models/event-page.view-model.ts'
+import type { EventNotice } from '../../dev-ops/view-models/event-banners.ts'
+import type { PurgeFormNotice } from '../../dev-ops/view-models/event-page.view-model.ts'
 
 declare module '@hapi/yar' {
   interface YarFlashes {

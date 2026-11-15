@@ -121,19 +121,6 @@ export const toPreciseInstant = (date: Date, zone: Zone): string => {
   return `${parts.day} ${parts.month} ${parts.year} ${parts.hour}:${parts.minute}:${parts.second}.${ms}`
 }
 
-export const toAbsoluteInstant = (at: string | null): string | null =>
-  at === null ? null : toAbsolute(at)
-
-export const toPreciseOrNone = (value: string | null, zone: Zone): string => {
-  if (value === null) {
-    return none
-  }
-
-  const date = toValidDate(value)
-
-  return date === null ? none : toPreciseInstant(date, zone)
-}
-
 /** Compared as instants: two ISO spellings of one moment need not sort as strings. */
 export const isAfter = (later: string, earlier: string): boolean => {
   const a = toValidDate(later)

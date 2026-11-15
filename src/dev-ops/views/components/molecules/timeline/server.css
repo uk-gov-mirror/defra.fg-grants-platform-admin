@@ -1,0 +1,11 @@
+.gpa-timeline-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--size-timeline-mark);
+  height: var(--size-timeline-mark);
+}
+.gpa-timeline-link {
+  margin-top: var(--gap-stack-xs);
+}

@@ -1,0 +1,7 @@
+{%- from "../../core/macros.njk" import attrs, cls, body -%}
+{%- from "../../atoms/icon-button/macro.njk" import IconButton -%}
+<span class="{{ cls('gpa-tag' ~ (' gpa-tag-sm' if p.size == 'sm' else ''), p) }}"{{ attrs(p) }}><span class="gpa-tag-label{{ ' gpa-mono' if p.mono }}">{{ body(p, caller) }}</span>
+    {%- if p.removeHref -%}{{ IconButton({ icon: 'x', size: 'xs', label: p.removeLabel or 'Remove', href: p.removeHref, classes: 'gpa-tag-remove', testId: p.removeTestId, title: false }) }}
+    {%- elif p.removeName -%}{{ IconButton({ icon: 'x', size: 'xs', label: p.removeLabel or 'Remove', type: 'submit', name: p.removeName, value: p.removeValue, form: p.removeForm, classes: 'gpa-tag-remove', testId: p.removeTestId, title: false }) }}
+    {%- endif -%}
+  </span>

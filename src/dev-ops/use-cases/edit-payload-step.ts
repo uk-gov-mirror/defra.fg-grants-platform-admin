@@ -15,6 +15,8 @@ export type PayloadEditStep =
       text: string
       revision: number
       problem: EditProblem | null
+      /** A note typed at review, kept through Back to editing. */
+      note: string
     }
   | {
       step: 'review'
@@ -47,8 +49,9 @@ const toCurrentRevision = (event: EventDetail): number =>
 const toEditStep = (
   text: string,
   revision: number,
-  problem: EditProblem | null
-): PayloadEditStep => ({ step: 'edit', text, revision, problem })
+  problem: EditProblem | null,
+  note = ''
+): PayloadEditStep => ({ step: 'edit', text, revision, problem, note })
 
 export const toOpenedStep = (event: EventDetail): PayloadEditStep =>
   toEditStep(toStoredJson(event), toCurrentRevision(event), null)
@@ -62,8 +65,12 @@ const isStale = (event: EventDetail, submission: PayloadSubmission): boolean =>
  * so the next review diffs it against the payload as it is now, and shows
  * any of the other edit it would undo.
  */
-const toStaleStep = (event: EventDetail, text: string): PayloadEditStep =>
-  toEditStep(text, toCurrentRevision(event), { kind: 'stale' })
+const toStaleStep = (
+  event: EventDetail,
+  text: string,
+  note: string
+): PayloadEditStep =>
+  toEditStep(text, toCurrentRevision(event), { kind: 'stale' }, note)
 
 const toReviewStep = (
   formatted: string,
@@ -83,13 +90,14 @@ const toCheckedStep = (
   submission: PayloadSubmission
 ): PayloadEditStep => {
   const read = readPayload(text)
+  const note = submission.note ?? ''
 
   if (read.kind === 'refused') {
-    return toEditStep(text, submission.revision, read.problem)
+    return toEditStep(text, submission.revision, read.problem, note)
   }
 
   return read.formatted === toStoredJson(event)
-    ? toEditStep(text, submission.revision, { kind: 'unchanged' })
+    ? toEditStep(text, submission.revision, { kind: 'unchanged' }, note)
     : toReviewStep(read.formatted, submission)
 }
 
@@ -98,12 +106,13 @@ export const toSubmittedStep = (
   submission: PayloadSubmission
 ): PayloadEditStep => {
   const text = toEditText(submission.text)
+  const note = submission.note ?? ''
 
   if (isStale(event, submission)) {
-    return toStaleStep(event, text)
+    return toStaleStep(event, text, note)
   }
 
   return submission.back
-    ? toEditStep(text, submission.revision, null)
+    ? toEditStep(text, submission.revision, null, note)
     : toCheckedStep(event, text, submission)
 }

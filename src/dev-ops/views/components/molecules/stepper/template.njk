@@ -1,0 +1,8 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+{%- set cur = p.current or 0 -%}
+  <ol class="{{ cls('gpa-stepper' ~ (' gpa-stepper-vertical' if p.orientation == 'vertical' else ''), p) }}"{% if p.label %} aria-label="{{ p.label }}"{% endif %}{{ attrs(p) }}>
+    {%- for s in p.steps -%}{%- set i = loop.index0 -%}{%- set st = 'done' if i < cur else ('current' if i == cur else 'todo') -%}
+      <li class="gpa-step is-{{ st }}"{% if st == 'current' %} aria-current="step"{% endif %}><span class="gpa-step-mark" aria-hidden="true">{% if st == 'done' %}{{ Icon({ name: 'check', size: 'sm', strokeWidth: 3 }) }}{% else %}{{ i + 1 }}{% endif %}</span><span class="gpa-step-text"><span class="gpa-step-label">{{ s.label }}<span class="gpa-vh"> — {{ 'Done' if st == 'done' else ('Current' if st == 'current' else 'Step ' ~ (i + 1) ~ ' of ' ~ (p.steps | length)) }}</span></span>{% if s.description %}<span class="gpa-step-desc">{{ s.description }}</span>{% endif %}</span></li>
+    {%- endfor -%}
+  </ol>

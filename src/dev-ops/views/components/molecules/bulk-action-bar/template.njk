@@ -1,0 +1,3 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../atoms/link/macro.njk" import Link -%}
+<div class="{{ cls('gpa-bulkbar', p) }}" role="region" aria-label="{{ p.count }} selected"{{ attrs(p) }}><span class="gpa-bulkbar-count">{{ p.count }} selected</span><div class="gpa-actions gpa-actions-sm">{{ p.actions | safe }}</div>{% if p.clearHref %}{{ Link({ text: 'Clear selection', href: p.clearHref, size: 'sm' }) }}{% endif %}</div>

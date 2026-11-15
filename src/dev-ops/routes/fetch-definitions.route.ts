@@ -35,7 +35,7 @@ interface FetchDefinitionsRoute {
 /**
  * Fetches every definition file of one version that is not stored, then goes
  * back to the tab it was asked from, with the outcome riding the session for
- * one render. CSRF is stopped by the session cookie, as for redrive.
+ * one render.
  */
 export const fetchDefinitionsRoute = ({
   record,

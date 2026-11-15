@@ -1,0 +1,93 @@
+.gpa-grid-table {
+  display: block;
+  width: 100%;
+  border-spacing: 0;
+}
+.gpa-grid-table > thead,
+.gpa-grid-table > tbody {
+  display: block;
+}
+.gpa-grid-table th,
+.gpa-grid-table td {
+  display: block;
+  padding: 0;
+  text-align: start;
+}
+.gpa-grid-table:not(.is-subgrid) th,
+.gpa-grid-table:not(.is-subgrid) td {
+  min-width: 0;
+}
+.gpa-grid-table th {
+  font-weight: 500;
+}
+.gpa-grid-table :is(th, td).gpa-right {
+  text-align: end;
+  justify-self: end;
+}
+.gpa-grid-table :is(th, td).gpa-center {
+  text-align: center;
+  justify-self: center;
+}
+.gpa-grid-table td.gpa-row-chevron {
+  display: flex;
+}
+.gpa-grid-table :is(th, td).gpa-sticky-col {
+  display: flex;
+  padding-block: var(--inset-cell-y);
+  padding-inline: var(--inset-card) var(--gap-columns);
+}
+.gpa-grid-table .gpa-thead > th.gpa-sticky-col {
+  padding-block: var(--inset-cell-head-y);
+}
+.gpa-grid-table :is(th, td).gpa-sticky-col.gpa-sticky-after-check {
+  padding-inline-start: 0;
+}
+.gpa-grid-table a.gpa-rowlink {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+  text-decoration: none;
+}
+.gpa-grid-table a.gpa-rowlink.gpa-mono {
+  font-size: var(--font-size-md);
+}
+
+.gpa-grid-table.is-subgrid {
+  grid-template-columns: var(--gpa-cols, var(--gpa-cols-auto));
+}
+@container (max-width: 719px) {
+  .gpa-grid-table.is-subgrid.is-wrapping {
+    grid-template-columns: var(--gpa-cols-narrow, var(--gpa-cols-auto));
+  }
+}
+@supports (x: attr(x type(*))) {
+  .gpa-grid-table.is-subgrid[data-gpa-cols] {
+    grid-template-columns: attr(
+      data-gpa-cols type(*),
+      var(--gpa-cols, var(--gpa-cols-auto))
+    );
+  }
+  @container (max-width: 719px) {
+    .gpa-grid-table.is-subgrid.is-wrapping[data-gpa-cols-narrow] {
+      grid-template-columns: attr(
+        data-gpa-cols-narrow type(*),
+        var(--gpa-cols-narrow, var(--gpa-cols-auto))
+      );
+    }
+  }
+}
+.gpa-grid-table.is-subgrid > thead {
+  display: contents;
+}
+.gpa-grid-table.is-subgrid > thead > .gpa-tr {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+}
+.gpa-grid-table.is-subgrid .gpa-cell-chevron {
+  display: flex;
+  align-items: center;
+}
+.gpa-grid-table.is-subgrid th:not(.label-sm) {
+  font-weight: inherit;
+}

@@ -6,6 +6,7 @@ import { redriveEventUseCase } from '../use-cases/redrive-event.use-case.ts'
 import { eventAddress, toEventKey } from '../view-models/event-address.ts'
 import { toEventHref } from '../view-models/event-formats.ts'
 import {
+  eventBannerId,
   redriveNoticeKey,
   toSafeFrom
 } from '../view-models/event-page.view-model.ts'
@@ -20,8 +21,9 @@ import { fromMax } from '../view-models/record-filters.ts'
  */
 const toRedirect = (key: EventKey, from: string): string => {
   const href = toEventHref(key)
+  const query = from === '' ? '' : `?back=${encodeURIComponent(from)}`
 
-  return from === '' ? href : `${href}?back=${encodeURIComponent(from)}`
+  return `${href}${query}#${eventBannerId}`
 }
 
 /**
@@ -35,9 +37,8 @@ const toRedirect = (key: EventKey, from: string): string => {
  * reaches the scope check, let alone the queue.
  *
  * A same-site one still carries it: every `*.cdp-int.defra.cloud` frontend is
- * the same site as this app. The access token writes close that with
- * server/plugins/auth/same-origin.ts; this write doesn't yet, an accepted gap
- * until it is given the same check.
+ * the same site as this app. src/dev-ops/index.ts closes that by registering
+ * this write through `sameOriginOnly`, as the access token writes are.
  *
  * A crumb here would be a token in one place out of one, which is the shape
  * of a defence that quietly stops working.

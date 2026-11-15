@@ -1,0 +1,2 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+<div class="{{ cls('gpa-stack gpa-gap-' ~ (p.gap or 'md'), p) }}"{{ attrs(p) }}>{{ caller() }}</div>

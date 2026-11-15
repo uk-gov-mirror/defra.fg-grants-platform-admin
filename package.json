@@ -2,9 +2,7 @@
   "name": "fg-grants-platform-admin",
   "version": "0.0.0",
   "description": "FG Grants Platform Admin",
-  "sideEffects": [
-    "./src/dev-ops/client/focus-on-arrival.ts"
-  ],
+  "sideEffects": [],
   "main": "src/main.ts",
   "type": "module",
   "imports": {

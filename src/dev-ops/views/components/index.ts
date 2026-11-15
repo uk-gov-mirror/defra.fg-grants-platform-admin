@@ -1,19 +1,41 @@
+import { GpaCalendar } from "./molecules/calendar/web-component.ts";
+import { GpaClearable } from "./atoms/input/web-component.ts";
+import { GpaCopy } from "./molecules/copy-button/web-component.ts";
+import { GpaDataTable } from "./organisms/data-table/web-component.ts";
+import { GpaDateRangeChip } from "./molecules/date-range-chip/web-component.ts";
 import { GpaDialog } from "./organisms/dialog/web-component.ts";
+import { GpaDisclosure } from "./molecules/disclosure/web-component.ts";
 import { GpaDismiss } from "./molecules/alert/web-component.ts";
 import { GpaDropdown } from "./molecules/dropdown/web-component.ts";
 import { GpaErrorSummary } from "./molecules/error-summary/web-component.ts";
+import { GpaListPage } from "./templates/list-page/web-component.ts";
+import { GpaLoadMore } from "./molecules/list-footer/web-component.ts";
+import { GpaPopover } from "./molecules/popover/web-component.ts";
+import { GpaSearchKind } from "./molecules/search-field/web-component.ts";
 import { GpaSegmented } from "./molecules/segmented-control/web-component.ts";
+import { GpaTabs } from "./molecules/tabs/web-component.ts";
 import { GpaThemeToggle } from "./molecules/theme-toggle/web-component.ts";
 import { GpaToastRegion } from "./molecules/toast-region/web-component.ts";
 import { GpaToast } from "./molecules/toast/web-component.ts";
 import { GpaTooltip } from "./atoms/tooltip/web-component.ts";
 
 const elements: [string, CustomElementConstructor][] = [
+  ["gpa-calendar", GpaCalendar],
+  ["gpa-clearable", GpaClearable],
+  ["gpa-copy", GpaCopy],
+  ["gpa-data-table", GpaDataTable],
+  ["gpa-date-range-chip", GpaDateRangeChip],
   ["gpa-dialog", GpaDialog],
+  ["gpa-disclosure", GpaDisclosure],
   ["gpa-dismiss", GpaDismiss],
   ["gpa-dropdown", GpaDropdown],
   ["gpa-error-summary", GpaErrorSummary],
+  ["gpa-list-page", GpaListPage],
+  ["gpa-load-more", GpaLoadMore],
+  ["gpa-popover", GpaPopover],
+  ["gpa-search-kind", GpaSearchKind],
   ["gpa-segmented", GpaSegmented],
+  ["gpa-tabs", GpaTabs],
   ["gpa-theme-toggle", GpaThemeToggle],
   ["gpa-toast-region", GpaToastRegion],
   ["gpa-toast", GpaToast],
@@ -98,11 +120,22 @@ if (document.readyState === "loading")
 else upgrade(document);
 
 export {
+  GpaCalendar,
+  GpaClearable,
+  GpaCopy,
+  GpaDataTable,
+  GpaDateRangeChip,
   GpaDialog,
+  GpaDisclosure,
   GpaDismiss,
   GpaDropdown,
   GpaErrorSummary,
+  GpaListPage,
+  GpaLoadMore,
+  GpaPopover,
+  GpaSearchKind,
   GpaSegmented,
+  GpaTabs,
   GpaThemeToggle,
   GpaToastRegion,
   GpaToast,

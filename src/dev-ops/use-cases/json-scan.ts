@@ -31,8 +31,8 @@ export interface JsonKeyFault extends JsonPosition {
 export interface JsonScan {
   fault: JsonFault | null
   keyFault: JsonKeyFault | null
-  /** The first whole number past ±(2^53 − 1), which `JSON.parse` rounds. */
-  unsafeInteger: JsonPosition | null
+  /** Every whole number past ±(2^53 − 1), which `JSON.parse` rounds, in order. */
+  unsafeIntegers: JsonPosition[]
 }
 
 type Container = '{' | '['
@@ -51,7 +51,7 @@ interface Scan {
   /** One set per open container, kept in step with `open`; an array's stays empty. */
   keys: Set<string>[]
   keyFault: KeyFaultAt | null
-  unsafeIntegerAt: number | null
+  unsafeIntegersAt: number[]
 }
 
 class Fault {
@@ -132,8 +132,8 @@ const exponent = (scan: Scan): boolean => {
 const noteUnsafeInteger = (scan: Scan, start: number) => {
   const exact = Number.isSafeInteger(Number(scan.text.slice(start, scan.at)))
 
-  if (!exact && scan.unsafeIntegerAt === null) {
-    scan.unsafeIntegerAt = start
+  if (!exact) {
+    scan.unsafeIntegersAt.push(start)
   }
 }
 
@@ -404,9 +404,6 @@ const toKeyFault = (text: string, fault: KeyFaultAt | null) =>
     ? null
     : { ...toPosition(text, fault.at), problem: fault.problem }
 
-const toUnsafeInteger = (text: string, at: number | null) =>
-  at === null ? null : toPosition(text, at)
-
 const walk = (scan: Scan) => {
   let step: Step | null = 'value'
 
@@ -417,7 +414,7 @@ const walk = (scan: Scan) => {
 
 const toFaultScan = (text: string, error: unknown): JsonScan => {
   if (error instanceof Fault) {
-    return { fault: toFault(text, error), keyFault: null, unsafeInteger: null }
+    return { fault: toFault(text, error), keyFault: null, unsafeIntegers: [] }
   }
 
   throw error
@@ -430,7 +427,7 @@ export const scanJson = (text: string): JsonScan => {
     open: [],
     keys: [],
     keyFault: null,
-    unsafeIntegerAt: null
+    unsafeIntegersAt: []
   }
 
   try {
@@ -442,6 +439,6 @@ export const scanJson = (text: string): JsonScan => {
   return {
     fault: null,
     keyFault: toKeyFault(text, scan.keyFault),
-    unsafeInteger: toUnsafeInteger(text, scan.unsafeIntegerAt)
+    unsafeIntegers: scan.unsafeIntegersAt.map((at) => toPosition(text, at))
   }
 }

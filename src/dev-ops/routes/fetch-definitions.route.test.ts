@@ -82,7 +82,8 @@ const fetch = async (payload: object | undefined = {}, url = path) =>
     method: 'POST',
     url,
     payload,
-    auth: { strategy: 'session', credentials }
+    auth: { strategy: 'session', credentials },
+    headers: { 'sec-fetch-site': 'same-origin' }
   })
 
 const sessionCookie = (response: { headers: Record<string, unknown> }) =>
@@ -164,6 +165,19 @@ describe('fetchGrantDefinitionsRoute', () => {
           scope: ['FCP.GrantApplicationsAdmin']
         }
       }
+    })
+
+    expect(statusCode).toBe(statusCodes.forbidden)
+    expect(fetchGrantDefinitionsUseCase).not.toHaveBeenCalled()
+  })
+
+  test('refuses a Fetch posted from another site', async () => {
+    const { statusCode } = await server.inject({
+      method: 'POST',
+      url: path,
+      payload: {},
+      auth: { strategy: 'session', credentials },
+      headers: { 'sec-fetch-site': 'cross-site' }
     })
 
     expect(statusCode).toBe(statusCodes.forbidden)

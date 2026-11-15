@@ -1,0 +1,32 @@
+.gpa-stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.gpa-stack.gpa-gap-none {
+  gap: 0;
+}
+.gpa-stack.gpa-gap-2xs {
+  gap: var(--gap-stack-2xs);
+}
+.gpa-stack.gpa-gap-xs {
+  gap: var(--gap-stack-xs);
+}
+.gpa-stack.gpa-gap-sm {
+  gap: var(--gap-stack-sm);
+}
+.gpa-stack.gpa-gap-md {
+  gap: var(--gap-stack-md);
+}
+.gpa-stack.gpa-gap-lg {
+  gap: var(--gap-stack-lg);
+}
+.gpa-stack.gpa-gap-xl {
+  gap: var(--gap-stack-xl);
+}
+.gpa-stack.gpa-gap-2xl {
+  gap: var(--gap-stack-2xl);
+}
+.gpa-stack.gpa-gap-section {
+  gap: var(--gap-section);
+}

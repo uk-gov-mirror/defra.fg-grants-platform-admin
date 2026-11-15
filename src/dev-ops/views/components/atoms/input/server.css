@@ -1,0 +1,6 @@
+.gpa-input-date {
+  max-width: 14rem;
+}
+gpa-clearable:not(:defined) .gpa-input-clear {
+  display: none;
+}

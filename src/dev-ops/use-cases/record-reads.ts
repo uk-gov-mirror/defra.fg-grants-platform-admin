@@ -1,7 +1,8 @@
 import { describeError } from '../../common/describe-error.ts'
 import { logger } from '../../common/logger.ts'
 import { statusCodes } from '../../common/status-codes.ts'
-import { toGasErrorField, toGasStatusCode } from './gas-status.ts'
+import { toGasErrorField, toGasFailure, toGasStatusCode } from './gas-status.ts'
+import type { GasFailure } from './gas-status.ts'
 
 export type {
   Counterpart,
@@ -18,6 +19,12 @@ export { recordTabs } from '../repositories/record-page.ts'
 export interface ListResult<P> {
   page: P
   unavailable: boolean
+  /** No answer in time: GAS's 504 for CW, or a timeout here. */
+  timedOut: boolean
+  /** GAS itself sent nothing: a timeout here, or a connection dropped mid-request. */
+  gasSilent?: true
+  /** GAS answered with an error, CW's failures behind it included. Otherwise an unread list is one GAS couldn't be reached for. */
+  errored: boolean
   refused: boolean
   /** GAS's own reason for a refusal: fixed text that never repeats what was sent. */
   refusal: string | null
@@ -37,6 +44,18 @@ const logListFailure = (name: string, refused: boolean, error: unknown) => {
   )
 }
 
+const isRefusal = (failure: GasFailure): boolean =>
+  failure.kind === 'refused' && failure.statusCode === statusCodes.badRequest
+
+const timedOutKinds = new Set<GasFailure['kind']>(['timed-out', 'no-answer'])
+
+/** Any answer but a 400 or a timeout is an error GAS answered with, CW's included: its status is GAS's. */
+const answeredKinds = new Set<GasFailure['kind']>([
+  'refused',
+  'errored',
+  'cw-not-reached'
+])
+
 /** A list has one source, so any failure leaves it empty; a 400 is a bad link, not an outage. */
 export const readList = async <P>(
   name: string,
@@ -47,20 +66,34 @@ export const readList = async <P>(
     return {
       page: await read(),
       unavailable: false,
+      timedOut: false,
+      errored: false,
       refused: false,
       refusal: null
     }
   } catch (error) {
-    const refused = toGasStatusCode(error) === statusCodes.badRequest
+    return toFailedList(name, error, empty)
+  }
+}
 
-    logListFailure(name, refused, error)
+const toFailedList = <P>(
+  name: string,
+  error: unknown,
+  empty: P
+): ListResult<P> => {
+  const failure = toGasFailure(error)
+  const refused = isRefusal(failure)
 
-    return {
-      page: empty,
-      unavailable: !refused,
-      refused,
-      refusal: refused ? toGasErrorField(error, 'message') : null
-    }
+  logListFailure(name, refused, error)
+
+  return {
+    page: empty,
+    unavailable: !refused,
+    timedOut: timedOutKinds.has(failure.kind),
+    ...(failure.kind === 'no-answer' ? { gasSilent: true as const } : {}),
+    errored: !refused && answeredKinds.has(failure.kind),
+    refused,
+    refusal: refused ? toGasErrorField(error, 'message') : null
   }
 }
 

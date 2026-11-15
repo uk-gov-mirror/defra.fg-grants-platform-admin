@@ -1,0 +1,31 @@
+.gpa-inline-nowrap {
+  flex-wrap: nowrap;
+}
+.gpa-inline-start {
+  align-items: flex-start;
+}
+.gpa-inline-baseline {
+  align-items: baseline;
+}
+.gpa-inline-between {
+  justify-content: space-between;
+}
+
+details.gpa-inline-disclosure {
+  display: contents;
+}
+details.gpa-inline-disclosure::details-content {
+  flex-basis: 100%;
+}
+details.gpa-inline-disclosure:not([open])::details-content {
+  display: none;
+}
+@supports not selector(::details-content) {
+  details.gpa-inline-disclosure {
+    display: block;
+    flex-basis: 100%;
+  }
+}
+.gpa-inline-form {
+  display: inline;
+}

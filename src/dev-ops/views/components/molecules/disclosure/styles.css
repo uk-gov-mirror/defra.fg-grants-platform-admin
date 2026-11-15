@@ -1,0 +1,31 @@
+.gpa-disclosure {
+  position: relative;
+}
+.gpa-disclosure::after {
+  content: "";
+  position: absolute;
+  inset-inline-start: calc(var(--inset-tag-xs) * -1);
+  inset-inline-end: calc(var(--inset-tag-xs) * -1);
+  top: 50%;
+  height: var(--size-target-min);
+  transform: translateY(-50%);
+}
+
+.gpa-disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-inline-xs);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg-link);
+  font: inherit;
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-md);
+  cursor: pointer;
+}
+.gpa-disclosure:hover:where(
+    :not(:disabled, [aria-disabled="true"], .is-disabled)
+  ) {
+  color: var(--fg-link-hover);
+}

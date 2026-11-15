@@ -1,0 +1,100 @@
+.gpa-diff {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--code-bg);
+  font-family: var(--font-code);
+  font-feature-settings: var(--font-code-features);
+  font-size: var(--code-block-size);
+  line-height: var(--code-block-line-height);
+  font-variant-ligatures: none;
+}
+.gpa-diff-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-inline-lg);
+  padding: var(--inset-code-y) var(--inset-code-x);
+  border-bottom: var(--border-width-hairline) solid var(--border-subtle);
+  font-family: var(--font-sans);
+}
+.gpa-diff-count-add {
+  color: var(--fg-success);
+}
+.gpa-diff-count-del {
+  color: var(--fg-danger);
+}
+.gpa-diff-body {
+  overflow: auto;
+  min-height: 0;
+}
+.gpa-diff-body:focus-visible {
+  outline: var(--focus-ring-width) solid var(--border-focus);
+  outline-offset: var(--focus-ring-offset-inset);
+}
+.gpa-diff-rows {
+  display: table;
+  min-width: 100%;
+  padding-block: var(--inset-code-y);
+}
+.gpa-diff-line {
+  display: table-row;
+}
+.gpa-diff-line > span {
+  display: table-cell;
+  vertical-align: top;
+}
+.gpa-diff-num {
+  width: var(--size-code-gutter);
+  padding-inline: var(--inset-code-y);
+  color: var(--code-gutter-fg);
+  text-align: end;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+.gpa-diff-sign {
+  position: relative;
+  width: var(--size-icon-md);
+  padding-inline: var(--gap-inline-xs);
+  text-align: center;
+}
+.gpa-diff-sign .gpa-icon {
+  vertical-align: middle;
+}
+.gpa-diff-text {
+  padding-inline-end: var(--inset-code-x);
+  color: var(--fg-default);
+  white-space: pre;
+}
+.gpa-diff-line.is-add {
+  background: var(--bg-success-subtle);
+}
+.gpa-diff-line.is-add .gpa-diff-sign {
+  color: var(--fg-success);
+}
+.gpa-diff-line.is-del {
+  background: var(--bg-danger-subtle);
+}
+.gpa-diff-line.is-del .gpa-diff-sign {
+  color: var(--fg-danger);
+}
+.gpa-diff-line.is-gap .gpa-diff-text {
+  padding-block: var(--gap-stack-xs);
+  color: var(--fg-muted);
+  font-family: var(--font-sans);
+}
+.gpa-diff-none {
+  padding: var(--inset-code-y) var(--inset-code-x);
+  color: var(--fg-subtle);
+  font-family: var(--font-sans);
+}
+@media (forced-colors: active) {
+  .gpa-diff-line.is-add .gpa-diff-text,
+  .gpa-diff-line.is-del .gpa-diff-text {
+    text-decoration: underline;
+  }
+}
+.gpa-diff-none {
+  color: var(--fg-muted);
+}

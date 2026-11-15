@@ -2,6 +2,9 @@ import Joi from 'joi'
 
 import {
   shellQuery,
+  toClockTime,
+  toDayTime,
+  toSecondsTime,
   timesOf,
   toTime,
   toTimes,
@@ -213,5 +216,29 @@ describe('withoutShellKeys', () => {
     expect(withoutShellKeys({ times: 'open', status: 'FAILED' })).toEqual({
       status: 'FAILED'
     })
+  })
+})
+
+describe('the attempts’ and dates’ times', () => {
+  const instant = new Date('2026-10-13T14:53:22.635Z')
+  const uk = toTimes('uk')
+
+  test('with seconds, where the order within a minute matters', () => {
+    expect(toSecondsTime(instant, uk)).toEqual({
+      datetime: '2026-10-13T14:53:22.635Z',
+      text: '13\u00a0Oct 2026 15:53:22',
+      title: '13 Oct 2026 15:53:22 BST'
+    })
+  })
+
+  test('the clock to the millisecond, in the zone', () => {
+    expect(toClockTime(instant, uk).text).toBe('15:53:22.635')
+    expect(toClockTime(instant, toTimes('utc')).text).toBe('14:53:22.635')
+  })
+
+  test('a day', () => {
+    expect(
+      toDayTime(new Date('2027-02-02T00:00:00.000Z'), toTimes('utc')).text
+    ).toBe('2\u00a0Feb 2027')
   })
 })

@@ -1,0 +1,12 @@
+.gpa-listfoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap-inline-xl);
+  min-height: var(--size-row);
+  padding: var(--inset-cell-y) var(--inset-card);
+  border-top: var(--border-width-hairline) solid var(--table-divider);
+  font-size: var(--font-size-md);
+  color: var(--fg-muted);
+}

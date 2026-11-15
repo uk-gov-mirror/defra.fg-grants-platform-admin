@@ -1,0 +1,11 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../layouts/columns/macro.njk" import Columns -%}
+{%- from "../../molecules/tabs/macro.njk" import Tabs -%}
+{%- from "../../organisms/page-header/macro.njk" import PageHeader -%}
+{%- set main -%}<div class="gpa-stack gpa-gap-xl">{{ caller() if caller }}</div>{%- endset -%}
+  <div class="{{ cls('gpa-page', p) }}"{{ attrs(p) }}>
+    {{- PageHeader({ title: p.title, mono: p.mono, back: p.back, breadcrumbs: p.breadcrumbs, meta: p.meta, actions: p.actions, titleTestId: p.titleTestId }) -}}
+    {{- p.alert | safe if p.alert -}}
+    {{- Tabs(p.tabs) if p.tabs -}}
+    {%- if p.aside -%}{{ Columns({ aside: p.aside, asideWidth: p.asideWidth, asideLabel: p.asideLabel, mainHtml: main }) }}{%- else -%}{{ caller() if caller }}{%- endif -%}
+  </div>

@@ -1,0 +1,2 @@
+{%- from "../../core/macros.njk" import attrs, cls, body -%}
+<time class="{{ cls('gpa-time' ~ (' gpa-mono' if p.mono else ''), p) }}"{% if p.datetime %} datetime="{{ p.datetime }}"{% endif %}{% if p.title %} title="{{ p.title }}"{% endif %}{{ attrs(p) }}>{% if p.text and not p.html and not caller %}{{ p.text | replace(r/^(\d{1,2}) (?=[A-Za-z])/, "$1 ") }}{% else %}{{ body(p, caller) }}{% endif %}</time>

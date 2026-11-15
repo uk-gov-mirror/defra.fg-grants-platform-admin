@@ -1,142 +1,131 @@
-import { ukZone } from './zoned-clock.ts'
-import Joi from 'joi'
-
 import {
   timeRangeFilters,
-  toRangeInstants,
-  toTimeRange
+  toRangeChip,
+  toRangeInstants
 } from './time-range.view-model.ts'
-import type { TimeRangeList } from './time-range.view-model.ts'
 
-const now = new Date('2026-06-16T10:20:00.000Z')
+const now = new Date('2026-11-10T12:00:00.000Z')
 
-interface ApplicationsQuery {
-  code?: string
-  q?: string
-  cursor?: string
-  from?: string
-  to?: string
-  range?: string
-}
-
-const applications: TimeRangeList<ApplicationsQuery> = {
-  basePath: '/dev-ops/applications',
-  filterKeys: ['code', 'q', 'from', 'to', 'range'],
-  presetTitlePrefix: 'Applications created in the last'
-}
-
-const rangeFor = (query: ApplicationsQuery = {}) =>
-  toTimeRange(applications, query, now, ukZone)
-
-describe('toTimeRange', () => {
-  test('offers All and the same six presets on any list', () => {
-    expect(rangeFor().presets.map(({ label }) => label)).toEqual([
-      'Last 15m',
-      'Last 1h',
-      'Last 6h',
-      'Last 24h',
-      'Last 7d',
-      'Last 30d'
-    ])
-    expect(rangeFor().anyTimeActive).toBe(true)
-  })
-
-  test('links each preset to its own list, keeping its other filters', () => {
-    const [fifteen] = rangeFor({
-      code: 'woodland',
-      q: 'APP-1',
-      cursor: 'END',
-      to: '2026-06-16T10:00:00.000Z'
-    }).presets
-
-    expect(fifteen.href).toBe(
-      '/dev-ops/applications?code=woodland&q=APP-1&from=2026-06-16T10%3A05%3A00.000Z&range=15m'
-    )
-  })
-
-  test('titles each preset in the words of the list', () => {
-    expect(rangeFor().presets[3].title).toBe(
-      'Applications created in the last 24h'
-    )
-  })
-
-  test('clears only the window on All', () => {
-    expect(
-      rangeFor({
-        code: 'woodland',
-        from: '2026-06-15T10:20:00.000Z',
-        range: '24h'
-      }).anyTimeHref
-    ).toBe('/dev-ops/applications?code=woodland')
-  })
-
-  test('sends the Custom form to the list, carrying every filter but the window', () => {
-    const range = rangeFor({
-      code: 'woodland',
-      q: 'APP-1',
-      from: '2026-06-16T09:00:00.000Z',
-      range: '1h',
-      cursor: 'END'
-    })
-
-    expect(range.action).toBe('/dev-ops/applications')
-    expect(range.hiddenFields).toEqual([
-      { name: 'code', value: 'woodland' },
-      { name: 'q', value: 'APP-1' }
-    ])
-  })
-
-  test('fills the Custom boxes in UK time', () => {
-    const range = rangeFor({
-      from: '2026-06-16T09:00:00.000Z',
-      to: '2026-06-16T10:20:30.000Z'
-    })
-
-    expect(range.fromInput).toBe('2026-06-16T10:00:00')
-    expect(range.toInput).toBe('2026-06-16T11:20:30')
-    expect(range.label).toBe('2026-06-16 10:00 – 2026-06-16 11:20')
-    expect(range.active).toBe(true)
-  })
-})
+const href = (window: object) =>
+  `/list?${new URLSearchParams(window as Record<string, string>)}`
 
 describe('toRangeInstants', () => {
-  test('takes the first pass of the repeated autumn hour for From, the second for To', () => {
+  test('a day from the calendar is the whole day, in the zone the person reads times in', () => {
     expect(
-      toRangeInstants(
-        { from: '2026-10-25T01:30', to: '2026-10-25T01:30' },
-        ukZone
-      )
+      toRangeInstants({ from: '2026-07-01', to: '2026-07-02' }, 'Europe/London')
     ).toEqual({
-      from: '2026-10-25T00:30:00.000Z',
-      to: '2026-10-25T01:30:00.000Z'
+      from: '2026-06-30T23:00:00.000Z',
+      to: '2026-07-02T22:59:59.999Z'
+    })
+    expect(toRangeInstants({ from: '2026-07-01' }, 'UTC')).toEqual({
+      from: '2026-07-01T00:00:00.000Z'
     })
   })
 
-  test('passes an instant from a preset link through untouched', () => {
+  test('a wall clock is read in the zone; an instant is kept as it is', () => {
     expect(
-      toRangeInstants({ from: '2026-06-16T09:00:00.000Z' }, ukZone)
-    ).toEqual({
-      from: '2026-06-16T09:00:00.000Z'
-    })
-  })
-
-  test('leaves out an empty box', () => {
-    expect(toRangeInstants({ from: '', to: undefined }, ukZone)).toEqual({})
+      toRangeInstants({ from: '2026-07-01T09:00' }, 'Europe/London').from
+    ).toBe('2026-07-01T08:00:00.000Z')
+    expect(
+      toRangeInstants({ from: '2026-07-01T09:00:00.000Z' }, 'Europe/London')
+        .from
+    ).toBe('2026-07-01T09:00:00.000Z')
   })
 })
 
 describe('timeRangeFilters', () => {
-  const schema = Joi.object(timeRangeFilters)
-
-  test('refuses a date the calendar does not have', () => {
-    expect(schema.validate({ from: '2026-02-30T00:00' }).error).toBeDefined()
+  test.each(['2026-02-30', '2026-13-01T00:00'])('refuses %s', (value) => {
+    expect(timeRangeFilters.from.validate(value).error).toBeDefined()
   })
 
-  test('takes a box with or without seconds, and an empty one', () => {
+  test.each(['2026-02-28', '2026-02-28T23:59', '2026-02-28T23:59:59', ''])(
+    'takes %s',
+    (value) => {
+      expect(timeRangeFilters.from.validate(value).error).toBeUndefined()
+    }
+  )
+})
+
+describe('toRangeChip', () => {
+  test('nothing chosen: Any time, first and ticked, then the quick ranges back from now', () => {
+    const chip = toRangeChip({}, href, now, 'UTC')
+
+    expect(chip.text).toBe('Any time')
+    expect(chip.isSet).toBe(false)
+    expect(chip.presets.map(({ text, checked }) => [text, checked])).toEqual([
+      ['Any time', true],
+      ['Last hour', false],
+      ['Last 24 hours', false],
+      ['Last 7 days', false],
+      ['Last 30 days', false]
+    ])
+    expect(chip.presets[2].href).toBe(
+      '/list?from=2026-11-09T12%3A00%3A00.000Z&range=24h'
+    )
+    expect(chip.max).toBe('2026-11-10')
+  })
+
+  test('a quick range names itself and is ticked', () => {
+    const chip = toRangeChip(
+      { from: '2026-11-03T12:00:00.000Z', range: '7d' },
+      href,
+      now,
+      'UTC'
+    )
+
+    expect(chip.text).toBe('Last 7 days')
+    expect(chip.start).toBeUndefined()
+    expect(chip.presets[3].checked).toBe(true)
+  })
+
+  test('days: the range as the design system writes it, and the days for the calendar', () => {
+    const chip = toRangeChip(
+      { from: '2026-11-03', to: '2026-11-09' },
+      href,
+      now,
+      'UTC'
+    )
+
+    expect(chip.text).toBe('3–9 Nov 2026')
+    expect([chip.start, chip.end]).toEqual(['2026-11-03', '2026-11-09'])
+  })
+
+  test('one side only', () => {
+    expect(toRangeChip({ from: '2026-11-03' }, href, now, 'UTC').text).toBe(
+      'From 3 Nov 2026'
+    )
+    expect(toRangeChip({ to: '2026-11-09' }, href, now, 'UTC').text).toBe(
+      'Until 9 Nov 2026'
+    )
+  })
+
+  test('an instant falls on its day in the zone', () => {
     expect(
-      schema.validate({ from: '2026-06-16T09:00', to: '2026-06-16T09:00:30' })
-        .error
-    ).toBeUndefined()
-    expect(schema.validate({ from: '', range: '' }).error).toBeUndefined()
+      toRangeChip(
+        { from: '2026-11-02T23:30:00.000Z' },
+        href,
+        now,
+        'Europe/London'
+      ).start
+    ).toBe('2026-11-02')
+    expect(
+      toRangeChip(
+        { from: '2026-07-02T23:30:00.000Z' },
+        href,
+        now,
+        'Europe/London'
+      ).start
+    ).toBe('2026-07-03')
+  })
+
+  test('a quick range this release doesn’t have is read as where it starts', () => {
+    expect(
+      toRangeChip(
+        { from: '2026-11-10T06:00:00.000Z', range: '6h' },
+        href,
+        now,
+        'UTC'
+      ).text
+    ).toBe('From 10 Nov 2026')
   })
 })

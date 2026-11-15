@@ -1,5 +1,6 @@
 import hapi from '@hapi/hapi'
 import type { Request } from '@hapi/hapi'
+import Joi from 'joi'
 
 import { config } from '../../../common/config.ts'
 import { isSameOrigin, sameOriginOnly } from './same-origin.ts'
@@ -60,7 +61,10 @@ describe('sameOriginOnly', () => {
         {
           method: 'POST',
           path: '/write',
-          options: { pre: [{ method: () => 'later', assign: 'later' }] },
+          options: {
+            pre: [{ method: () => 'later', assign: 'later' }],
+            validate: { payload: Joi.object({ name: Joi.string().required() }) }
+          },
           handler
         }
       ])
@@ -79,10 +83,22 @@ describe('sameOriginOnly', () => {
     expect(handler).not.toHaveBeenCalled()
   })
 
+  test('refuses a cross-site write before it validates the payload', async () => {
+    const { statusCode } = await server.inject({
+      method: 'POST',
+      url: '/write',
+      payload: {},
+      headers: { 'sec-fetch-site': 'cross-site' }
+    })
+
+    expect(statusCode).toBe(403)
+  })
+
   test('lets a same-origin write through, still running its own steps', async () => {
     const { statusCode, result } = await server.inject({
       method: 'POST',
       url: '/write',
+      payload: { name: 'Ada' },
       headers: { 'sec-fetch-site': 'same-origin' }
     })
 

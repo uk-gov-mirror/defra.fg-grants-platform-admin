@@ -1,0 +1,9 @@
+.gpa-formactions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-inline-xl);
+  padding-top: var(--gap-stack-xl);
+  border-top: var(--border-width-hairline) solid var(--border-subtle);
+}

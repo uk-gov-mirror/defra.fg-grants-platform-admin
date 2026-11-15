@@ -140,7 +140,7 @@ describe('keys that cannot be saved', () => {
     expect(scanJson(text)).toEqual({
       fault: null,
       keyFault: { line, column, problem },
-      unsafeInteger: null
+      unsafeIntegers: []
     })
   })
 
@@ -164,7 +164,7 @@ describe('keys that cannot be saved', () => {
     expect(scanJson('{ "a": 1, "a": 2 x }')).toEqual({
       fault: { line: 1, column: 18, expected: 'a comma or a closing brace' },
       keyFault: null,
-      unsafeInteger: null
+      unsafeIntegers: []
     })
   })
 })
@@ -179,7 +179,7 @@ describe('whole numbers too large to keep', () => {
       { line: 2, column: 9 }
     ]
   ])('finds %s', (_name, text, position) => {
-    expect(scanJson(text).unsafeInteger).toEqual(position)
+    expect(scanJson(text).unsafeIntegers).toEqual([position])
   })
 
   test.each([
@@ -189,12 +189,15 @@ describe('whole numbers too large to keep', () => {
     ['an exponent', '1e300'],
     ['the digits as a string', '"12345678901234567890"']
   ])('lets %s through', (_name, text) => {
-    expect(scanJson(text).unsafeInteger).toBeNull()
+    expect(scanJson(text).unsafeIntegers).toEqual([])
   })
 
-  test('names only the first', () => {
+  test('names every one, in order', () => {
     expect(
-      scanJson('[1, 9007199254740993, 9007199254740994]').unsafeInteger
-    ).toEqual({ line: 1, column: 5 })
+      scanJson('[1, 9007199254740993,\n 9007199254740994]').unsafeIntegers
+    ).toEqual([
+      { line: 1, column: 5 },
+      { line: 2, column: 2 }
+    ])
   })
 })

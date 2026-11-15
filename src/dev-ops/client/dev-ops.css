@@ -9,7 +9,7 @@
  * authors its own selectors for components ends up maintaining two design
  * systems.
  */
-@import 'tailwindcss' source("../views");
+@import 'tailwindcss' source('../views');
 
 /*
  * The theme contract, stated rather than defaulted: light unless the system

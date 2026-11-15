@@ -1,0 +1,18 @@
+.gpa-loadmore {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.gpa-loadmore > .gpa-btn {
+  margin-block: var(--gap-stack-md);
+}
+.gpa-loadmore > .gpa-listfoot {
+  align-self: stretch;
+}
+.gpa-loadmore-sentinel {
+  width: 100%;
+  height: 1px;
+}
+.gpa-listfoot-form {
+  display: contents;
+}

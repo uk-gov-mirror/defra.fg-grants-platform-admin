@@ -1,0 +1,21 @@
+{%- from "../../core/macros.njk" import attrs, cls, body -%}
+{%- from "../../atoms/button/macro.njk" import Button -%}
+{%- from "../../atoms/spinner/macro.njk" import Spinner -%}
+{%- from "../../atoms/time/macro.njk" import Time -%}
+{% macro listFooterForm(f, text) -%}
+  <form class="gpa-listfoot-form" method="post" action="{{ f.action }}">
+    {%- for k, v in f.fields %}{% for x in (v if v is iterable and v is not string else [v]) %}<input type="hidden" name="{{ k }}" value="{{ x }}">{% endfor %}{% endfor -%}
+    {{ Button({ text: text, size: 'sm', type: 'submit', attributes: { 'data-gpa-more': true } }) }}</form>
+{%- endmacro %}
+{%- set noun = p.noun or 'records' -%}
+  {%- set inPlace = p.state == 'more' or (p.state == 'searched' and (p.keepLookingHref or p.form)) -%}
+  {%- if inPlace %}<gpa-load-more data-noun="{{ noun }}"{% if p.countId %} data-count-id="{{ p.countId }}"{% endif %}{% if p.auto === false or p.state == 'searched' %} data-auto="false"{% endif %}>{% endif -%}
+  <div class="{{ cls('gpa-listfoot', p) }}"{% if p.state == 'error' %} role="alert"{% elif p.state == 'loading' %} aria-live="polite"{% endif %}{{ attrs(p) }}>
+    {%- if p.state == 'loading' -%}{{ Spinner({ size: 'sm' }) }}{{ p.text or ('Loading more ' ~ noun ~ '…') }}
+    {%- elif p.state == 'error' -%}<span class="gpa-text-danger">{{ p.text or ('Couldn’t load more ' ~ noun ~ '.') }}</span>{% if p.retryHref %}{{ Button({ text: 'Retry', size: 'sm', href: p.retryHref }) }}{% endif %}
+    {%- elif p.state == 'more' -%}{% if p.note %}<span>{{ p.note }}</span>{% endif %}{% if p.form %}{{ listFooterForm(p.form, p.text or ('Show more ' ~ noun)) }}{% else %}{{ Button({ text: p.text or ('Show more ' ~ noun), size: 'sm', href: p.nextHref, attributes: { 'data-gpa-more': true } }) }}{% endif %}
+    {%- elif p.state == 'searched' -%}<span>Searched back to {{ Time({ datetime: p.searchedTo.datetime, text: p.searchedTo.text }) }}.</span>{% if p.note %}<span>{{ p.note }}</span>{% endif %}{% if p.form %}{{ listFooterForm(p.form, 'Keep looking') }}{% elif p.keepLookingHref %}{{ Button({ text: 'Keep looking', size: 'sm', href: p.keepLookingHref, attributes: { 'data-gpa-more': true } }) }}{% endif %}
+    {%- else -%}{{ body(p, caller) if (p.text or p.html or caller) else ('No more ' ~ noun ~ '.') }}
+    {%- endif -%}
+  </div>
+  {%- if inPlace %}</gpa-load-more>{% endif -%}

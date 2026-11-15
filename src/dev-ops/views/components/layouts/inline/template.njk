@@ -1,0 +1,2 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+<div class="{{ cls('gpa-inline gpa-gap-' ~ (p.gap or 'md') ~ (' gpa-inline-nowrap' if p.wrap === false else '') ~ (' gpa-inline-' ~ p.align if p.align else '') ~ (' gpa-inline-between' if p.between else ''), p) }}"{{ attrs(p) }}>{{ caller() }}</div>

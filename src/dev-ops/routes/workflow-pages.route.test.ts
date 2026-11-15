@@ -155,7 +155,8 @@ const post = async (payload: object | undefined = {}, url = `${path}/fetch`) =>
     method: 'POST',
     url,
     payload,
-    auth: { strategy: 'session', credentials }
+    auth: { strategy: 'session', credentials },
+    headers: { 'sec-fetch-site': 'same-origin' }
   })
 
 const sessionCookie = (response: { headers: Record<string, unknown> }) =>

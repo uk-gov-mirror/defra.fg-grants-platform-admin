@@ -9,8 +9,6 @@ import { readList } from './record-reads.ts'
 
 export type {
   BucketCell,
-  BucketGroup,
-  BucketGroupValue,
   BucketLink,
   BucketPaging,
   BucketPlan,
@@ -20,9 +18,7 @@ export type {
 
 /** The URL's filters, the stored search and the place a later page starts from. */
 export interface BucketSearch {
-  where: Record<string, string>
-  /** The facts whose hidden values the URL asks for. */
-  show?: string[]
+  where: Record<string, string | string[]>
   ref?: string
   from?: string
   to?: string
@@ -33,11 +29,12 @@ export type BucketListResult = ListResult<BucketResult | null>
 
 const pageSize = 20
 
-/** A first page asks for the groups; a later page is only its rows. */
-const toQuery = (bucket: BucketEntry, search: BucketSearch): BucketQuery =>
-  search.cursor
-    ? { ...search, limit: pageSize }
-    : { ...search, limit: pageSize, groupBy: bucket.groupings }
+/** Every page asks for the list's total, a search's too: a later page opened without the script draws its own. */
+const toQuery = (search: BucketSearch): BucketQuery => ({
+  ...search,
+  limit: pageSize,
+  count: true
+})
 
 export const queryBucketUseCase = async (
   bucket: BucketEntry,
@@ -46,6 +43,6 @@ export const queryBucketUseCase = async (
 ): Promise<BucketListResult> =>
   readList(
     `bucket ${bucket.id}`,
-    () => queryBucket(bucket.id, toQuery(bucket, search), repeat),
+    () => queryBucket(bucket.id, toQuery(search), repeat),
     null
   )

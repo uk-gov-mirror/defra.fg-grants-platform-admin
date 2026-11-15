@@ -1,0 +1,16 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+{%- set inPage = p.items and p.items[0] and p.items[0].panel -%}
+  {%- if inPage -%}
+    <gpa-tabs><div class="{{ cls('gpa-tabs', p) }}" role="tablist" aria-label="{{ p.label }}"{{ attrs(p) }}>
+      {%- for t in p.items -%}
+        <a class="gpa-tab" role="tab" href="#{{ t.panel }}" aria-controls="{{ t.panel }}" data-id="{{ t.id or t.panel }}" aria-selected="{{ 'true' if t.current else 'false' }}"{% if t.disabled %} aria-disabled="true"{% endif %}{% if t.testId %} data-testid="{{ t.testId }}"{% endif %}>{% if t.icon %}{{ Icon({ name: t.icon, size: 'sm' }) }}{% endif %}{{ t.text }}{% if t.count is defined and t.count !== null %}<span class="gpa-count">{{ t.count }}</span>{% endif %}</a>
+      {%- endfor -%}
+    </div></gpa-tabs>
+  {%- else -%}
+    <nav class="{{ cls('gpa-tabs', p) }}" aria-label="{{ p.label }}"{{ attrs(p) }}>
+      {%- for t in p.items -%}
+        <a class="gpa-tab"{% if not t.disabled %} href="{{ t.href }}"{% else %} aria-disabled="true"{% endif %}{% if t.current %} aria-current="page"{% endif %}{% if t.testId %} data-testid="{{ t.testId }}"{% endif %}{% for k, v in t.attributes %} {{ k }}="{{ v }}"{% endfor %}>{% if t.icon %}{{ Icon({ name: t.icon, size: 'sm' }) }}{% endif %}{{ t.text }}{% if t.count is defined and t.count !== null %}<span class="gpa-count">{{ t.count }}</span>{% endif %}</a>
+      {%- endfor -%}
+    </nav>
+  {%- endif -%}

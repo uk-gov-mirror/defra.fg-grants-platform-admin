@@ -17,7 +17,11 @@ import {
   rotateToken
 } from '../repositories/clients.repository.ts'
 import { generateToken } from './generate-token.ts'
-import { toGasErrorField, toGasStatusCode } from './gas-status.ts'
+import {
+  cwNotReachedCode,
+  toGasErrorField,
+  toGasStatusCode
+} from './gas-status.ts'
 
 export type { ApiToken, ClientService, KeepOld, ListedToken, TokenKey }
 
@@ -75,12 +79,6 @@ const toRefusal = (error: unknown): TokenFailure | null => {
       }
     : null
 }
-
-/**
- * GAS's answer when it could not reach Caseworking at all, so nothing was
- * sent on. Any other 5xx after a send leaves the outcome unknown.
- */
-export const cwNotReachedCode = 'CW_UNREACHABLE'
 
 const cwNotReached = (error: unknown): boolean =>
   isResponseError(error) &&

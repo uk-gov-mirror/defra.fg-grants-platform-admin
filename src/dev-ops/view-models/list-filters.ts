@@ -11,15 +11,19 @@ export const present = (
   value: string | undefined
 ): Record<string, string> => (value ? { [name]: value } : {})
 
+const valuesOf = (value: unknown): string[] =>
+  (Array.isArray(value) ? value : [value]).filter(
+    (one): one is string => typeof one === 'string' && one !== ''
+  )
+
+/** One field per value: a filter with several values repeats its name. */
 export const toFields = <Q extends object>(
   query: Q,
   keys: FilterKeys<Q>
 ): FilterField[] =>
-  keys.flatMap((name) => {
-    const value = query[name]
-
-    return typeof value === 'string' && value !== '' ? [{ name, value }] : []
-  })
+  keys.flatMap((name) =>
+    valuesOf(query[name]).map((value) => ({ name, value }))
+  )
 
 /** A list's link with every filter it holds; `params` goes first, as the cursor does. */
 export const toFilterHref = <Q extends object>(
@@ -28,9 +32,10 @@ export const toFilterHref = <Q extends object>(
   query: Q,
   params: URLSearchParams = new URLSearchParams()
 ): string => {
-  for (const { name, value } of toFields(query, keys)) {
-    params.set(name, value)
-  }
+  const fields = toFields(query, keys)
+
+  fields.forEach(({ name }) => params.delete(name))
+  fields.forEach(({ name, value }) => params.append(name, value))
 
   return params.size ? `${basePath}?${params}` : basePath
 }

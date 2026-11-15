@@ -1,0 +1,13 @@
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+{%- from "../../atoms/menu-item/macro.njk" import MenuItem -%}
+{%- from "../../molecules/dropdown/macro.njk" import Dropdown -%}
+{%- set isSet = p.value and p.value != (p.allLabel or 'All') -%}
+  {%- set trigger -%}{% if p.icon %}{{ Icon({ name: p.icon, size: 'sm', classes: 'gpa-chip-icon' }) }}{% endif %}<span class="gpa-chip-label">{{ p.label }}:</span> <span class="gpa-chip-value"{% if p.valueTestId %} data-testid="{{ p.valueTestId }}"{% endif %}>{{ p.value or (p.allLabel or 'All') }}</span>{{ Icon({ name: 'chevron-down', size: 'sm', classes: 'gpa-chevron' }) }}{%- endset -%}
+  {%- set items -%}
+    {%- if caller -%}{{ caller() }}{%- else -%}
+    {%- for item in p.items -%}
+      {{ MenuItem({ text: item.text, href: item.href, type: 'submit' if not item.href, name: p.name if not item.href, value: item.value if not item.href, form: p.form, checked: true if item.checked else false, toggle: p.multiple, meta: item.count, mono: item.mono, testId: item.testId, metaTestId: item.countTestId, ariaLabel: item.ariaLabel, attributes: item.attributes }) }}
+    {%- endfor -%}
+    {%- endif -%}
+  {%- endset -%}
+  {{- Dropdown({ trigger: trigger, menuHtml: items, triggerClasses: 'gpa-chip' ~ (' is-set' if isSet else ''), triggerTestId: p.triggerTestId, triggerTitle: p.triggerTitle, menuLabel: p.menuLabel or p.label, menuWidth: p.menuWidth or 'md', align: p.align, id: p.panelId, panelTestId: p.panelTestId, testId: p.testId, attributes: p.attributes, classes: p.classes }) -}}

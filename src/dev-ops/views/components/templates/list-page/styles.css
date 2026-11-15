@@ -1,0 +1,8 @@
+.gpa-listpage-top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-stack-xl);
+}
+.gpa-listpage-top > .gpa-pageheader {
+  margin-bottom: var(--gap-stack-md);
+}

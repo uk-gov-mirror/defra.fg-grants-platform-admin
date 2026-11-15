@@ -1,0 +1,2 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+<ol class="{{ cls('gpa-timeline', p) }}"{% if p.label %} aria-label="{{ p.label }}"{% endif %}{{ attrs(p) }}>{{ caller() }}</ol>

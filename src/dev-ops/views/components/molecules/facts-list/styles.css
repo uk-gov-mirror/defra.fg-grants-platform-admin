@@ -1,0 +1,66 @@
+.gpa-facts {
+  display: grid;
+  grid-template-columns: var(--size-facts-label) minmax(0, 1fr);
+  margin: 0;
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-md);
+  align-content: start;
+}
+.gpa-facts dt,
+.gpa-facts dd {
+  display: flex;
+  align-items: center;
+  min-height: var(--size-fact-row);
+  margin: 0;
+  padding: var(--space-8) 0;
+  border-top: var(--border-width-hairline) solid var(--border-subtle);
+}
+.gpa-facts dt:first-of-type,
+.gpa-facts dd:first-of-type {
+  border-top: 0;
+}
+.gpa-facts dt {
+  padding-inline-end: var(--gap-columns);
+  color: var(--fg-muted);
+}
+.gpa-facts dd {
+  gap: var(--gap-inline-sm);
+  min-width: 0;
+  color: var(--fg-default);
+  overflow-wrap: anywhere;
+}
+.gpa-facts dd > .gpa-btn {
+  margin-block: calc(var(--space-2) * -1);
+  color: var(--fg-subtle);
+}
+.gpa-facts
+  dd
+  > .gpa-btn:hover:where(
+    :not(:disabled, [aria-disabled="true"], .is-disabled)
+  ) {
+  color: var(--fg-default);
+}
+.gpa-fact-empty {
+  color: var(--fg-faint);
+}
+.gpa-dd-id {
+  font-feature-settings:
+    "zero" 1,
+    "cv05" 1,
+    "cv08" 1;
+}
+.gpa-facts-stacked {
+  grid-template-columns: minmax(0, 1fr);
+}
+.gpa-facts-stacked dt {
+  min-height: 0;
+  padding: var(--space-8) 0 var(--space-2);
+}
+.gpa-facts-stacked dd {
+  min-height: 0;
+  padding: 0 0 var(--space-8);
+  border-top: 0;
+}
+.gpa-facts dd .gpa-time {
+  white-space: normal;
+}

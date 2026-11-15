@@ -29,8 +29,16 @@
   {%- set __html %}{% include "./atoms/spinner/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
 {%- endmacro %}
+{% macro StatusDot(p) -%}
+  {%- set __html %}{% include "./atoms/status-dot/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
 {% macro Badge(p) -%}
   {%- set __html %}{% include "./atoms/badge/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Tag(p) -%}
+  {%- set __html %}{% include "./atoms/tag/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
 {%- endmacro %}
 {% macro Avatar(p) -%}
@@ -45,12 +53,24 @@
   {%- set __html %}{% include "./atoms/label/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
 {%- endmacro %}
+{% macro Input(p) -%}
+  {%- set __html %}{% include "./atoms/input/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Textarea(p) -%}
+  {%- set __html %}{% include "./atoms/textarea/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
 {% macro Checkbox(p) -%}
   {%- set __html %}{% include "./atoms/checkbox/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
 {%- endmacro %}
 {% macro Radio(p) -%}
   {%- set __html %}{% include "./atoms/radio/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Skeleton(p) -%}
+  {%- set __html %}{% include "./atoms/skeleton/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
 {%- endmacro %}
 {% macro Tooltip(p) -%}
@@ -81,8 +101,28 @@
   {%- set __html %}{% include "./molecules/dropdown/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
 {%- endmacro %}
+{% macro FilterChip(p) -%}
+  {%- set __html %}{% include "./molecules/filter-chip/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro DateRangeChip(p) -%}
+  {%- set __html %}{% include "./molecules/date-range-chip/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro SearchField(p) -%}
+  {%- set __html %}{% include "./molecules/search-field/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
 {% macro SegmentedControl(p) -%}
   {%- set __html %}{% include "./molecules/segmented-control/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Tabs(p) -%}
+  {%- set __html %}{% include "./molecules/tabs/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro TabPanel(p) -%}
+  {%- set __html %}{% include "./molecules/tab-panel/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
 {%- endmacro %}
 {% macro BackLink(p) -%}
@@ -97,8 +137,32 @@
   {%- set __html %}{% include "./molecules/empty-state/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
 {%- endmacro %}
+{% macro Disclosure(p) -%}
+  {%- set __html %}{% include "./molecules/disclosure/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro FactsList(p) -%}
+  {%- set __html %}{% include "./molecules/facts-list/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Fact(p) -%}
+  {%- set __html %}{% include "./molecules/fact/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro NoValue(p) -%}
+  {%- set __html %}{% include "./molecules/no-value/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro CopyButton(p) -%}
+  {%- set __html %}{% include "./molecules/copy-button/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
 {% macro ThemeToggle(p) -%}
   {%- set __html %}{% include "./molecules/theme-toggle/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro ListFooter(p) -%}
+  {%- set __html %}{% include "./molecules/list-footer/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
 {%- endmacro %}
 {% macro Toast(p) -%}
@@ -125,12 +189,40 @@
   {%- set __html %}{% include "./organisms/page-header/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
 {%- endmacro %}
+{% macro FilterBar(p) -%}
+  {%- set __html %}{% include "./organisms/filter-bar/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Table(p) -%}
+  {%- set __html %}{% include "./organisms/table/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro RowLink(p) -%}
+  {%- set __html %}{% include "./organisms/row-link/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro RowChevron(p) -%}
+  {%- set __html %}{% include "./organisms/row-chevron/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro DataTable(p) -%}
+  {%- set __html %}{% include "./organisms/data-table/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro TableRow(p) -%}
+  {%- set __html %}{% include "./organisms/table-row/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
 {% macro Card(p) -%}
   {%- set __html %}{% include "./organisms/card/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
 {%- endmacro %}
 {% macro CardBody(p) -%}
   {%- set __html %}{% include "./organisms/card-body/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro FactsCard(p) -%}
+  {%- set __html %}{% include "./organisms/facts-card/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
 {%- endmacro %}
 {% macro Dialog(p) -%}
@@ -165,8 +257,48 @@
   {%- set __html %}{% include "./molecules/breadcrumbs/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
 {%- endmacro %}
+{% macro Stepper(p) -%}
+  {%- set __html %}{% include "./molecules/stepper/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Timeline(p) -%}
+  {%- set __html %}{% include "./molecules/timeline/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro TimelineItem(p) -%}
+  {%- set __html %}{% include "./molecules/timeline-item/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Popover(p) -%}
+  {%- set __html %}{% include "./molecules/popover/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
 {% macro RadioGroup(p) -%}
   {%- set __html %}{% include "./molecules/radio-group/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Calendar(p) -%}
+  {%- set __html %}{% include "./molecules/calendar/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro BulkActionBar(p) -%}
+  {%- set __html %}{% include "./molecules/bulk-action-bar/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Stack(p) -%}
+  {%- set __html %}{% include "./layouts/stack/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Inline(p) -%}
+  {%- set __html %}{% include "./layouts/inline/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Grid(p) -%}
+  {%- set __html %}{% include "./layouts/grid/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Columns(p) -%}
+  {%- set __html %}{% include "./layouts/columns/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
 {%- endmacro %}
 {% macro HiddenField(p) -%}
@@ -177,8 +309,20 @@
   {%- set __html %}{% include "./layouts/form/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
 {%- endmacro %}
+{% macro FormActions(p) -%}
+  {%- set __html %}{% include "./layouts/form-actions/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
 {% macro Page(p) -%}
   {%- set __html %}{% include "./templates/page/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro ListPage(p) -%}
+  {%- set __html %}{% include "./templates/list-page/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro RecordPage(p) -%}
+  {%- set __html %}{% include "./templates/record-page/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
 {%- endmacro %}
 {% macro ErrorSummary(p) -%}
@@ -187,6 +331,14 @@
 {%- endmacro %}
 {% macro StatusPage(p) -%}
   {%- set __html %}{% include "./templates/status-page/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro Time(p) -%}
+  {%- set __html %}{% include "./atoms/time/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro DiffViewer(p) -%}
+  {%- set __html %}{% include "./organisms/diff-viewer/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
 {%- endmacro %}
 {% macro TopNav(p) -%}

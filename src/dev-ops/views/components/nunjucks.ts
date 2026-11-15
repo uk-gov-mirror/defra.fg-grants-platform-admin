@@ -1,6 +1,16 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import type nunjucks from "nunjucks";
+import { calendarMonth, formatRange } from "./core/dates.ts";
+import { diffLines } from "./core/diff.ts";
+
+export {
+  calendarMonth,
+  formatDate,
+  formatRange,
+  parseDate,
+} from "./core/dates.ts";
+export { diffLines } from "./core/diff.ts";
 
 export const designSystemViews = path.resolve(import.meta.dirname, "..");
 
@@ -31,5 +41,8 @@ export const addDesignSystem = (environment: nunjucks.Environment) => {
   environment.addGlobal("gpaIconNodes", iconNodes);
   environment.addGlobal("gpaIconName", iconName);
   environment.addGlobal("gpaId", nextId);
+  environment.addGlobal("gpaDiff", diffLines);
+  environment.addGlobal("gpaFormatRange", formatRange);
+  environment.addGlobal("gpaCalendarMonth", calendarMonth);
   return environment;
 };

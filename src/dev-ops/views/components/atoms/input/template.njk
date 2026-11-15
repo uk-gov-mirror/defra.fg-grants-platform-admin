@@ -1,0 +1,14 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../atoms/icon-button/macro.njk" import IconButton -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+{%- set has = p.value is defined and p.value !== null and p.value !== '' -%}
+  {%- set klass = 'gpa-input gpa-input-' ~ (p.size or 'md') ~ (' gpa-input-bare' if p.bare else '') ~ (' is-invalid' if p.invalid else '') ~ (' is-disabled' if p.disabled else '') ~ (' is-readonly' if p.readonly and not p.disabled else '') ~ (' gpa-input-mono' if p.mono else '') ~ (' gpa-width-' ~ p.width if p.width else '') -%}
+  {%- set clear = p.clearable and not p.disabled and not p.readonly -%}
+  {%- if clear %}<gpa-clearable>{% endif -%}
+  <span class="{{ cls(klass, p) }}"{{ attrs(p) }}>
+    {%- if p.icon or p.iconStart %}{{ Icon({ name: p.icon or p.iconStart, size: 'sm', classes: 'gpa-input-icon' }) }}{% endif -%}
+    <input{% if p.id %} id="{{ p.id }}"{% endif %} type="{{ p.type or 'text' }}"{% if p.name %} name="{{ p.name }}"{% endif %}{% if p.value is defined and p.value !== null %} value="{{ p.value }}"{% endif %}{% if p.placeholder %} placeholder="{{ p.placeholder }}"{% endif %}{% if p.invalid %} aria-invalid="true"{% endif %}{% if p.describedBy %} aria-describedby="{{ p.describedBy }}"{% endif %}{% if p.label %} aria-label="{{ p.label }}"{% endif %}{% if p.disabled %} disabled{% endif %}{% if p.readonly %} readonly{% endif %}{% if p.required %} required{% endif %}{% if p.inputmode %} inputmode="{{ p.inputmode }}"{% endif %}{% if p.autocomplete %} autocomplete="{{ p.autocomplete }}"{% endif %}{% if p.spellcheck === false or (p.mono and p.spellcheck is not defined) %} spellcheck="false"{% endif %}{% for k, v in p.inputAttributes %}{% if v === true %} {{ k }}{% elif v !== false and v !== null %} {{ k }}="{{ v }}"{% endif %}{% endfor %}>
+    {%- if p.suffix or p.suffixHtml %}<span class="gpa-input-suffix">{{ p.suffixHtml | safe if p.suffixHtml else p.suffix }}</span>{% endif -%}
+    {%- if clear %}{{ IconButton({ icon: 'x', label: p.clearLabel or 'Clear', size: 'xs', classes: 'gpa-input-clear', attributes: { hidden: not has } }) }}{% endif -%}
+  </span>
+  {%- if clear %}</gpa-clearable>{% endif -%}

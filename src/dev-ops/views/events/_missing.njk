@@ -1,0 +1,30 @@
+{% import "components/macros.njk" as gpa %}
+{#- An event the service couldn't give: not found, timed out or unavailable, with the header kept. -#}
+{%- call gpa.Page() -%}
+  {{ gpa.PageHeader({ title: title, mono: true, back: { href: back.href, text: back.text, testId: 'event-back' }, titleTestId: 'event-title' }) }}
+
+  {%- if missing.state == 'not-found' -%}
+    {%- call gpa.Card({ testId: 'event-not-found' }) -%}
+      {{ gpa.EmptyState({ icon: 'search-x', title: missing.title, text: missing.text, actions: gpa.Button({ text: back.text, href: back.href }) }) }}
+    {%- endcall -%}
+  {%- else -%}
+    {%- set actions -%}
+      {{ gpa.Button({ text: 'Try again', size: 'sm', iconStart: 'refresh-cw', href: retryHref, testId: 'event-retry' }) }}
+      {{ gpa.Button({ text: back.text, size: 'sm', variant: 'tertiary', href: back.href }) }}
+    {%- endset -%}
+    {{ gpa.Alert({ tone: 'danger', title: missing.title, text: missing.text, actions: actions, testId: 'event-' ~ missing.state }) }}
+  {%- endif -%}
+
+  {%- if kept -%}
+    {#- The edit couldn't be checked against the event: it is shown, so nothing typed is lost. -#}
+    {%- call gpa.Card({ padded: true, title: 'Your changes', actions: gpa.CopyButton({ value: kept.text, text: 'Copy' }), testId: 'event-kept' }) -%}
+      {%- call gpa.Stack({ gap: 'lg' }) -%}
+        {{ gpa.Text({ tone: 'muted', text: 'They haven’t been saved. Copy them before you leave this page, then try again.' }) }}
+        {{ gpa.Code({ block: true, framed: true, code: kept.text, label: 'Your changes', maxHeight: 360 }) }}
+        {%- if kept.note -%}
+          {%- call gpa.FactsList() %}{{ gpa.Fact({ label: 'Why are you changing it?', text: kept.note }) }}{% endcall -%}
+        {%- endif -%}
+      {%- endcall -%}
+    {%- endcall -%}
+  {%- endif -%}
+{%- endcall -%}

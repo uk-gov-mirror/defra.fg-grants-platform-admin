@@ -1,0 +1,22 @@
+.gpa-bulkbar {
+  position: sticky;
+  top: 0;
+  z-index: calc(var(--z-sticky) + 1);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-inline-xl);
+  min-height: var(--size-row);
+  padding: var(--inset-card-head-y) var(--inset-card);
+  border-bottom: var(--border-width-hairline) solid var(--table-divider);
+  background: var(--bg-selected);
+}
+.gpa-bulkbar-count {
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-md);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.gpa-bulkbar .gpa-link {
+  margin-inline-start: auto;
+}

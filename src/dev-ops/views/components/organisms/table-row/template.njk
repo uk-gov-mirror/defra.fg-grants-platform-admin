@@ -1,0 +1,8 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../atoms/checkbox/macro.njk" import Checkbox -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+<tr class="{{ cls('gpa-tr' ~ (' ' ~ p.cols if p.cols else '') ~ (' is-link' if (p.href or p.link) else '') ~ (' is-selected' if p.selected else ''), p) }}" role="row"{% if p.selectable %} aria-selected="{{ 'true' if p.selected else 'false' }}"{% endif %}{{ attrs(p) }}>
+    {%- if p.selectable %}<td role="cell" class="gpa-cell-check">{{ Checkbox({ ariaLabel: 'Select ' ~ (p.rowLabel or p.rowId), name: p.selectName or 'selected', value: p.rowId, checked: p.selected, inputAttributes: { 'data-gpa-row': '' } }) }}</td>{% endif -%}
+    {{- caller() -}}
+    {%- if p.href %}<td class="gpa-cell-chevron" aria-hidden="true"><span class="gpa-row-chevron">{{ Icon({ name: 'chevron-right', size: 'md', classes: 'gpa-dir-icon' }) }}</span></td>{% endif -%}
+  </tr>

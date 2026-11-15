@@ -1,0 +1,2 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+<dl class="{{ cls('gpa-facts' ~ (' gpa-facts-stacked' if p and p.stacked else ''), p or {}) }}"{{ attrs(p or {}) }}>{{ caller() }}</dl>

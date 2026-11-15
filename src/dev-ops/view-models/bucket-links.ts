@@ -14,8 +14,11 @@ import { toFilterHref } from './list-filters.ts'
 import { toWorkflowHref } from './workflows-page.view-model.ts'
 import { toFittingBack } from './record-filters.ts'
 
+/** One value, or the values a fact with offered values is filtered by. */
+export type FilterValue = string | string[]
+
 /** Everything a list's URL holds but its position: one key per filtered fact, and the time range. */
-export type BucketFilters = Record<string, string | undefined>
+export type BucketFilters = Record<string, FilterValue | undefined>
 
 /** The list under these filters, spelled as its URL spells them; `params` goes first, as a cursor does. */
 export const toBucketHref = (

@@ -43,5 +43,10 @@
       {% block content %}{% endblock %}
     {%- endcall -%}
     {% if offersTimes %}{% include "times-dialog.njk" %}{% endif %}
+    {%- if toasts and toasts.length -%}
+      {%- call gpa.ToastRegion() -%}
+        {%- for toast in toasts %}{{ gpa.Toast({ tone: toast.tone, text: toast.text, testId: 'toast' }) }}{% endfor -%}
+      {%- endcall -%}
+    {%- endif %}
   </body>
 </html>

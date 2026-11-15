@@ -1,0 +1,92 @@
+.gpa-stepper {
+  display: flex;
+  gap: var(--gap-inline-xl);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+.gpa-step {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  gap: var(--gap-inline-md);
+  min-width: 0;
+}
+.gpa-step:not(:last-child)::after {
+  content: "";
+  flex: 1;
+  align-self: flex-start;
+  min-width: var(--gap-columns);
+  height: var(--border-width-hairline);
+  margin-top: calc(var(--size-step-mark) / 2);
+  background: var(--border-default);
+}
+.gpa-step.is-done:not(:last-child)::after {
+  background: var(--bg-accent);
+}
+.gpa-step-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--size-step-mark);
+  height: var(--size-step-mark);
+  border: var(--border-width-hairline) solid var(--border-default);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+  font-weight: 600;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+.gpa-step.is-done .gpa-step-mark {
+  border-color: var(--bg-accent);
+  background: var(--bg-accent);
+  color: var(--fg-on-accent);
+}
+.gpa-step.is-current .gpa-step-mark {
+  border: var(--border-width-thick) solid var(--bg-accent);
+  color: var(--fg-default);
+}
+.gpa-step-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-stack-2xs);
+  min-width: 0;
+  padding-top: calc((var(--size-step-mark) - var(--line-height-md)) / 2);
+}
+.gpa-step-label {
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-md);
+  font-weight: 500;
+  color: var(--fg-default);
+}
+.gpa-step.is-todo .gpa-step-label {
+  color: var(--fg-muted);
+  font-weight: 400;
+}
+.gpa-step-desc {
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+  color: var(--fg-subtle);
+  letter-spacing: var(--tracking-sm);
+}
+.gpa-stepper-vertical {
+  flex-direction: column;
+  gap: var(--gap-stack-2xl);
+}
+.gpa-stepper-vertical .gpa-step:not(:last-child)::after {
+  position: absolute;
+  inset-inline-start: calc(var(--size-step-mark) / 2);
+  top: calc(var(--size-step-mark) + var(--gap-stack-2xs));
+  width: var(--border-width-hairline);
+  height: calc(
+    100% - var(--size-step-mark) + var(--gap-stack-2xl) - var(--gap-stack-2xs) *
+      2
+  );
+  min-width: 0;
+  margin-top: 0;
+  flex: none;
+}

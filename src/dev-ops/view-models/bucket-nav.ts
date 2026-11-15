@@ -45,7 +45,7 @@ const toKey = ({ id, page }: BucketEntry): string =>
   page === null ? `list:${id}` : `page:${page.id}`
 
 /** Event lists live under `events/`, whatever the catalogue calls their link. */
-const isEventList = ({ path }: BucketEntry): boolean =>
+export const isEventList = ({ path }: BucketEntry): boolean =>
   path.startsWith('events/')
 
 const toNavItem = (bucket: BucketEntry): NavItem => ({
@@ -94,6 +94,33 @@ const withItem = (
       )
     : [...sections, { title, items: [item] }]
 
+/**
+ * GAS answered without CW's lists because it couldn't reach CW: CW's Events
+ * stays in reach, where the page says so.
+ */
+const cwEventsItem: NavItem = {
+  id: 'cw.outbox',
+  ids: ['cw.outbox', 'cw.inbox'],
+  label: 'Events',
+  perService: true,
+  href: `${devOpsPath}/events/cw/outbox`,
+  icon: 'activity'
+}
+
+const cwUnreachable = (catalogue: Catalogue | null): boolean =>
+  (catalogue?.sourceErrors ?? []).some(({ hop }) => hop === 'CW-BE')
+
+const hasCwLists = (sections: NavSection[]): boolean =>
+  sections.some(({ title }) => title === serviceWords.cw.short)
+
+const withUnreachable = (
+  catalogue: Catalogue | null,
+  sections: NavSection[]
+) =>
+  cwUnreachable(catalogue) && !hasCwLists(sections)
+    ? [...sections, { title: serviceWords.cw.short, items: [cwEventsItem] }]
+    : sections
+
 /** One section per service, in the order the catalogue first names it, each ending with that service's access tokens. */
 export const toNavSections = (catalogue: Catalogue | null): NavSection[] => {
   const buckets = catalogue?.buckets ?? []
@@ -106,7 +133,7 @@ export const toNavSections = (catalogue: Catalogue | null): NavSection[] => {
   return clientServices.reduce(
     (drawn, service) =>
       withItem(drawn, serviceWords[service].short, toAccessTokensItem(service)),
-    sections
+    withUnreachable(catalogue, sections)
   )
 }
 
@@ -144,5 +171,8 @@ export const toHomeLabel = (catalogue: Catalogue | null): string | null => {
   return first ? toPageLabel(first) : null
 }
 
-const toPageLabel = ({ page, label }: BucketEntry): string =>
+/** A list by the page it is drawn on: a queue by its service's events, the others by their own name. */
+export const toListLabel = ({ page, label }: BucketEntry): string =>
   page?.label ?? label
+
+const toPageLabel = toListLabel

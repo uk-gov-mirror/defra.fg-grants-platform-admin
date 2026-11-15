@@ -1,0 +1,33 @@
+.gpa-filterbar-row > .gpa-searchfield {
+  flex: 1 1 var(--size-search-basis);
+  width: auto;
+}
+
+.gpa-filterbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-stack-md);
+}
+.gpa-filterbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-inline-md);
+}
+.gpa-filterbar-applied {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-inline-sm);
+}
+.gpa-filterbar-applied {
+  min-height: var(--size-control-xs);
+}
+.gpa-filterbar-total {
+  margin-inline-start: auto;
+  color: var(--fg-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

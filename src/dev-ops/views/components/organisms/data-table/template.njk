@@ -1,0 +1,43 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../atoms/checkbox/macro.njk" import Checkbox -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+{%- from "../../atoms/skeleton/macro.njk" import Skeleton -%}
+{%- from "../../molecules/empty-state/macro.njk" import EmptyState -%}
+{%- set legacy = p.cols -%}
+  {%- set tracks = [] -%}
+  {%- if p.selectable %}{% set tracks = (tracks.push('var(--size-column-check)'), tracks) %}{% endif -%}
+  {%- for c in p.columns %}{% set tracks = (tracks.push(c.width or ('minmax(max-content, 1fr)' if (c.mono or (loop.first and p.link)) else 'minmax(120px, 1fr)')), tracks) %}{% endfor -%}
+  {%- if p.link %}{% set tracks = (tracks.push('var(--size-column-chevron)'), tracks) %}{% endif -%}
+  {%- set n = p.columns | length -%}
+  {%- set narrow = [] -%}
+  {%- for t in tracks %}{% set narrow = (narrow.push(t if t in ['var(--size-column-check)', 'var(--size-column-chevron)'] else 'auto'), narrow) %}{% endfor -%}
+  {%- set tid = p.id or gpaId('table') -%}
+  {%- if p.styleNonce and not legacy %}<style nonce="{{ p.styleNonce }}">[data-gpa-table="{{ tid }}"]{--gpa-cols:{{ tracks | join(' ') }};--gpa-cols-narrow:{{ narrow | join(' ') }}}</style>{% endif -%}
+  <gpa-data-table{% if not legacy %} data-cols="{{ tracks | join(' ') }}"{% endif %}{% if p.selectable %} data-selectable{% endif %}{% if p.stickyFirstColumn %} data-sticky{% endif %}><div class="gpa-cq"><div class="{{ cls('gpa-table', p) }}"{{ attrs(p) }}>
+    {%- if p.selectable and p.bulkActions -%}
+      <div class="gpa-bulkbar" role="region" aria-label="0 selected" hidden><span class="gpa-bulkbar-count">0 selected</span><div class="gpa-btngroup gpa-btngroup-sm">{{ p.bulkActions | safe }}</div><button type="button" class="gpa-link gpa-link-sm" data-gpa-clear><span>Clear selection</span></button></div>
+    {%- endif -%}
+    <table class="gpa-table-scroll gpa-grid-table{{ (' is-subgrid gpa-ncols-' ~ n ~ (' has-check' if p.selectable else '') ~ (' has-chevron' if p.link else '') ~ ('' if p.stickyFirstColumn or (p.narrow == 'scroll') or (not p.narrow and n >= 5) else ' is-wrapping')) if not legacy }}" role="table"{% if not legacy %} data-gpa-table="{{ tid }}" data-gpa-cols="{{ tracks | join(' ') }}" data-gpa-cols-narrow="{{ narrow | join(' ') }}"{% endif %}{% if p.label %} aria-label="{{ p.label }}"{% endif %}{% if p.loading %} aria-busy="true"{% endif %}{% if p.tableTestId %} data-testid="{{ p.tableTestId }}"{% endif %}>
+      <thead><tr class="gpa-tr gpa-thead{{ ' ' ~ legacy if legacy }}" role="row"{% if p.headTestId %} data-testid="{{ p.headTestId }}"{% endif %}>
+        {%- if p.selectable %}<th role="columnheader" class="gpa-cell-check{{ ' gpa-sticky-col' if p.stickyFirstColumn }}">{{ Checkbox({ ariaLabel: 'Select all rows', inputAttributes: { 'data-gpa-all': '' } }) }}</th>{% endif -%}
+        {%- for c in p.columns -%}
+          {%- set active = p.sort and c.key and p.sort.key == c.key -%}
+          {%- set dir = p.sort.dir if active else null -%}
+          <th scope="col" role="columnheader"{% if active %} aria-sort="{{ 'ascending' if dir == 'asc' else 'descending' }}"{% elif c.sortable %} aria-sort="none"{% endif %} class="label-sm{{ ' gpa-center' if c.align == 'center' }}{{ ' gpa-right' if c.align == 'right' }}{{ (' gpa-sticky-col' ~ (' gpa-sticky-after-check' if p.selectable else '')) if p.stickyFirstColumn and loop.first }}">
+            {%- if c.sortable -%}
+              <a class="gpa-sort{{ ' is-active' if active }}" href="{{ c.sortHref }}">{{ c.label }}{{ Icon({ name: 'arrow-up' if dir == 'asc' else ('arrow-down' if dir == 'desc' else 'chevrons-up-down'), size: 'xs' }) }}</a>
+            {%- else -%}{{ c.label }}{%- endif -%}
+          </th>
+        {%- endfor -%}
+        {%- if p.link %}<td aria-hidden="true"></td>{% endif -%}
+      </tr></thead>
+      <tbody class="gpa-table-body" role="rowgroup"{% if p.bodyId %} id="{{ p.bodyId }}"{% endif %}{% if p.bodyTestId %} data-testid="{{ p.bodyTestId }}"{% endif %}>
+        {%- if p.loading -%}
+          {%- for i in range(3) %}<tr class="gpa-tr" role="row">{% if p.selectable %}<td role="cell"></td>{% endif %}{% for c in p.columns %}<td role="cell">{{ Skeleton({ height: 12, width: '60%' }) }}</td>{% endfor %}</tr>{% endfor -%}
+        {%- endif -%}
+        {{- caller() if caller -}}
+      </tbody>
+    </table>
+    {%- if p.empty %}{{ EmptyState({ compact: true, icon: p.empty.icon or 'inbox', title: p.empty.title or 'Nothing here', text: p.empty.text }) }}{% endif -%}
+    {%- if p.after %}{{ p.after | safe }}{% endif -%}
+  </div></div></gpa-data-table>

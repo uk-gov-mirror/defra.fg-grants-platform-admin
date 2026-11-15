@@ -1,0 +1,10 @@
+{%- from "../../core/macros.njk" import attrs, cls -%}
+{%- from "../../organisms/page-header/macro.njk" import PageHeader -%}
+<gpa-list-page><div class="{{ cls('gpa-page gpa-listpage', p) }}"{{ attrs(p) }}>
+    <div class="gpa-listpage-top">
+      {{- PageHeader({ title: p.title, actions: p.actions, meta: p.meta, breadcrumbs: p.breadcrumbs, titleTestId: p.titleTestId }) -}}
+      {{- p.alert | safe if p.alert -}}
+      {{- p.filters | safe if p.filters -}}
+    </div>
+    {%- if caller %}{{ caller() }}{% endif -%}
+  </div></gpa-list-page>

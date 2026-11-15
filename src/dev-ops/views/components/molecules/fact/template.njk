@@ -1,0 +1,9 @@
+{%- from "../../core/macros.njk" import attrs, body -%}
+{%- from "../../atoms/link/macro.njk" import Link -%}
+{%- from "../../molecules/copy-button/macro.njk" import CopyButton -%}
+{%- from "../../molecules/no-value/macro.njk" import NoValue -%}
+{%- set has = (p.text is defined and p.text !== null and p.text !== '') or p.html or caller -%}
+  <dt{{ attrs(p) }}>{{ p.label }}</dt><dd{% if p.mono %} class="gpa-dd-id"{% endif %}>
+    {%- if not has %}{{ NoValue() }}{% elif p.href %}{{ Link({ text: p.text, html: p.html, href: p.href, external: p.external }) }}{% else %}{{ body(p, caller) }}{% endif -%}
+    {%- if p.copy and has %}{{ CopyButton({ value: p.copyValue or p.text, size: 'xs' }) }}{% endif -%}
+  </dd>

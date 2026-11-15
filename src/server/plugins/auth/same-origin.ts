@@ -1,10 +1,5 @@
 import Boom from '@hapi/boom'
-import type {
-  Request,
-  ResponseToolkit,
-  RouteOptionsPreArray,
-  ServerRoute
-} from '@hapi/hapi'
+import type { Request, ResponseToolkit, ServerRoute } from '@hapi/hapi'
 
 import { config } from '../../../common/config.ts'
 
@@ -42,15 +37,12 @@ export const requireSameOrigin = (request: Request, h: ResponseToolkit) => {
   return h.continue
 }
 
-/** Runs before any handler of these routes. */
+/** Runs before these routes validate what was sent, so a refusal is always a 403. */
 export const sameOriginOnly = (routes: ServerRoute[]): ServerRoute[] =>
   routes.map((route) => ({
     ...route,
     options: {
       ...route.options,
-      pre: [
-        { method: requireSameOrigin },
-        ...((route.options as { pre?: RouteOptionsPreArray })?.pre ?? [])
-      ]
+      ext: { onPostAuth: { method: requireSameOrigin } }
     }
   }))

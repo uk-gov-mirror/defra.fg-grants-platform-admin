@@ -1,0 +1,15 @@
+{%- from "../../core/macros.njk" import attrs, iconTemplate -%}
+{%- from "../../atoms/button/macro.njk" import Button -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+{% macro calendarGrid(m) -%}
+  <div class="gpa-calendar" data-gpa-ssr inert><div class="gpa-calendar-head">{{ Button({ iconOnly: 'chevron-left', label: 'Previous month', size: 'sm', variant: 'tertiary', classes: 'gpa-dir-icon' }) }}<button type="button" class="gpa-calendar-title gpa-calendar-switch" aria-live="polite" aria-label="{{ m.title }} — Choose month">{{ m.title }}{{ Icon({ name: 'chevron-down', size: 'xs' }) }}</button>{{ Button({ iconOnly: 'chevron-right', label: 'Next month', size: 'sm', variant: 'tertiary', classes: 'gpa-dir-icon' }) }}</div>
+    <div role="grid" aria-label="{{ m.title }}" class="gpa-calendar-grid"><div role="row" class="gpa-calendar-row">{% for w in m.weekdays %}<span role="columnheader" class="gpa-calendar-wd" aria-label="{{ w.long }}">{{ w.narrow }}</span>{% endfor %}</div>
+      {%- for row in m.rows %}<div role="row" class="gpa-calendar-row">{% for d in row %}<span role="gridcell"{% if d.selected %} aria-selected="true"{% endif %}><button type="button" data-date="{{ d.iso }}" aria-label="{{ d.label }}" class="{{ d.className }}" tabindex="{{ '0' if d.focus else '-1' }}"{% if d.focus %} data-autofocus{% endif %}{% if d.disabled %} disabled{% endif %}{% if d.today %} aria-current="date"{% endif %}>{{ d.day }}</button></span>{% endfor %}</div>{% endfor -%}
+    </div></div>
+{%- endmacro %}
+  {%- set m = gpaCalendarMonth({ value: p.value, rangeStart: p.rangeStart, rangeEnd: p.rangeEnd, min: p.min, max: p.max, today: p.today }) -%}
+  <gpa-calendar{% if p.rangeStart %} data-range-start="{{ p.rangeStart }}"{% endif %}{% if p.rangeEnd %} data-range-end="{{ p.rangeEnd }}"{% endif %}{{ attrs(p) }}>
+    {{- calendarGrid(m) -}}
+    <span class="gpa-input gpa-input-md" data-gpa-native><input type="date"{% if p.id %} id="{{ p.id }}"{% endif %}{% if p.name %} name="{{ p.name }}"{% endif %}{% if p.form %} form="{{ p.form }}"{% endif %} value="{{ p.value or '' }}"{% if p.min %} min="{{ p.min }}"{% endif %}{% if p.max %} max="{{ p.max }}"{% endif %} aria-label="{{ p.label or 'Date' }}"></span>
+    {{- iconTemplate({ names: ['chevron-left', 'chevron-right', 'chevron-down'] }) -}}
+  </gpa-calendar>

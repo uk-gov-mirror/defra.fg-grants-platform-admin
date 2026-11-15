@@ -81,7 +81,7 @@ describe('toPurgeFormError', () => {
   test('asks for a reason when none was chosen', () => {
     expect(toPurgeFormError(submission(''))).toEqual({
       field: 'reason',
-      message: 'Choose a reason.'
+      message: 'Choose a reason'
     })
   })
 
@@ -92,7 +92,7 @@ describe('toPurgeFormError', () => {
   test('asks for a note when the reason is Other', () => {
     expect(toPurgeFormError(submission('OTHER'))).toEqual({
       field: 'note',
-      message: "Enter a note. It's required when the reason is Other."
+      message: 'Say why: the reason is Other'
     })
   })
 
@@ -101,7 +101,7 @@ describe('toPurgeFormError', () => {
       toPurgeFormError(submission('BROKEN_PAYLOAD', 'x'.repeat(501)))
     ).toEqual({
       field: 'note',
-      message: 'Shorten the note to 500 characters or fewer.'
+      message: 'Shorten the note to 500 characters or fewer'
     })
   })
 

@@ -1,0 +1,329 @@
+.gpa-tr.is-link {
+  outline: var(--focus-ring-width) none transparent;
+  outline-offset: var(--focus-ring-offset);
+}
+.gpa-tr.is-link {
+  transition: var(--transition-focus);
+}
+.gpa-tr.is-link {
+  outline-offset: var(--focus-ring-offset-inset);
+}
+.gpa-center {
+  text-align: center;
+  justify-self: center;
+}
+.gpa-right {
+  text-align: end;
+  justify-self: end;
+}
+
+.gpa-table {
+  overflow: clip;
+  border: var(--border-width-hairline) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+.gpa-tr {
+  position: relative;
+  display: grid;
+  align-items: center;
+  gap: var(--gap-columns);
+  min-height: var(--size-row);
+  padding: var(--inset-cell-y) var(--inset-card);
+  border-top: var(--border-width-hairline) solid var(--table-divider);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-md);
+}
+.gpa-thead {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  min-height: var(--size-table-head);
+  padding-top: var(--inset-cell-head-y);
+  padding-bottom: var(--inset-cell-head-y);
+  border-top: 0;
+  color: var(--table-header-fg);
+  background:
+    linear-gradient(var(--bg-sunken), var(--bg-sunken)), var(--bg-surface);
+}
+.gpa-tr.is-link {
+  cursor: pointer;
+}
+.gpa-tr.is-link:hover:where(
+    :not(:disabled, [aria-disabled="true"], .is-disabled)
+  ) {
+  background: var(--table-row-bg-hover);
+}
+.gpa-tr.is-selected {
+  background: var(--bg-selected);
+}
+.gpa-tr.is-selected .gpa-text-subtle {
+  color: var(--fg-muted);
+}
+.gpa-tr.is-link:has(.gpa-rowlink:focus-visible) {
+  outline: var(--focus-ring-width) solid var(--border-focus);
+  outline-offset: var(--focus-ring-offset-inset);
+}
+.gpa-rowlink {
+  min-width: 0;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg-default);
+  font: inherit;
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gpa-rowlink::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.gpa-tr > [role="cell"] > .gpa-truncate {
+  display: block;
+}
+.gpa-tr > [role="cell"] {
+  overflow-wrap: break-word;
+}
+.gpa-rowlink:focus-visible {
+  outline-color: transparent;
+  box-shadow: none;
+}
+.gpa-rowlink.gpa-mono {
+  font-size: var(--font-size-md);
+}
+.gpa-cell-mono {
+  min-width: 0;
+  font-feature-settings:
+    "zero" 1,
+    "cv05" 1,
+    "cv08" 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gpa-row-chevron {
+  display: flex;
+  justify-content: flex-end;
+  color: var(--fg-faint);
+}
+.gpa-table .gpa-empty {
+  border-top: var(--border-width-hairline) solid var(--table-divider);
+}
+@media (prefers-reduced-motion: reduce) {
+  .gpa-tr.is-link {
+    transition: none;
+  }
+}
+@media (forced-colors: active) {
+  .gpa-tr.is-link {
+    outline-style: none;
+  }
+}
+
+.gpa-cell-check {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+}
+.gpa-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-inline-xs);
+  margin: 0 calc(var(--inset-tag-xs) * -1);
+  padding: 0 var(--inset-tag-xs);
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.gpa-sort .gpa-icon {
+  color: var(--fg-faint);
+}
+.gpa-sort.is-active,
+.gpa-sort.is-active .gpa-icon {
+  color: var(--fg-default);
+}
+.gpa-sort:hover:where(:not(:disabled)) {
+  color: var(--fg-default);
+}
+.gpa-right .gpa-sort {
+  flex-direction: row-reverse;
+}
+.gpa-tr {
+  --gpa-row-tint: transparent;
+}
+.gpa-thead {
+  --gpa-row-tint: var(--bg-sunken);
+}
+.gpa-tr.is-selected {
+  --gpa-row-tint: var(--bg-selected);
+}
+.gpa-tr.is-link:hover:where(
+    :not(:disabled, [aria-disabled="true"], .is-disabled)
+  ) {
+  --gpa-row-tint: var(--table-row-bg-hover);
+}
+.gpa-tr {
+  min-width: min-content;
+}
+.gpa-table-scroll.is-subgrid {
+  display: grid;
+  grid-template-columns: var(--gpa-cols);
+  column-gap: var(--gap-columns);
+}
+.gpa-table-scroll.is-subgrid > .gpa-tr,
+.gpa-table-scroll.is-subgrid > .gpa-table-body,
+.gpa-table-scroll.is-subgrid > .gpa-table-body > .gpa-tr {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+}
+.gpa-table-scroll.is-subgrid {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.gpa-table-scroll.is-subgrid.is-fitting {
+  overflow-x: visible;
+}
+@container (max-width: 719px) {
+  .gpa-table-scroll {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+}
+@container (max-width: 719px) {
+  .gpa-table-scroll.is-wrapping {
+    overflow-x: visible;
+    grid-template-columns: var(--gpa-cols-narrow);
+    background: none;
+  }
+  .gpa-table-scroll.is-wrapping [role="columnheader"] {
+    min-width: min-content;
+  }
+  .gpa-table-scroll.is-wrapping [role="cell"] {
+    min-width: min-content;
+    overflow-wrap: break-word;
+  }
+  .gpa-table-scroll.is-wrapping [role="cell"]:has(.gpa-rowlink, .gpa-truncate),
+  .gpa-table-scroll.is-wrapping .gpa-cell-mono {
+    min-width: var(--size-cell-id-min);
+    min-width: calc-size(max-content, min(size, var(--size-cell-id-min)));
+    overflow-wrap: anywhere;
+  }
+  .gpa-table-scroll.is-wrapping .gpa-time {
+    white-space: normal;
+    overflow-wrap: normal;
+  }
+  .gpa-table-scroll.is-wrapping .gpa-cell-mono,
+  .gpa-table-scroll.is-wrapping [role="cell"] .gpa-rowlink,
+  .gpa-table-scroll.is-wrapping [role="cell"] .gpa-truncate {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+  }
+  .gpa-table-scroll.is-wrapping [role="cell"]:has(.gpa-status, .gpa-badge) {
+    min-width: min-content;
+  }
+}
+.gpa-sticky-col {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  margin-block: calc(var(--inset-cell-y) * -1) calc(var(--inset-cell-y) * -1);
+  margin-inline: calc(var(--inset-card) * -1) calc(var(--gap-columns) * -1);
+  padding-block: var(--inset-cell-y) var(--inset-cell-y);
+  padding-inline: var(--inset-card) var(--gap-columns);
+  background:
+    linear-gradient(var(--gpa-row-tint), var(--gpa-row-tint)), var(--bg-surface);
+}
+.gpa-thead > .gpa-sticky-col {
+  margin-top: calc(var(--inset-cell-head-y) * -1);
+  margin-bottom: calc(var(--inset-cell-head-y) * -1);
+  padding-top: var(--inset-cell-head-y);
+  padding-bottom: var(--inset-cell-head-y);
+}
+.gpa-sticky-col.gpa-sticky-after-check {
+  inset-inline-start: calc(
+    var(--inset-card) + var(--size-column-check) + var(--gap-columns)
+  );
+  margin-inline-start: 0;
+  padding-inline-start: 0;
+}
+.gpa-table-scroll:not(.is-fitting):has(.gpa-sticky-col)
+  .gpa-sticky-col:not(.gpa-cell-check) {
+  box-shadow: inset calc(var(--border-width-hairline) * -1) 0 0
+    var(--table-divider);
+}
+.gpa-tr.is-link:has(.gpa-sticky-col) {
+  cursor: pointer;
+}
+.gpa-table.is-virtual .gpa-table-body > .gpa-tr {
+  height: var(--size-row);
+  min-height: 0;
+}
+.gpa-table.is-virtual .gpa-table-body > .gpa-tr > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[dir="rtl"]
+  .gpa-table-scroll:not(.is-fitting):has(.gpa-sticky-col)
+  .gpa-sticky-col:not(.gpa-cell-check) {
+  box-shadow: inset var(--border-width-hairline) 0 0 var(--table-divider);
+}
+@container (min-width: 720px) {
+  .gpa-table-scroll.is-subgrid:not(.is-fitting) {
+    background:
+      linear-gradient(to right, var(--bg-surface) 30%, transparent) left / 24px
+        100% no-repeat local,
+      linear-gradient(to left, var(--bg-surface) 30%, transparent) right / 24px
+        100% no-repeat local,
+      radial-gradient(
+          farthest-side at 0 50%,
+          var(--border-default),
+          transparent
+        )
+        left / 8px 100% no-repeat scroll,
+      radial-gradient(
+          farthest-side at 100% 50%,
+          var(--border-default),
+          transparent
+        )
+        right / 8px 100% no-repeat scroll;
+  }
+}
+@container (max-width: 719px) {
+  .gpa-table-scroll {
+    background:
+      linear-gradient(to right, var(--bg-surface) 30%, transparent) left / 24px
+        100% no-repeat local,
+      linear-gradient(to left, var(--bg-surface) 30%, transparent) right / 24px
+        100% no-repeat local,
+      radial-gradient(
+          farthest-side at 0 50%,
+          var(--border-default),
+          transparent
+        )
+        left / 8px 100% no-repeat scroll,
+      radial-gradient(
+          farthest-side at 100% 50%,
+          var(--border-default),
+          transparent
+        )
+        right / 8px 100% no-repeat scroll;
+  }
+}

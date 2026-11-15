@@ -35,11 +35,11 @@ export interface PurgeFormError {
   message: string
 }
 
-const missingReason = 'Choose a reason.'
+const missingReason = 'Choose a reason'
 
-const missingNote = "Enter a note. It's required when the reason is Other."
+const missingNote = 'Say why: the reason is Other'
 
-const longNote = `Shorten the note to ${noteMaxLength} characters or fewer.`
+const longNote = `Shorten the note to ${noteMaxLength} characters or fewer`
 
 /** The first rule that applies is the one reported: one error, one link. */
 const rules: [PurgeField, string, (submission: PurgeSubmission) => boolean][] =

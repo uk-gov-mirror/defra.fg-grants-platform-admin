@@ -1,9 +1,5 @@
 import { getFromGas, postToGas } from '../../common/gas.ts'
-import {
-  findBuckets,
-  queryBucket,
-  summariseBucket
-} from './buckets.repository.ts'
+import { findBuckets, queryBucket } from './buckets.repository.ts'
 
 vi.mock(import('../../common/gas.ts'))
 
@@ -52,28 +48,6 @@ describe('queryBucket', () => {
 
     expect(postToGas).toHaveBeenCalledWith(
       '/grant-admin/buckets/a%2Fb%3Fc/query',
-      { payload: {} }
-    )
-  })
-})
-
-describe('summariseBucket', () => {
-  test('posts the range to the summary of the bucket', async () => {
-    await summariseBucket('gas.outbox', 'errors', {
-      from: '2026-10-08T09:20:00.000Z'
-    })
-
-    expect(postToGas).toHaveBeenCalledWith(
-      '/grant-admin/buckets/gas.outbox/summaries/errors',
-      { payload: { from: '2026-10-08T09:20:00.000Z' } }
-    )
-  })
-
-  test('escapes both ids into one path segment each', async () => {
-    await summariseBucket('a/b', 'c?d', {})
-
-    expect(postToGas).toHaveBeenCalledWith(
-      '/grant-admin/buckets/a%2Fb/summaries/c%3Fd',
       { payload: {} }
     )
   })

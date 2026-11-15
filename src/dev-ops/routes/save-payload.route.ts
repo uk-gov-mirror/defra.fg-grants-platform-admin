@@ -1,29 +1,33 @@
 import type { Request, ResponseToolkit, ServerRoute } from '@hapi/hapi'
 import Joi from 'joi'
 
+import { config } from '../../common/config.ts'
+import type { EditPayloadCheck } from '../use-cases/edit-payload-command.ts'
 import {
   checkEditPayload,
   formMaxBytes
 } from '../use-cases/edit-payload-command.ts'
 import type { PayloadSubmission } from '../use-cases/edit-payload-step.ts'
+import type { EditResult } from '../use-cases/edit-payload.use-case.ts'
 import { editPayloadUseCase } from '../use-cases/edit-payload.use-case.ts'
 import { getCatalogueUseCase } from '../use-cases/get-catalogue.use-case.ts'
-import type { EventKey } from '../use-cases/get-event.use-case.ts'
+import type { EventKey, PayloadEdit } from '../use-cases/get-event.use-case.ts'
 import { getEventUseCase } from '../use-cases/get-event.use-case.ts'
+import { redriveEventUseCase } from '../use-cases/redrive-event.use-case.ts'
 import { toActor } from '../../common/view-models/actor.ts'
-import { toBackBucket } from '../view-models/bucket-nav.ts'
 import { eventAddress, toEventKey } from '../view-models/event-address.ts'
 import { toEventHref } from '../view-models/event-formats.ts'
+import type { EventPageAsks } from '../view-models/event-page.view-model.ts'
 import {
   eventBannerId,
   eventPageCache,
+  isProduction,
   redriveNoticeKey,
-  toSafeFrom
+  toEventPage,
+  toEventStatusCode,
+  toSafeFrom,
+  toSubmissionAsks
 } from '../view-models/event-page.view-model.ts'
-import {
-  toPayloadPage,
-  toUnattributedPage
-} from '../view-models/payload-edit-page.ts'
 import { seeOther } from '../view-models/see-other.ts'
 import { fromMax } from '../view-models/record-filters.ts'
 import { timesOf } from '../view-models/times.ts'
@@ -36,6 +40,7 @@ interface SavePayload {
   revision: number
   back: string
   note: string
+  then?: string
 }
 
 /** To the banner, which takes focus there: the form posted to `#payload`, which a bare Location would inherit. */
@@ -46,34 +51,103 @@ const toRedirect = (key: EventKey, from: string): string => {
   return `${href}${query}#${eventBannerId}`
 }
 
-/**
- * A rejected save is the review again, re-rendered from the posted text with
- * the note kept and the reason beside it, for the same reason the review is
- * rendered rather than redirected to. A stale one is the editor again, with
- * the text kept. Either way both are handed back if the event can't be read.
- */
-const rerender = async (
-  request: Request,
-  h: ResponseToolkit,
-  submission: PayloadSubmission
-) => {
-  const key = toEventKey(request.params)
-  const result = await getEventUseCase(key)
-  const bucket = toBackBucket(
-    await getCatalogueUseCase(),
-    toSafeFrom(submission.from)
-  )
+/** The service didn't answer the save: the changes stay on the page, to try again. */
+const unanswered = new Set(['timed-out', 'unavailable'])
 
-  return h.view(
-    'event',
-    toPayloadPage(result, key, submission, timesOf(request).zone, bucket)
-  )
+/** Trimmed, as it is kept for the form or sent. */
+const checkedNote = (check: EditPayloadCheck): string =>
+  check.kind === 'invalid' ? check.note : check.edit.note
+
+const unattributed = {
+  title:
+    'Not saved — your account has no name or email to record against this change.',
+  text: 'Nothing has changed.'
+}
+
+const toHeld = (
+  { outcome }: EditResult,
+  { then, ...held }: Omit<SavePayload, 'back'>
+) => ({ timedOut: outcome === 'timed-out', ...held, then: then ?? '' })
+
+interface Save {
+  key: EventKey
+  edit: PayloadEdit
+  actor: string
+  submission: PayloadSubmission & { note: string }
+  then: string | undefined
 }
 
 /**
- * Confirm save. The hidden text is read again rather than trusted, since it
- * came back from the browser. Only the outcome rides the session, and the
- * write is followed by a 303, as redrive and purge are.
+ * A stale save is the editor again, one the service didn't answer the held
+ * changes; the rest leave their outcome in the session and are followed by a
+ * 303.
+ */
+const save = async (
+  request: Request,
+  h: ResponseToolkit,
+  { key, edit, actor, submission, then }: Save
+) => {
+  const result = await editPayloadUseCase(key, edit, actor)
+
+  if (result.outcome === 'stale') {
+    return viewSubmission(request, h, key, { ...submission, stale: true })
+  }
+
+  if (unanswered.has(result.outcome)) {
+    return viewSubmission(request, h, key, submission, {
+      held: toHeld(result, { ...submission, then })
+    })
+  }
+
+  request.yar.flash(redriveNoticeKey, {
+    ...result,
+    action: 'edit',
+    page: toEventHref(key),
+    redrive: await redriveAfter(result, then, key, actor)
+  })
+
+  return h.redirect(toRedirect(key, toSafeFrom(submission.from))).code(seeOther)
+}
+
+/** Save and redrive has no single endpoint: the redrive follows a save that went through, and only then. */
+const redriveAfter = async (
+  { outcome }: EditResult,
+  then: string | undefined,
+  key: EventKey,
+  actor: string
+) =>
+  outcome === 'saved' && then === 'redrive'
+    ? redriveEventUseCase(key, actor)
+    : null
+
+/** The page drawn from the posted text: the review, the editor or the held changes. */
+const viewSubmission = async (
+  request: Request,
+  h: ResponseToolkit,
+  key: EventKey,
+  submission: PayloadSubmission,
+  extras: Pick<EventPageAsks, 'held' | 'saveError'> = {}
+) => {
+  const result = await getEventUseCase(key)
+  const page = toEventPage({
+    result,
+    key,
+    times: timesOf(request),
+    catalogue: await getCatalogueUseCase(),
+    prod: isProduction(config.get('environmentLabel')),
+    ...toSubmissionAsks(result, key, submission, extras)
+  })
+
+  return h.view('events/event', page).code(toEventStatusCode(page))
+}
+
+/**
+ * Save, and Save and redrive. The hidden text is read again rather than
+ * trusted, since it came back from the browser. A rejected save is the review
+ * again, a stale one the editor, an unanswered one the changes held on the
+ * page; the rest leave their outcome in the session and are followed by a
+ * 303, as redrive and purge are. Save and redrive has no single endpoint, so
+ * the redrive follows a save that went through, and only then.
  *
  * No CSRF token and no `options.auth`, for the reasons the redrive route
  * spells out.
@@ -92,21 +166,26 @@ export const savePayloadRoute: ServerRoute = {
         back: Joi.string().allow('').max(fromMax).default(''),
         // Truncated rather than refused: a pasted payload is a note to
         // shorten, and the form can only say so with the note in front of it.
-        note: Joi.string().allow('').max(noteMax).truncate().default('')
+        note: Joi.string().allow('').max(noteMax).truncate().default(''),
+        then: Joi.string().valid('redrive')
       })
     }
   },
   async handler(request: Request, h: ResponseToolkit) {
     const key = toEventKey(request.params)
-    const { text, revision, back: from, note } = request.payload as SavePayload
+    const {
+      text,
+      revision,
+      back: from,
+      note,
+      then
+    } = request.payload as SavePayload
     const check = checkEditPayload({ text, revision, note })
+    const submission = { text, revision, from, note: checkedNote(check) }
 
     if (check.kind === 'invalid') {
-      return rerender(request, h, {
-        text,
-        revision,
-        from,
-        note: check.note,
+      return viewSubmission(request, h, key, {
+        ...submission,
         noteProblem: check.noteProblem
       })
     }
@@ -114,34 +193,17 @@ export const savePayloadRoute: ServerRoute = {
     const actor = toActor(request)
 
     if (actor === undefined) {
-      return h.view(
-        'event',
-        toUnattributedPage(
-          key,
-          { text, revision, from, note: check.edit.note },
-          timesOf(request).zone
-        )
-      )
-    }
-
-    const result = await editPayloadUseCase(key, check.edit, actor)
-
-    if (result.outcome === 'stale') {
-      return rerender(request, h, {
-        text,
-        revision,
-        from,
-        note: check.edit.note,
-        stale: true
+      return viewSubmission(request, h, key, submission, {
+        saveError: unattributed
       })
     }
 
-    request.yar.flash(redriveNoticeKey, {
-      ...result,
-      action: 'edit',
-      page: toEventHref(key)
+    return save(request, h, {
+      key,
+      edit: check.edit,
+      actor,
+      submission,
+      then
     })
-
-    return h.redirect(toRedirect(key, toSafeFrom(from))).code(seeOther)
   }
 }

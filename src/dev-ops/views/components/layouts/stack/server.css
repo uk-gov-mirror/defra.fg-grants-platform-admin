@@ -1,0 +1,34 @@
+:not(
+    .gpa-stack,
+    .gpa-page,
+    .gpa-content,
+    .gpa-card-body,
+    .gpa-sg-layout,
+    .gpa-cols-2,
+    .gpa-grid,
+    .gpa-inline,
+    .gpa-columns
+  )
+  > :is(.gpa-card, .gpa-alert, .gpa-table, .gpa-disclosure-boxed)
+  + :is(
+    .gpa-card,
+    .gpa-alert,
+    .gpa-table,
+    .gpa-disclosure-boxed,
+    .gpa-plaintext
+  ) {
+  margin-top: var(--gap-stack-xl);
+}
+:not(
+    .gpa-stack,
+    .gpa-page,
+    .gpa-content,
+    .gpa-card-body,
+    .gpa-grid,
+    .gpa-inline,
+    .gpa-columns
+  )
+  > .gpa-plaintext
+  + :is(.gpa-card, .gpa-table, .gpa-alert) {
+  margin-top: var(--gap-stack-md);
+}

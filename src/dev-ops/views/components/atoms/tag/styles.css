@@ -1,0 +1,55 @@
+.gpa-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-inline-xs);
+  height: var(--size-control-xs);
+  max-width: 100%;
+  padding: 0 var(--inset-menuitem-x);
+  border-radius: var(--radius-full);
+  background: var(--bg-hover);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+  color: var(--fg-muted);
+  letter-spacing: var(--tracking-sm);
+}
+.gpa-tag:has(.gpa-tag-remove) {
+  padding-inline-end: 0;
+}
+.gpa-tag-sm {
+  height: var(--size-tag-sm);
+}
+.gpa-tag-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gpa-tag strong {
+  color: var(--fg-default);
+  font-weight: 500;
+}
+.gpa-tag .gpa-tag-remove {
+  border-radius: var(--radius-full);
+  color: var(--fg-muted);
+}
+.gpa-tag
+  .gpa-tag-remove:hover:where(
+    :not(:disabled, [aria-disabled="true"], .is-disabled)
+  ) {
+  background: var(--bg-pressed);
+  color: var(--fg-default);
+}
+.gpa-tag-sm .gpa-tag-remove {
+  width: var(--size-tag-sm);
+  height: var(--size-tag-sm);
+}
+@media (pointer: coarse) {
+  .gpa-tag-remove {
+    position: relative;
+  }
+  .gpa-tag-remove::after {
+    content: "";
+    position: absolute;
+    inset: calc((var(--size-control-xs) - var(--size-target-comfortable)) / 2);
+  }
+}

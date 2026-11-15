@@ -1,0 +1,36 @@
+{%- from "../../core/macros.njk" import attrs, cls, iconTemplate -%}
+{%- from "../../atoms/button/macro.njk" import Button -%}
+{%- from "../../atoms/field-message/macro.njk" import FieldMessage -%}
+{%- from "../../atoms/icon/macro.njk" import Icon -%}
+{%- from "../../atoms/input/macro.njk" import Input -%}
+{%- from "../../atoms/menu-item/macro.njk" import MenuItem -%}
+{%- from "../../molecules/dropdown/macro.njk" import Dropdown -%}
+{%- from "../../molecules/menu-heading/macro.njk" import MenuHeading -%}
+{%- set id = p.id ~ '-q' if p.id else gpaId('search') -%}
+  {%- set errorId = p.errorId or (id ~ '-err') -%}
+  {%- set items = p.kinds.items if p.kinds else [] -%}
+  {%- set current = (items | selectattr('checked') | first) or items[0] or { text: '' } -%}
+  {%- set ph = p.placeholder or (('Exact ' ~ (current.text | lower)) if current.text else 'Search') -%}
+  <div class="{{ cls('gpa-searchfield', p) }}"{{ attrs(p) }}>
+    <form role="search" class="gpa-search{{ ' is-invalid' if p.error }}"{% if p.action %} action="{{ p.action }}"{% endif %} method="{{ p.method or 'get' }}"{% if p.id %} id="{{ p.id }}"{% endif %}>
+      {%- for f in p.hidden %}<input type="hidden" name="{{ f.name }}" value="{{ f.value }}"{% if f.testId %} data-testid="{{ f.testId }}"{% endif %}>{% endfor -%}
+      {%- if p.kinds and p.kinds.items | length > 1 -%}
+        <gpa-search-kind{% if not p.placeholder %} data-placeholder{% endif %}>
+          <select class="gpa-search-kind gpa-search-kind-native" name="{{ p.kinds.name }}" aria-label="{{ p.kinds.label or 'Search by' }}">
+            {%- for k in p.kinds.items %}<option value="{{ k.value }}"{% if k.value == current.value %} selected{% endif %}>{{ k.text }}</option>{% endfor -%}
+          </select>
+          {%- set trigger %}<span>{{ current.text }}</span>{{ Icon({ name: 'chevron-down', size: 'md', classes: 'gpa-chevron' }) }}{% endset -%}
+          {%- call Dropdown({ trigger: trigger, triggerClasses: 'gpa-btn gpa-btn-tertiary gpa-btn-md gpa-search-kind', menuLabel: p.kinds.label or 'Search by', menuWidth: 'md', attributes: { 'data-gpa-picker': true } }) -%}
+            {{- MenuHeading({ text: 'Search ' ~ (p.noun or 'records') ~ ' by' }) -}}
+            {%- for k in p.kinds.items %}{{ MenuItem({ text: k.text, checked: true if (k.checked or (loop.first and not (p.kinds.items | selectattr('checked') | length))) else false, attributes: { 'data-value': k.value } }) }}{% endfor -%}
+          {%- endcall -%}
+          {{- iconTemplate({ names: ['check'] }) -}}
+        </gpa-search-kind>
+      {%- endif -%}
+      <label for="{{ id }}" class="gpa-vh">{{ ph }}</label>
+      {{- Input({ bare: true, id: id, icon: 'search', name: p.name, value: p.value or '', placeholder: ph, invalid: p.error, describedBy: errorId if p.error, spellcheck: false, autocomplete: 'off', clearable: true, testId: p.inputTestId }) -}}
+      {%- if caller %}{{ caller() }}{% endif -%}
+      {%- if p.submitText %}{{ Button({ text: p.submitText, type: 'submit', variant: 'tertiary', classes: 'gpa-search-submit', testId: p.submitTestId }) }}{% endif -%}
+    </form>
+    {%- if p.error %}{{ FieldMessage({ id: errorId, tone: 'error', text: p.error, testId: p.errorTestId }) }}{% endif -%}
+  </div>

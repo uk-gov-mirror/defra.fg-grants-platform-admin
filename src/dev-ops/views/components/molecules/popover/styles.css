@@ -1,0 +1,22 @@
+.gpa-popover {
+  width: var(--size-popover-width);
+  max-width: calc(100vw - 16px);
+  overflow-y: auto;
+  border: var(--border-width-hairline) solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface-raised);
+  box-shadow: var(--elevation-overlay);
+  outline: none;
+}
+.gpa-popover-padded {
+  padding: var(--inset-field);
+}
+.gpa-popover-head {
+  margin-bottom: var(--gap-stack-md);
+}
+.gpa-popover:has(.gpa-range) {
+  width: max-content;
+}
+.gpa-popover:has(.gpa-calendar) {
+  width: max-content;
+}

@@ -1,0 +1,11 @@
+{%- from "../../molecules/fact/macro.njk" import Fact -%}
+{%- from "../../organisms/card/macro.njk" import Card -%}
+{%- set cols = p.columns or ([p.facts] if p.facts else []) -%}
+  {%- set inner -%}
+    <div class="gpa-factscard">
+      {%- if cols.length -%}
+        {%- for c in cols %}<dl class="gpa-facts">{% for f in c %}{% if not f.hidden %}{{ Fact(f) }}{% endif %}{% endfor %}</dl>{% endfor -%}
+      {%- else -%}<dl class="gpa-facts">{{ caller() if caller }}</dl>{%- endif -%}
+    </div>
+  {%- endset -%}
+  {{ Card({ title: p.title, actions: p.actions, id: p.id, headingLevel: p.headingLevel, bodyHtml: inner, attributes: p.attributes, testId: p.testId, classes: p.classes }) }}
