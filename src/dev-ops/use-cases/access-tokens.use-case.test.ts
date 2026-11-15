@@ -57,6 +57,24 @@ const responseError = (statusCode: number, body: object = {}) =>
     data: { isResponseError: true, payload: body }
   })
 
+/** Hapi's answer for a path it has no route for. */
+const noRoute = { statusCode: 404, error: 'Not Found', message: 'Not Found' }
+
+/** GAS's Boom for a token or client it hasn't got, with the code it adds. */
+const notFoundBody = (errorCode: string) => ({
+  statusCode: 404,
+  error: 'Not Found',
+  message: 'CW-BE has no such client or token',
+  errorCode
+})
+
+/** A 5xx with no code, as Hapi sends GAS's Boom: only a 500 has its message hidden. */
+const gasError = (statusCode: number, error: string, message: string) => ({
+  statusCode,
+  error,
+  message
+})
+
 /** As @hapi/wreck rejects when no connection could be made. */
 const connectionError = (code: string) =>
   Boom.badGateway(
@@ -84,9 +102,19 @@ const failures = [
     { outcome: 'refused', statusCode: 403, errorCode: null }
   ],
   [
-    'a 404',
-    responseError(404, { errorCode: 'API_TOKEN_NOT_FOUND' }),
+    'a 404 for a token GAS hasn’t got',
+    responseError(404, notFoundBody('API_TOKEN_NOT_FOUND')),
     { outcome: 'refused', statusCode: 404, errorCode: 'API_TOKEN_NOT_FOUND' }
+  ],
+  [
+    'a 404 for a client GAS hasn’t got',
+    responseError(404, notFoundBody('API_CLIENT_NOT_FOUND')),
+    { outcome: 'refused', statusCode: 404, errorCode: 'API_CLIENT_NOT_FOUND' }
+  ],
+  [
+    'a 404 with no error code: a GAS with no token routes',
+    responseError(404, noRoute),
+    { outcome: 'not-offered' }
   ],
   [
     'a connection that was never made',
@@ -104,35 +132,88 @@ const failures = [
     { outcome: 'unreachable', errorCode: 'CW_UNREACHABLE' }
   ],
   [
-    'a 503 without that code, which may have been sent on',
-    responseError(503),
+    'a 503 without that code, as from a proxy in front of GAS, which may have been sent on',
+    responseError(
+      503,
+      gasError(503, 'Service Unavailable', 'Service Unavailable')
+    ),
+    { outcome: 'errored' }
+  ],
+  ['a timeout here', timeout(), { outcome: 'unknown', gasSilent: true }],
+  [
+    'a 500',
+    responseError(
+      500,
+      gasError(
+        500,
+        'Internal Server Error',
+        'An internal server error occurred'
+      )
+    ),
+    { outcome: 'errored' }
+  ],
+  [
+    'a 502 from GAS, as when CW has no client routes',
+    responseError(
+      502,
+      gasError(502, 'Bad Gateway', 'CW-BE has no client routes')
+    ),
+    { outcome: 'errored' }
+  ],
+  [
+    'a 504 from GAS: CW didn’t answer it in time',
+    responseError(
+      504,
+      gasError(
+        504,
+        'Gateway Time-out',
+        'CW-BE did not answer in time for clients'
+      )
+    ),
     { outcome: 'unknown' }
   ],
-  ['a timeout', timeout(), { outcome: 'unknown' }],
-  ['a 500', responseError(500), { outcome: 'unknown' }],
-  ['a 502 from GAS', responseError(502), { outcome: 'unknown' }],
-  ['a 504 from GAS', responseError(504), { outcome: 'unknown' }],
-  ['a read that timed out', Boom.clientTimeout(), { outcome: 'unknown' }],
+  [
+    'a read that timed out',
+    Boom.clientTimeout(),
+    { outcome: 'unknown', gasSilent: true }
+  ],
   [
     'a connection dropped mid-request',
     connectionError('ECONNRESET'),
-    { outcome: 'unknown' }
+    { outcome: 'unknown', gasSilent: true }
   ],
-  ['anything else', new Error('boom'), { outcome: 'unknown' }]
+  ['anything else', new Error('boom'), { outcome: 'errored' }]
 ] as const
 
 describe('listAccessTokensUseCase', () => {
   test('answers the tokens GAS lists', async () => {
     vi.mocked(listTokens).mockResolvedValue([token])
 
-    await expect(listAccessTokensUseCase('cw')).resolves.toEqual([token])
+    await expect(listAccessTokensUseCase('cw')).resolves.toEqual({
+      outcome: 'done',
+      tokens: [token]
+    })
     expect(listTokens).toHaveBeenCalledWith('cw')
   })
 
-  test.each(failures)('answers null for %s', async (_name, error) => {
-    vi.mocked(listTokens).mockRejectedValue(error)
+  test.each(failures)(
+    'answers %s as the failure, so the page can say who didn’t answer',
+    async (_name, error, expected) => {
+      vi.mocked(listTokens).mockRejectedValue(error)
 
-    await expect(listAccessTokensUseCase('gas')).resolves.toBeNull()
+      await expect(listAccessTokensUseCase('gas')).resolves.toEqual(expected)
+    }
+  )
+
+  test('answers CW not reached when GAS says so', async () => {
+    vi.mocked(listTokens).mockRejectedValue(
+      responseError(502, { errorCode: 'CW_UNREACHABLE' })
+    )
+
+    await expect(listAccessTokensUseCase('cw')).resolves.toEqual({
+      outcome: 'unreachable',
+      errorCode: 'CW_UNREACHABLE'
+    })
   })
 })
 
@@ -145,7 +226,10 @@ describe('issueAccessTokenUseCase', () => {
 
   test('sends GAS the hash and hint only, and keeps the raw token for the reveal', async () => {
     await expect(
-      issueAccessTokenUseCase('gas', 'grants-ui', '2027-02-02T13:50:00.000Z')
+      issueAccessTokenUseCase('gas', 'grants-ui', {
+        expiresAt: '2027-02-02T13:50:00.000Z',
+        confirmed: true
+      })
     ).resolves.toEqual({ outcome: 'issued', raw, token })
 
     expect(issueToken).toHaveBeenCalledWith(
@@ -158,7 +242,10 @@ describe('issueAccessTokenUseCase', () => {
   })
 
   test('creates the client when no row has its name', async () => {
-    await issueAccessTokenUseCase('cw', 'new-service', null)
+    await issueAccessTokenUseCase('cw', 'new-service', {
+      expiresAt: null,
+      confirmed: false
+    })
 
     expect(issueToken).toHaveBeenCalledWith(
       'cw',
@@ -168,11 +255,76 @@ describe('issueAccessTokenUseCase', () => {
     )
   })
 
+  test('issues nothing for a client with active tokens until confirmed, and says how many it has', async () => {
+    vi.mocked(listTokens).mockResolvedValue([
+      token,
+      { ...token, tokenId: '6650c1f2a9e4b1d07c20bd92' },
+      { ...token, tokenId: '6650c1f2a9e4b1d07c20bd93', status: 'REVOKED' }
+    ])
+
+    await expect(
+      issueAccessTokenUseCase('gas', 'grants-ui', {
+        expiresAt: null,
+        confirmed: false
+      })
+    ).resolves.toEqual({ outcome: 'has-active', active: 2 })
+    expect(issueToken).not.toHaveBeenCalled()
+  })
+
+  test('issues for a client whose tokens have all stopped working without asking', async () => {
+    vi.mocked(listTokens).mockResolvedValue([{ ...token, status: 'EXPIRED' }])
+
+    await expect(
+      issueAccessTokenUseCase('gas', 'grants-ui', {
+        expiresAt: null,
+        confirmed: false
+      })
+    ).resolves.toMatchObject({ outcome: 'issued' })
+    expect(issueToken).toHaveBeenCalledWith(
+      'gas',
+      'grants-ui',
+      expect.anything(),
+      { expiresAt: null, newClient: false }
+    )
+  })
+
   test('issues nothing when the list cannot be read', async () => {
     vi.mocked(listTokens).mockRejectedValue(timeout())
 
     await expect(
-      issueAccessTokenUseCase('gas', 'grants-ui', null)
+      issueAccessTokenUseCase('gas', 'grants-ui', {
+        expiresAt: null,
+        confirmed: true
+      })
+    ).resolves.toEqual({ outcome: 'unchecked' })
+    expect(issueToken).not.toHaveBeenCalled()
+  })
+
+  test('says GAS offers no tokens when the list has no route, and issues nothing', async () => {
+    vi.mocked(listTokens).mockRejectedValue(responseError(404, noRoute))
+
+    await expect(
+      issueAccessTokenUseCase('gas', 'grants-ui', {
+        expiresAt: null,
+        confirmed: true
+      })
+    ).resolves.toEqual({ outcome: 'not-offered' })
+    expect(issueToken).not.toHaveBeenCalled()
+  })
+
+  test('issues nothing when GAS answers the list with an error of its own', async () => {
+    vi.mocked(listTokens).mockRejectedValue(
+      responseError(
+        502,
+        gasError(502, 'Bad Gateway', 'CW-BE has no client routes')
+      )
+    )
+
+    await expect(
+      issueAccessTokenUseCase('gas', 'grants-ui', {
+        expiresAt: null,
+        confirmed: true
+      })
     ).resolves.toEqual({ outcome: 'unchecked' })
     expect(issueToken).not.toHaveBeenCalled()
   })
@@ -182,7 +334,10 @@ describe('issueAccessTokenUseCase', () => {
     async (_name, error, expected) => {
       vi.mocked(issueToken).mockRejectedValue(error)
 
-      const result = await issueAccessTokenUseCase('gas', 'grants-ui', null)
+      const result = await issueAccessTokenUseCase('gas', 'grants-ui', {
+        expiresAt: null,
+        confirmed: true
+      })
 
       expect(result).toEqual(expected)
       expect(JSON.stringify(result)).not.toContain(raw)
@@ -192,7 +347,10 @@ describe('issueAccessTokenUseCase', () => {
   test('logs no raw token, hash or hint', async () => {
     vi.mocked(issueToken).mockRejectedValue(responseError(500))
 
-    await issueAccessTokenUseCase('gas', 'grants-ui', null)
+    await issueAccessTokenUseCase('gas', 'grants-ui', {
+      expiresAt: null,
+      confirmed: true
+    })
 
     expect(logger.error).toHaveBeenCalledTimes(1)
     expect(loggedText()).not.toContain(raw)
@@ -278,6 +436,17 @@ describe('revokeAccessTokenUseCase', () => {
 
     expect(logger.warn).toHaveBeenCalledWith(
       `Did not revoke token gas/grants-ui/${token.tokenId}: 409 API_TOKEN_IN_USE`
+    )
+    expect(logger.error).not.toHaveBeenCalled()
+  })
+
+  test('warns, rather than errs, when GAS has no token routes', async () => {
+    vi.mocked(revokeToken).mockRejectedValue(responseError(404, noRoute))
+
+    await revokeAccessTokenUseCase(key)
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      `Did not revoke token gas/grants-ui/${token.tokenId}: fg-gas-backend has no access token routes`
     )
     expect(logger.error).not.toHaveBeenCalled()
   })

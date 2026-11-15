@@ -1,2 +1,0 @@
-{# Tailwind only sees class names written literally in this file. The design's red in light; a lighter one in dark, where #b91c1c is about 2.5:1 on the dialog. #}
-<p class="text-[13px] text-[#b91c1c] [[data-theme=dark]_&]:text-[#f87171] [@media(prefers-color-scheme:dark)]:[:root:not([data-theme])_&]:text-[#f87171]" id="{{ params.id }}"{% if params.hidden %} hidden{% endif %}{% if params.live %} data-client-error{% endif %}{% if params.reset %} data-reset-remove{% endif %} data-testid="{{ params.testId }}">{{ params.text }}</p>

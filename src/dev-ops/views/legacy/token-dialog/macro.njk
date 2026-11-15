@@ -1,5 +1,0 @@
-{# One of the access tokens dialogs: a daisyUI modal on a native <dialog>, so focus moves in, Escape closes it and the rest of the page is inert while it is open. #}
-{% macro tokenDialog(params) %}
-    {%- set body = caller() -%}
-    {%- include "./template.njk" -%}
-{% endmacro %}

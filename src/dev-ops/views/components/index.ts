@@ -1,8 +1,10 @@
 import { GpaAccordion } from "./molecules/accordion/web-component.ts";
 import { GpaCalendar } from "./molecules/calendar/web-component.ts";
 import { GpaClearable } from "./atoms/input/web-component.ts";
+import { GpaConfirm } from "./organisms/confirm-dialog/web-component.ts";
 import { GpaCopy } from "./molecules/copy-button/web-component.ts";
 import { GpaDataTable } from "./organisms/data-table/web-component.ts";
+import { GpaDatePicker } from "./molecules/date-picker/web-component.ts";
 import { GpaDateRangeChip } from "./molecules/date-range-chip/web-component.ts";
 import { GpaDialog } from "./organisms/dialog/web-component.ts";
 import { GpaDisclosure } from "./molecules/disclosure/web-component.ts";
@@ -25,8 +27,10 @@ const elements: [string, CustomElementConstructor][] = [
   ["gpa-accordion", GpaAccordion],
   ["gpa-calendar", GpaCalendar],
   ["gpa-clearable", GpaClearable],
+  ["gpa-confirm", GpaConfirm],
   ["gpa-copy", GpaCopy],
   ["gpa-data-table", GpaDataTable],
+  ["gpa-date-picker", GpaDatePicker],
   ["gpa-date-range-chip", GpaDateRangeChip],
   ["gpa-dialog", GpaDialog],
   ["gpa-disclosure", GpaDisclosure],
@@ -127,8 +131,10 @@ export {
   GpaAccordion,
   GpaCalendar,
   GpaClearable,
+  GpaConfirm,
   GpaCopy,
   GpaDataTable,
+  GpaDatePicker,
   GpaDateRangeChip,
   GpaDialog,
   GpaDisclosure,

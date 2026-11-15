@@ -1,287 +1,575 @@
+import { statusCodes } from '../../common/status-codes.ts'
 import type {
-  ApiToken,
   ClientService,
-  KeepOld,
-  ListedToken
+  ListResult,
+  ListedToken,
+  TokenFailure
 } from '../use-cases/access-tokens.use-case.ts'
 import { toExpiryDay, toUkDate } from './access-token-dates.ts'
 import type {
   DialogKind,
+  ExpiryGroup,
   ExpiryInput,
+  FormRefusal,
   OpenDialog
 } from './access-token-forms.ts'
 import {
   defaultExpiry,
-  toExpiryPicker,
-  inUseKeepOldReason,
-  toKeepOldChoices
+  toExpiryGroup,
+  toFirstOptionId,
+  toKeepOldOptions
 } from './access-token-forms.ts'
+import type {
+  TokenAlert,
+  TokenNotice,
+  TokenToast
+} from './access-token-messages.ts'
+import { toRefusalToast, toUnavailableAlert } from './access-token-messages.ts'
+import type { TokenRow } from './access-token-rows.ts'
 import { toTokenRows } from './access-token-rows.ts'
+import type { ServiceWords } from './access-token-services.ts'
 import {
   serviceWords,
   toClientsPath,
   toNavActive
 } from './access-token-services.ts'
-import type { Toast, TokenNotice } from './access-token-toasts.ts'
-import { toToast } from './access-token-toasts.ts'
+import { toServiceName } from './shell.ts'
 
 /** The page a token is never cached on, as it may carry one being revealed. */
 export const accessTokensPageCache = { otherwise: 'no-store' }
+
+export const metaSentence =
+  'Tokens are stored as SHA-256 hashes; the value is shown once, when it’s issued.'
 
 /** A token just issued, shown once in the response to the POST that made it. */
 export interface Reveal {
   clientId: string
   raw: string
-  hint: string
+  /** After a rotation: the old token, whose drawer stays open behind. */
+  rotatedTokenId: string | null
+}
+
+/** What the address asked to have open: a token's drawer, and a dialog over it or over the list. */
+export interface OpenRequest {
+  tokenId: string | null
+  dialog: DialogKind | null
 }
 
 export interface AccessTokensPageInput {
   service: ClientService
-  /** Null when the list could not be read. */
-  tokens: ListedToken[] | null
+  list: ListResult
   now: Date
+  prod: boolean
+  requested?: OpenRequest
   dialog?: OpenDialog | null
   reveal?: Reveal | null
-  notice?: TokenNotice
+  notice?: TokenNotice | null
 }
+
+interface SummaryError {
+  id: string
+  text: string
+}
+
+interface Context {
+  service: ClientService
+  words: ServiceWords
+  path: string
+  now: Date
+  /** The dialog drawn open, if any: the one a POST came back for, or the one the address asked for. */
+  open: { kind: DialogKind; tokenId: string | null } | null
+  posted: OpenDialog | null
+}
+
+const tokenHref = (path: string, tokenId: string, dialog?: DialogKind) =>
+  `${path}?token=${tokenId}${dialog ? `&dialog=${dialog}` : ''}`
+
+/** One item when the condition holds, else none: for lists built of optional parts. */
+const listIf = <T>(condition: unknown, item: () => T): T[] =>
+  condition ? [item()] : []
 
 const isOpen = (
-  dialog: OpenDialog | null | undefined,
+  { open }: Context,
   kind: DialogKind,
   tokenId: string | null
-): dialog is OpenDialog => dialog?.kind === kind && dialog.tokenId === tokenId
+): boolean => open?.kind === kind && open.tokenId === tokenId
 
-interface DialogState {
-  open: boolean
+const isPostedTo = (
+  { posted }: Context,
+  kind: DialogKind,
+  tokenId: string | null
+): boolean => posted?.kind === kind && posted.tokenId === tokenId
+
+interface Posted {
   values: Record<string, string>
   errors: Record<string, string>
+  refusal: FormRefusal | null
+  active: number
 }
 
-const closed: DialogState = { open: false, values: {}, errors: {} }
+const nothingPosted: Posted = {
+  values: {},
+  errors: {},
+  refusal: null,
+  active: 0
+}
 
-/** What one dialog comes back with: only the dialog the POST was for opens, with what was typed and what was wrong. */
-const stateOf = (
-  dialog: OpenDialog | null | undefined,
-  kind: DialogKind,
-  tokenId: string | null
-): DialogState =>
-  isOpen(dialog, kind, tokenId)
-    ? { open: true, values: dialog.values, errors: dialog.errors }
-    : closed
-
-/** Open, and the refusal it came back with, if any, for the whole dialog rather than one field. */
-const toOpenState = ({ open, errors }: DialogState) => ({
-  open,
-  formError: errors.form ?? null
+const toPosted = ({ values, errors, refusal, active }: OpenDialog): Posted => ({
+  values,
+  errors,
+  refusal: refusal ?? null,
+  active: active ?? 0
 })
 
-/** The UK day of an instant, as the date box shows it. */
-const toDateOnly = (instant: string): string => toUkDate(new Date(instant))
-
-/** Where an expiry change starts: never, or the token's own date, kept to the second if left alone. */
-const toCurrentExpiry = (token: ApiToken): ExpiryInput =>
-  token.expiresAt === null
-    ? { expiry: 'never', date: '' }
-    : {
-        expiry: 'custom',
-        date: toDateOnly(token.expiresAt),
-        current: token.expiresAt
-      }
+/** What a posted dialog came back with, only for the dialog it was posted from. */
+const postedTo = (
+  context: Context,
+  kind: DialogKind,
+  tokenId: string | null
+): Posted =>
+  isPostedTo(context, kind, tokenId)
+    ? toPosted(context.posted as OpenDialog)
+    : nothingPosted
 
 const toExpiryInput = (values: Record<string, string>): ExpiryInput => ({
   expiry: (values.expiry ?? defaultExpiry) as ExpiryInput['expiry'],
   date: values.date ?? ''
 })
 
-/** `Never`, or the date, as the Rotate and *Currently* lines say it. */
-const toExpiryText = (expiresAt: string | null): string =>
-  expiresAt === null ? 'Never' : toExpiryDay(new Date(expiresAt))
+/** Where an expiry change starts: never, or the token's own date. */
+const toCurrentExpiry = (expiresAt: string | null): ExpiryInput =>
+  expiresAt === null
+    ? { expiry: 'never', date: '' }
+    : { expiry: 'custom', date: toUkDate(new Date(expiresAt)) }
 
-interface DialogContext {
-  service: ClientService
-  dialog: OpenDialog | null | undefined
-  now: Date
-}
+/** The expiry choices' errors, in field order, for the summary at the top of the form. */
+const expirySummary = (group: ExpiryGroup): SummaryError[] => [
+  ...listIf(group.error, () => ({
+    id: toFirstOptionId(group.id),
+    text: group.error as string
+  })),
+  ...listIf(group.dateError, () => ({
+    id: group.dateId,
+    text: group.dateError as string
+  }))
+]
 
-interface TokenDialogContext extends DialogContext {
-  token: ApiToken
-  /** The dialog's id, less its suffix, and the token's address. */
-  id: string
-  action: string
-}
+const plural = (count: number, noun: string): string =>
+  `${count} ${noun}${count === 1 ? '' : 's'}`
 
-const toRotateDialog = ({ token, dialog, id, action }: TokenDialogContext) => {
-  const state = stateOf(dialog, 'rotate', token.tokenId)
+const toActiveWarning = (clientId: string, active: number): string | null =>
+  active > 0
+    ? `${clientId} already has ${plural(active, 'active token')}. If this replaces one, rotate that token instead; to add another, issue it again.`
+    : null
 
-  return {
-    id: `${id}-rotate`,
-    action: `${action}/rotate`,
-    ...toOpenState(state),
-    choices: toKeepOldChoices(
-      token.inUse,
-      state.values.keepOld as KeepOld | undefined
-    ),
-    lockedReason: inUseKeepOldReason,
-    sameExpiry: toExpiryText(token.expiresAt)
-  }
-}
+const newClientId = 'token-new-client'
 
-const toExpiryDialog = ({
-  token,
-  dialog,
-  now,
-  id,
-  action
-}: TokenDialogContext) => {
-  const state = stateOf(dialog, 'expiry', token.tokenId)
+const toNewClient = ({ values, errors, active }: Posted) => {
+  const value = values.clientId ?? ''
 
   return {
-    id: `${id}-expiry`,
-    action: `${action}/expiry`,
-    ...toOpenState(state),
-    currently: toExpiryText(token.expiresAt),
-    current: token.expiresAt ?? '',
-    picker: toExpiryPicker(
-      `${id}-expires`,
-      state.open
-        ? { ...toExpiryInput(state.values), current: token.expiresAt ?? '' }
-        : toCurrentExpiry(token),
-      state.errors.expiry,
-      now,
-      toCurrentExpiry(token)
-    )
+    id: newClientId,
+    value,
+    error: errors.clientId ?? null,
+    warning: toActiveWarning(value.trim(), active)
   }
 }
 
-const toRevokeDialog = ({ token, dialog, id, action }: TokenDialogContext) => {
-  const state = stateOf(dialog, 'revoke', token.tokenId)
-  const error = state.errors.confirm ?? null
-
-  return {
-    id: `${id}-revoke`,
-    action: `${action}/revoke`,
-    ...toOpenState(state),
-    value: state.values.confirm ?? '',
-    error
-  }
-}
-
-const toDeleteDialog = ({ token, dialog, id, action }: TokenDialogContext) => ({
-  id: `${id}-delete`,
-  action: `${action}/delete`,
-  ...toOpenState(stateOf(dialog, 'delete', token.tokenId))
-})
-
-const toTokenDialogs = (token: ApiToken, context: DialogContext) => {
-  const tokenContext = {
-    ...context,
-    token,
-    id: `token-${token.tokenId}`,
-    action: `${toClientsPath(context.service)}/${token.clientId}/tokens/${token.tokenId}`
-  }
-
-  return {
-    rotate: toRotateDialog(tokenContext),
-    expiry: toExpiryDialog(tokenContext),
-    revoke: toRevokeDialog(tokenContext),
-    delete: toDeleteDialog(tokenContext)
-  }
-}
-
-/** How many working tokens each client has, for the New token dialog to warn with. */
-const toActiveCounts = (tokens: ApiToken[]): Record<string, number> => {
-  const active = tokens.filter(
-    (token) => token.status === 'ACTIVE' && token.clientId !== null
+const toNewToken = (context: Context) => {
+  const posted = postedTo(context, 'new', null)
+  const client = toNewClient(posted)
+  const expiry = toExpiryGroup(
+    'token-new-expiry',
+    toExpiryInput(posted.values),
+    posted.errors,
+    context.now
   )
-
-  return Object.fromEntries(
-    [...Map.groupBy(active, ({ clientId }) => clientId)].map(
-      ([clientId, ofClient]) => [clientId, ofClient.length]
-    )
-  )
-}
-
-const toNewToken = (
-  tokens: ApiToken[],
-  { service, dialog, now }: DialogContext
-) => {
-  const { open, values, errors } = stateOf(dialog, 'new', null)
 
   return {
     id: 'token-new',
-    action: `${toClientsPath(service)}/tokens`,
-    open,
-    formError: errors.form ?? null,
-    clientId: values.clientId ?? '',
-    clientError: errors.clientId ?? null,
-    activeCounts: JSON.stringify(toActiveCounts(tokens)),
-    picker: toExpiryPicker(
-      'token-new-expires',
-      toExpiryInput(values),
-      errors.expiry,
-      now,
-      { expiry: defaultExpiry, date: '' }
-    )
+    formId: 'token-new-form',
+    open: isOpen(context, 'new', null),
+    action: `${context.path}/tokens`,
+    cancelHref: context.path,
+    refusal: posted.refusal,
+    client,
+    expiry,
+    // Issuing again for the client it warned about goes ahead.
+    hidden: listIf(client.warning, () => ({
+      name: 'confirmFor',
+      value: client.value.trim()
+    })),
+    errors: [
+      ...listIf(client.error, () => ({
+        id: newClientId,
+        text: client.error as string
+      })),
+      ...expirySummary(expiry)
+    ]
   }
 }
 
-const toRows = (tokens: ListedToken[], context: DialogContext) => {
-  const byId = new Map(tokens.map((token) => [token.tokenId, token]))
+const sameExpiry = (expiresAt: string | null): string =>
+  expiresAt === null ? 'never expires' : toExpiryDay(new Date(expiresAt))
 
-  return toTokenRows(tokens, context.now).map((row) => ({
-    ...row,
-    dialogs: toTokenDialogs(byId.get(row.tokenId) as ApiToken, context)
-  }))
+interface TokenContext extends Context {
+  row: TokenRow
+  id: string
+  action: string
+  cancelHref: string
 }
 
-const toList = (tokens: ListedToken[], context: DialogContext) => ({
-  rows: toRows(tokens, context),
-  newToken: toNewToken(tokens, context)
+/** What every dialog of a token has: its ids, where it posts and goes back to, and whether it's open. */
+const toTokenDialog = (context: TokenContext, kind: DialogKind) => ({
+  id: `${context.id}-${kind}`,
+  formId: `${context.id}-${kind}-form`,
+  open: isOpen(context, kind, context.row.tokenId),
+  action: `${context.action}/${kind}`,
+  cancelHref: context.cancelHref
 })
 
-const toReveal = (reveal: Reveal | null | undefined) => reveal ?? null
+const toKeepOldReason = ({ row, words }: TokenContext) =>
+  row.inUse ? { reason: words.inUse.keepOld } : null
 
-/** The token whose drawer is open on arrival: the one a dialog came back for. */
-const toOpenTokenId = (dialog: OpenDialog | null | undefined): string | null =>
-  dialog?.tokenId ?? null
+const toRotate = (context: TokenContext) => {
+  const { values, refusal } = postedTo(context, 'rotate', context.row.tokenId)
 
-/** New token's dialog is always drawn; a token's only while the list still has it. */
-const hasDialogFor = (tokens: ApiToken[] | null, tokenId: string | null) =>
-  tokenId === null ||
-  (tokens?.some((token) => token.tokenId === tokenId) ?? false)
+  return {
+    ...toTokenDialog(context, 'rotate'),
+    refusal,
+    sameExpiry: sameExpiry(context.row.expiresAt),
+    keepOld: {
+      id: `${context.id}-keep`,
+      options: toKeepOldOptions(toKeepOldReason(context), values.keepOld)
+    }
+  }
+}
+
+/** A dialog handed back starts where it was left; a fresh one, where the token is. */
+const toExpiryStart = (context: TokenContext, posted: Posted): ExpiryInput =>
+  isPostedTo(context, 'expiry', context.row.tokenId)
+    ? toExpiryInput(posted.values)
+    : toCurrentExpiry(context.row.expiresAt)
+
+const toChangeExpiry = (context: TokenContext) => {
+  const { row, id, now } = context
+  const posted = postedTo(context, 'expiry', row.tokenId)
+  const expiry = toExpiryGroup(
+    `${id}-expiry-choice`,
+    toExpiryStart(context, posted),
+    posted.errors,
+    now
+  )
+
+  return {
+    ...toTokenDialog(context, 'expiry'),
+    refusal: posted.refusal,
+    currently: sameExpiry(row.expiresAt),
+    expiry,
+    hidden: [{ name: 'hint', value: row.hint ?? '' }],
+    errors: expirySummary(expiry)
+  }
+}
+
+const toRevoke = (context: TokenContext) => {
+  const { row } = context
+  const { values, errors, refusal } = postedTo(context, 'revoke', row.tokenId)
+
+  return {
+    ...toTokenDialog(context, 'revoke'),
+    refusal,
+    hidden: [{ name: 'hint', value: row.hint ?? '' }],
+    typed: values.confirmText ?? null,
+    typedError: errors.confirm ?? null
+  }
+}
+
+const toDelete = (context: TokenContext) => ({
+  ...toTokenDialog(context, 'delete'),
+  refusal: postedTo(context, 'delete', context.row.tokenId).refusal
+})
+
+/**
+ * A button in the drawer: the address that opens its dialog without a
+ * script, and the dialog it opens with one. Null when the token hasn't the
+ * action; the dialog null when the address mustn't open it.
+ */
+const toAction = <T>(
+  context: TokenContext,
+  kind: DialogKind,
+  offered: boolean,
+  dialog: (() => T) | null
+) =>
+  offered
+    ? {
+        href: tokenHref(context.path, context.row.tokenId, kind),
+        opens: `${context.id}-${kind}`,
+        dialog: dialog?.() ?? null
+      }
+    : null
+
+const noActionsNote =
+  'This token has no valid client ID, so it can’t be changed here.'
+
+/** What the drawer says above the facts: who calls with the token in use, or why a token has no actions. */
+const toNotes = (row: TokenRow, words: ServiceWords) => ({
+  inUseNote: row.inUse && row.actions.revoke ? words.inUse : null,
+  noActionsNote: row.clientId === null ? noActionsNote : null
+})
+
+type TokenDialogs = Record<
+  Exclude<DialogKind, 'new'>,
+  { dialog: unknown } | null
+>
+
+/**
+ * A refusal whose dialog isn't drawn any more, said at the top of the
+ * token's drawer: the token changed state while the dialog was open (revoked
+ * before a rotation, revived before a delete), so the fresh list no longer
+ * offers that action.
+ */
+const isDrawn = (dialogs: TokenDialogs, kind: Exclude<DialogKind, 'new'>) =>
+  Boolean(dialogs[kind]?.dialog)
+
+const isPostedForToken = (
+  posted: OpenDialog | null,
+  tokenId: string
+): posted is OpenDialog & { kind: Exclude<DialogKind, 'new'> } =>
+  posted !== null && posted.kind !== 'new' && posted.tokenId === tokenId
+
+const toDrawerRefusal = (
+  { posted }: Context,
+  tokenId: string,
+  dialogs: TokenDialogs
+): FormRefusal | null =>
+  isPostedForToken(posted, tokenId) && !isDrawn(dialogs, posted.kind)
+    ? (posted.refusal ?? null)
+    : null
+
+const toTokenView = (
+  row: TokenRow,
+  context: Context,
+  openTokenId: string | null
+) => {
+  const id = `token-${row.tokenId}`
+  const tokenContext: TokenContext = {
+    ...context,
+    row,
+    id,
+    action: `${context.path}/${row.clientId}/tokens/${row.tokenId}`,
+    cancelHref: tokenHref(context.path, row.tokenId)
+  }
+  const { actions } = row
+  const dialogs = {
+    rotate: toAction(tokenContext, 'rotate', actions.rotate, () =>
+      toRotate(tokenContext)
+    ),
+    expiry: toAction(tokenContext, 'expiry', actions.expiry, () =>
+      toChangeExpiry(tokenContext)
+    ),
+    // The token in use is never revoked: its button is off, and it has no dialog for the address to open.
+    revoke: toAction(
+      tokenContext,
+      'revoke',
+      actions.revoke,
+      row.inUse ? null : () => toRevoke(tokenContext)
+    ),
+    delete: toAction(tokenContext, 'delete', actions.delete, () =>
+      toDelete(tokenContext)
+    )
+  }
+
+  return {
+    ...row,
+    id,
+    href: tokenHref(context.path, row.tokenId),
+    open: openTokenId === row.tokenId,
+    closeHref: context.path,
+    ...toNotes(row, context.words),
+    ...dialogs,
+    refusal: toDrawerRefusal(context, row.tokenId, dialogs)
+  }
+}
+
+export type TokenView = ReturnType<typeof toTokenView>
+
+const isListed = (tokens: ListedToken[], tokenId: string | null): boolean =>
+  tokens.some((token) => token.tokenId === tokenId)
+
+/** A dialog handed back opens again, unless its token has gone. */
+const toPostedOpen = (
+  { kind, tokenId }: OpenDialog,
+  tokens: ListedToken[]
+): Context['open'] =>
+  kind === 'new' || isListed(tokens, tokenId) ? { kind, tokenId } : null
+
+/** New token needs no token; any other dialog the address asks for, a listed one. */
+const isOpenable = (
+  { dialog, tokenId }: OpenRequest,
+  tokens: ListedToken[]
+): boolean => dialog !== null && (dialog === 'new' || isListed(tokens, tokenId))
+
+const toRequestedOpen = (
+  requested: OpenRequest,
+  tokens: ListedToken[]
+): Context['open'] =>
+  isOpenable(requested, tokens)
+    ? {
+        kind: requested.dialog as DialogKind,
+        tokenId: requested.dialog === 'new' ? null : requested.tokenId
+      }
+    : null
+
+const nothingRequested: OpenRequest = { tokenId: null, dialog: null }
+
+const toOpen = (
+  input: AccessTokensPageInput,
+  tokens: ListedToken[]
+): Context['open'] =>
+  input.dialog
+    ? toPostedOpen(input.dialog, tokens)
+    : toRequestedOpen(input.requested ?? nothingRequested, tokens)
+
+const toDrawerCandidates = (
+  input: AccessTokensPageInput,
+  open: Context['open']
+) => [open?.tokenId, input.reveal?.rotatedTokenId, input.requested?.tokenId]
+
+/** The drawer open on arrival: the token a dialog is over, the one just rotated, or the one the address names. */
+const toOpenTokenId = (
+  input: AccessTokensPageInput,
+  tokens: ListedToken[],
+  open: Context['open']
+): string | null =>
+  toDrawerCandidates(input, open).find(
+    (tokenId): tokenId is string =>
+      typeof tokenId === 'string' && isListed(tokens, tokenId)
+  ) ?? null
+
+const toTokenRefusal = (dialog: OpenDialog | null | undefined) =>
+  dialog?.refusal && dialog.tokenId !== null
+    ? { refusal: dialog.refusal, tokenId: dialog.tokenId }
+    : null
 
 /** A refusal for a token the fresh list no longer has: there is no dialog left to show it in. */
-const toOrphanRefusal = (
+const toOrphanToast = (
   dialog: OpenDialog | null | undefined,
-  tokens: ApiToken[] | null
-): Toast | null => {
-  const message = dialog?.errors.form
+  tokens: ListedToken[] | null
+): TokenToast | null => {
+  const orphan = toTokenRefusal(dialog)
 
-  return message && !hasDialogFor(tokens, dialog.tokenId)
-    ? { role: 'error', parts: [{ text: message }] }
+  return orphan && !isListed(tokens ?? [], orphan.tokenId)
+    ? toRefusalToast(orphan.refusal)
     : null
 }
 
-export const toAccessTokensPage = ({
-  service,
-  tokens,
-  now,
-  dialog,
-  reveal,
-  notice
-}: AccessTokensPageInput) => {
-  const words = serviceWords[service]
-  const context = { service, dialog, now }
+interface PageAlert {
+  tone: 'danger' | 'warning'
+  title: string
+  text: string
+  retryHref?: string
+  /** A notice after a write is news, so it takes the focus. */
+  focusOnArrival: boolean
+}
+
+const toListAlert = (
+  failure: TokenFailure,
+  service: ClientService,
+  path: string
+): PageAlert => {
+  const { retry, ...alert } = toUnavailableAlert(failure, service)
+
+  return {
+    ...alert,
+    ...(retry ? { retryHref: path } : {}),
+    focusOnArrival: false
+  }
+}
+
+const toAlerts = (input: AccessTokensPageInput, path: string): PageAlert[] => [
+  ...listIf(input.list.outcome !== 'done', () =>
+    toListAlert(input.list as TokenFailure, input.service, path)
+  ),
+  ...listIf(input.notice?.alert, () => ({
+    ...(input.notice?.alert as TokenAlert),
+    focusOnArrival: true
+  }))
+]
+
+const offersTokens = (list: ListResult): boolean =>
+  list.outcome !== 'not-offered'
+
+/** No New token where GAS offers no tokens. */
+const toOfferedNewToken = (list: ListResult, context: Context) =>
+  offersTokens(list) ? toNewToken(context) : null
+
+const toReveal = (reveal: Reveal | null | undefined, path: string) =>
+  reveal
+    ? {
+        id: 'token-issued',
+        clientId: reveal.clientId,
+        raw: reveal.raw,
+        doneHref: reveal.rotatedTokenId
+          ? tokenHref(path, reveal.rotatedTokenId)
+          : path
+      }
+    : null
+
+const toToasts = (
+  input: AccessTokensPageInput,
+  tokens: ListedToken[] | null
+): TokenToast[] => {
+  const toast = input.notice?.toast ?? toOrphanToast(input.dialog, tokens)
+
+  return toast ? [toast] : []
+}
+
+const tokensOf = (list: ListResult): ListedToken[] | null =>
+  list.outcome === 'done' ? list.tokens : null
+
+/** 503 for a list that couldn't be read, as a record that couldn't; a GAS that offers no tokens is no failure. */
+export const toListStatus = (list: ListResult): number =>
+  list.outcome === 'done' || !offersTokens(list)
+    ? statusCodes.ok
+    : statusCodes.serviceUnavailable
+
+const toContext = (
+  input: AccessTokensPageInput,
+  listed: ListedToken[]
+): Context => ({
+  service: input.service,
+  words: serviceWords[input.service],
+  path: toClientsPath(input.service),
+  now: input.now,
+  open: toOpen(input, listed),
+  posted: input.dialog ?? null
+})
+
+export const toAccessTokensPage = (input: AccessTokensPageInput) => {
+  const { service, now } = input
+  const tokens = tokensOf(input.list)
+  const context = toContext(input, tokens ?? [])
+  const { words, path } = context
+  const openTokenId = toOpenTokenId(input, tokens ?? [], context.open)
 
   return {
     pageTitle: `${words.short} access tokens`,
     service,
-    words,
     navActive: toNavActive(service),
-    path: toClientsPath(service),
-    list: tokens === null ? null : toList(tokens, context),
-    openTokenId: toOpenTokenId(dialog),
-    reveal: toReveal(reveal),
-    toast: toToast(notice, service) ?? toOrphanRefusal(dialog, tokens)
+    path,
+    shortName: words.short,
+    meta: [toServiceName(words.short), metaSentence],
+    prod: input.prod,
+    newHref: `${path}?dialog=new`,
+    alerts: toAlerts(input, path),
+    tokens:
+      tokens &&
+      toTokenRows(tokens, { now, words }).map((row) =>
+        toTokenView(row, context, openTokenId)
+      ),
+    newToken: toOfferedNewToken(input.list, context),
+    openTokenId,
+    reveal: toReveal(input.reveal, path),
+    toasts: toToasts(input, tokens)
   }
 }

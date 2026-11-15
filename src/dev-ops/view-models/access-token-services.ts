@@ -3,44 +3,46 @@ import type { ClientService } from '../use-cases/access-tokens.use-case.ts'
 export const clientServices: ClientService[] = ['gas', 'cw']
 
 /**
- * Everything the pages say differently per service. Nothing here is keyed on
- * a client's name: the in-use copy follows the token's `inUse` flag, which
- * each service sets on the token it was itself called with.
+ * What the token in use means on each service's page. Each service flags
+ * the token it was itself called with: GAS the one Dev Ops calls it with,
+ * CW the one GAS calls it with, as GAS lists CW's tokens for Dev Ops.
  */
+export interface InUseWords {
+  title: string
+  text: string
+  /** Who is calling with it: the start of why Revoke is off, and of the refusals that name it. */
+  calling: string
+  /** Why the old token can't be ended at once on a rotation. */
+  keepOld: string
+}
+
 export interface ServiceWords {
   short: string
-  /** Who answers for this service's tokens, in a refusal. */
-  owner: string
-  /** Who turns a revoked token away. */
-  rejecter: string
-  /** Completes "Not rotated — ", "Not changed — " and "Not revoked — ". */
-  inUse: { rotate: string; expiry: string; revoke: string }
+  inUse: InUseWords
 }
+
+const keepValid =
+  'Rotate it instead, keeping the old one valid while the new one is deployed.'
 
 export const serviceWords: Record<ClientService, ServiceWords> = {
   gas: {
     short: 'GAS',
-    owner: 'fg-gas-backend',
-    rejecter: 'GAS',
     inUse: {
-      rotate:
-        'this is the token GPA is calling with. Choose Keep valid until end of tomorrow or Keep valid for 7 days, to end of day.',
-      expiry: "this is the token GPA is calling with, so it can't expire now.",
-      revoke:
-        'Grants Platform Admin is calling GAS with this token. Rotate it instead.'
+      title: 'Dev Ops calls GAS with this token.',
+      text: `Revoking it would cut Dev Ops off from GAS. ${keepValid}`,
+      calling: 'Dev Ops is calling GAS with this token.',
+      keepOld:
+        'Not for the token in use: Dev Ops would be locked out of GAS until it has the new token.'
     }
   },
   cw: {
     short: 'CW',
-    owner: 'CW-BE',
-    rejecter: 'CW',
     inUse: {
-      rotate:
-        'this is the token GAS is calling CW-BE with. Choose Keep valid until end of tomorrow or Keep valid for 7 days, to end of day.',
-      expiry:
-        "this is the token GAS is calling CW-BE with, so it can't expire now.",
-      revoke:
-        'fg-gas-backend is calling CW-BE with this token. Rotate it instead.'
+      title: 'GAS calls CW with this token.',
+      text: `Revoking it would cut GAS, and Dev Ops through it, off from CW. ${keepValid}`,
+      calling: 'GAS is calling CW with this token.',
+      keepOld:
+        'Not for the token in use: GAS would be locked out of CW until it has the new token.'
     }
   }
 }

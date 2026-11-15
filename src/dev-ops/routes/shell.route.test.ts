@@ -13,11 +13,13 @@ import {
   resetsOnOpen
 } from '../test-utils.ts'
 import { listAccessTokensUseCase } from '../use-cases/access-tokens.use-case.ts'
+import { queryBucketUseCase } from '../use-cases/query-bucket.use-case.ts'
 import { catalogue, outboxBucket } from '../use-cases/test-fixtures.ts'
 
 vi.mock(import('../use-cases/get-catalogue.use-case.ts'))
 vi.mock(import('../use-cases/get-application-page.use-case.ts'))
 vi.mock(import('../use-cases/access-tokens.use-case.ts'))
+vi.mock(import('../use-cases/query-bucket.use-case.ts'))
 vi.mock(import('../../common/config.ts'))
 
 const operator = {
@@ -102,7 +104,10 @@ beforeEach(() => {
     outcome: 'not-found',
     page: null
   })
-  vi.mocked(listAccessTokensUseCase).mockResolvedValue([])
+  vi.mocked(listAccessTokensUseCase).mockResolvedValue({
+    outcome: 'done',
+    tokens: []
+  })
 })
 
 afterAll(async () => {
@@ -262,30 +267,36 @@ describe('the shell', () => {
     }
   )
 
-  test('links the old stylesheet and elements only on pages not yet rebuilt', async () => {
-    const old = (await visit(tokensPath)).$
-    const rebuilt = [
-      (await visit('/dev-ops/events')).$,
-      (await visit(applicationPath)).$,
-      (await visit('/dev-ops/signed-out')).$
+  test('every Dev Ops page loads the design system’s stylesheet and script, and nothing else', async () => {
+    vi.mocked(queryBucketUseCase).mockResolvedValue({
+      page: null,
+      unavailable: true,
+      refused: false,
+      refusal: null,
+      timedOut: false,
+      errored: false
+    })
+    const pages = [
+      tokensPath,
+      `${tokensPath}?times=open`,
+      '/dev-ops/events',
+      '/dev-ops/events/gas/outbox',
+      applicationPath,
+      '/dev-ops/no-such-page',
+      '/dev-ops/signed-out'
     ]
 
-    // First, so its cascade layers are declared before the design system's and never win over it.
-    expect(stylesheets(old)).toEqual([
-      '/public/src/dev-ops/client/dev-ops.css',
-      '/public/src/dev-ops/views/components/index.css'
-    ])
-    expect(
-      old('script[src="/public/src/dev-ops/views/legacy/index.ts"]')
-    ).toHaveLength(1)
+    for (const path of pages) {
+      const { $ } = await visit(path)
 
-    for (const $ of rebuilt) {
       expect(stylesheets($)).toEqual([
         '/public/src/dev-ops/views/components/index.css'
       ])
       expect(
-        $('script[src="/public/src/dev-ops/views/legacy/index.ts"]')
-      ).toHaveLength(0)
+        $('script[src]')
+          .toArray()
+          .map((script) => $(script).attr('src'))
+      ).toEqual(['/public/src/dev-ops/views/components/index.ts'])
     }
   })
 })

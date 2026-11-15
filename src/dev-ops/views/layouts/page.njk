@@ -9,12 +9,6 @@
     <link rel="icon" sizes="48x48" href="{{ getAssetPath("node_modules/govuk-frontend/dist/govuk/assets/images/favicon.ico") }}">
     <link rel="icon" sizes="any" href="{{ getAssetPath("node_modules/govuk-frontend/dist/govuk/assets/images/favicon.svg") }}" type="image/svg+xml">
     <link rel="preload" href="{{ getAssetPath('src/dev-ops/views/components/fonts/InterVariable.woff2') }}" as="font" type="font/woff2" crossorigin>
-    {#- A page not yet rebuilt on the design system keeps its old stylesheet and elements; a rebuilt one empties this block.
-        The old stylesheet comes first, so its cascade layers are declared before the design system's `au` and never win over it. -#}
-    {% block oldPage %}
-    <link href="{{ getAssetPath('src/dev-ops/client/dev-ops.css') }}" rel="stylesheet">
-    <script type="module" src="{{ getAssetPath('src/dev-ops/views/legacy/index.ts') }}"></script>
-    {% endblock %}
     <link href="{{ getAssetPath('src/dev-ops/views/components/index.css') }}" rel="stylesheet">
     <script type="module" src="{{ getAssetPath('src/dev-ops/views/components/index.ts') }}"></script>
   </head>

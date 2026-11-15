@@ -1,0 +1,34 @@
+{% import "components/macros.njk" as gpa %}
+
+{#- In production, every dialog that changes something says so first: the sidebar's badge is easy to stop seeing. -#}
+{% macro prodNote(prod) -%}
+  {%- if prod -%}
+    {%- call gpa.Inline({ gap: 'sm', align: 'center', testId: 'token-prod-note' }) -%}
+      {{ gpa.Badge({ text: 'prod', size: 'sm', tone: 'danger', variant: 'outline' }) }}{{ gpa.Text({ text: 'This changes production.', variant: 'label-md' }) }}
+    {%- endcall -%}
+  {%- endif -%}
+{%- endmacro %}
+
+{#- A write that didn't happen, at the top of the dialog it came from. -#}
+{% macro refusal(r) -%}
+  {%- if r %}{{ gpa.Alert({ tone: 'danger', title: r.title, text: r.text, testId: 'token-refusal' }) }}{% endif -%}
+{%- endmacro %}
+
+{#- The expiry choices of New token and Change expiry: each says where it lands, and Custom date shows its date box while picked. -#}
+{% macro expiryChoices(group) -%}
+  {%- set dateField -%}
+    {%- call gpa.Field({ id: group.dateId, label: 'Expiry date', error: group.dateError }) -%}
+      {{ gpa.DatePicker({ id: group.dateId, name: 'date', value: group.date, min: group.min, max: '9999-12-31', invalid: group.dateError, describedBy: gpa.describedBy({ id: group.dateId, error: group.dateError }) }) }}
+    {%- endcall -%}
+  {%- endset -%}
+  {%- set options = [] -%}
+  {%- for o in group.options -%}
+    {%- set options = (options.push({ value: o.value, text: o.text, hint: o.hint, checked: o.checked, conditionalHtml: dateField if o.value == 'custom' }), options) -%}
+  {%- endfor -%}
+  {{ gpa.RadioGroup({ id: group.id, name: 'expiry', label: 'Expires', hint: 'The token stops working at the end of that day, UK time.', error: group.error, options: options }) }}
+{%- endmacro %}
+
+{#- A dialog's two buttons: the way out, then what it does. -#}
+{% macro dialogActions(d, submitText) -%}
+  {{ gpa.Button({ text: 'Cancel', href: d.cancelHref, attributes: { 'data-gpa-close': true } }) }}{{ gpa.Button({ text: submitText, variant: 'primary', type: 'submit', form: d.formId, loadingOnSubmit: true, testId: d.id ~ '-submit' }) }}
+{%- endmacro %}

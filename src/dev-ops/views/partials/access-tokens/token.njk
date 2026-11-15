@@ -1,0 +1,84 @@
+{% import "components/macros.njk" as gpa %}
+{% import "partials/access-tokens/forms.njk" as forms %}
+
+{#- The ending of a token's hint, as the list and the drawer show it; a token issued before hints has none. -#}
+{% macro hint(t) -%}
+  {%- if t.hint %}…{{ t.hint }}{% else %}{{ gpa.NoValue() }}{% endif -%}
+{%- endmacro %}
+
+{#- One token's drawer: its state, facts and stored row, and the actions its state has. -#}
+{% macro drawer(t) -%}
+  {%- set actions -%}
+    {%- if t.rotate %}{{ gpa.Button({ text: 'Rotate', iconStart: 'refresh-cw', href: t.rotate.href, attributes: { 'data-gpa-open': t.rotate.opens }, testId: 'token-rotate' }) }}{% endif -%}
+    {%- if t.expiry %}{{ gpa.Button({ text: 'Change expiry', href: t.expiry.href, attributes: { 'data-gpa-open': t.expiry.opens }, testId: 'token-expiry' }) }}{% endif -%}
+    {%- if t.revoke %}{{ gpa.Button({ text: 'Revoke', variant: 'danger', href: t.revoke.href, disabledReason: t.revokeOff, attributes: {} if t.revokeOff else { 'data-gpa-open': t.revoke.opens }, testId: 'token-revoke' }) }}{% endif -%}
+    {%- if t.delete %}{{ gpa.Button({ text: 'Delete', variant: 'danger', href: t.delete.href, attributes: { 'data-gpa-open': t.delete.opens }, testId: 'token-delete' }) }}{% endif -%}
+  {%- endset -%}
+  {%- set expires -%}
+    {%- if t.expires %}{{ gpa.Time({ datetime: t.expires.datetime, text: t.expires.text, title: t.expires.title }) }}{% else %}Never{% endif -%}
+  {%- endset -%}
+  {%- call gpa.Drawer({ id: t.id, title: t.clientId or 'Not set', mono: t.clientId, subtitle: gpa.StatusDot({ tone: t.status.tone, text: t.status.text }), open: t.open, closeHref: t.closeHref, actions: actions if t.rotate or t.expiry or t.revoke or t.delete, testId: 'token-drawer' }) -%}
+    {%- call gpa.Stack({ gap: 'xl' }) -%}
+      {%- if t.refusal %}{{ gpa.Alert({ tone: 'danger', title: t.refusal.title, text: t.refusal.text, focusOnArrival: true, testId: 'token-drawer-refusal' }) }}{% endif -%}
+      {%- if t.inUseNote %}{{ gpa.Alert({ tone: 'info', title: t.inUseNote.title, text: t.inUseNote.text, testId: 'token-in-use' }) }}{% endif -%}
+      {%- if t.noActionsNote %}{{ gpa.Alert({ tone: 'info', text: t.noActionsNote, testId: 'token-no-actions' }) }}{% endif -%}
+      {%- call gpa.FactsList() -%}
+        {{ gpa.Fact({ label: 'Client ID', text: t.clientId, mono: true, copy: true }) }}
+        {{ gpa.Fact({ label: 'Token', text: ('…' ~ t.hint) if t.hint, mono: true }) }}
+        {{ gpa.Fact({ label: 'Expires', html: expires }) }}
+      {%- endcall -%}
+      {%- call gpa.Card({ title: 'Stored document' }) -%}
+        {{ gpa.Code({ block: true, code: t.document, label: 'Stored document', lineNumbers: false }) }}
+      {%- endcall -%}
+    {%- endcall -%}
+  {%- endcall -%}
+{%- endmacro %}
+
+{% macro rotateDialog(t, prod) -%}
+  {%- set d = t.rotate.dialog -%}
+  {%- call gpa.Dialog({ id: d.id, title: 'Rotate token', size: 'md', open: d.open, resetOnOpen: true, closeHref: d.cancelHref, actions: forms.dialogActions(d, 'Rotate token') }) -%}
+    {%- call gpa.Form({ id: d.formId, action: d.action, wide: true, label: 'Rotate token' }) -%}
+      {{ forms.prodNote(prod) }}
+      {{ forms.refusal(d.refusal) }}
+      {%- set client = gpa.Code({ text: t.clientId }) -%}
+      {%- set keep = (' (…' ~ t.hint ~ ')') if t.hint else '' -%}
+      {{ gpa.Text({ as: 'p', html: 'Issues a new token for ' ~ client ~ ' with the same expiry (' ~ (d.sameExpiry | escape) ~ '). Keep the old one' ~ (keep | escape) ~ ' valid long enough for the caller to switch over.' }) }}
+      {{ gpa.RadioGroup({ id: d.keepOld.id, name: 'keepOld', label: 'Old token', options: d.keepOld.options }) }}
+    {%- endcall -%}
+  {%- endcall -%}
+{%- endmacro %}
+
+{% macro expiryDialog(t, prod) -%}
+  {%- set d = t.expiry.dialog -%}
+  {%- call gpa.Dialog({ id: d.id, title: 'Change expiry', size: 'md', open: d.open, resetOnOpen: true, closeHref: d.cancelHref, actions: forms.dialogActions(d, 'Save expiry') }) -%}
+    {%- call gpa.Form({ id: d.formId, action: d.action, wide: true, label: 'Change expiry', errors: d.errors, hidden: d.hidden }) -%}
+      {{ forms.prodNote(prod) }}
+      {{ forms.refusal(d.refusal) }}
+      {{ gpa.Text({ as: 'p', text: 'Currently: ' ~ d.currently ~ '.' }) }}
+      {{ forms.expiryChoices(d.expiry) }}
+    {%- endcall -%}
+  {%- endcall -%}
+{%- endmacro %}
+
+{#- Revoke asks for the client to be typed: the script keeps Revoke off until it is, and the server checks it either way. -#}
+{% macro revokeDialog(t, prod, service) -%}
+  {%- set d = t.revoke.dialog -%}
+  {%- call gpa.ConfirmDialog({ id: d.id, title: 'Revoke token', tone: 'danger', confirmLabel: 'Revoke', cancelHref: d.cancelHref, requireText: t.clientId, requireTextValue: d.typed, requireTextError: d.typedError, action: d.action, hidden: d.hidden, open: d.open, resetOnOpen: true }) -%}
+    {%- call gpa.Stack({ gap: 'md' }) -%}
+      {{ forms.prodNote(prod) }}
+      {{ forms.refusal(d.refusal) }}
+      {{ gpa.Text({ as: 'p', html: 'Sets ' ~ gpa.Code({ text: 'expiresAt' }) ~ ' to now. ' ~ service ~ ' rejects the token with 401 on the caller’s next request. The record stays for audit.' }) }}
+    {%- endcall -%}
+  {%- endcall -%}
+{%- endmacro %}
+
+{% macro deleteDialog(t, prod) -%}
+  {%- set d = t.delete.dialog -%}
+  {%- call gpa.ConfirmDialog({ id: d.id, title: 'Delete token record', tone: 'danger', confirmLabel: 'Delete', cancelHref: d.cancelHref, action: d.action, open: d.open }) -%}
+    {%- call gpa.Stack({ gap: 'md' }) -%}
+      {{ forms.prodNote(prod) }}
+      {{ forms.refusal(d.refusal) }}
+      {{ gpa.Text({ as: 'p', text: 'Removes the token’s record, so this list won’t show it again. Its audit events stay.' }) }}
+    {%- endcall -%}
+  {%- endcall -%}
+{%- endmacro %}

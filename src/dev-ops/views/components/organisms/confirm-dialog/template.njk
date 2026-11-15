@@ -1,0 +1,17 @@
+{%- from "../../core/macros.njk" import body, describedBy -%}
+{%- from "../../atoms/button/macro.njk" import Button -%}
+{%- from "../../atoms/input/macro.njk" import Input -%}
+{%- from "../../layouts/hidden-field/macro.njk" import HiddenField -%}
+{%- from "../../molecules/field/macro.njk" import Field -%}
+{%- from "../../organisms/dialog/macro.njk" import Dialog -%}
+{%- set danger = p.tone == 'danger' -%}
+  {%- set fid = p.id ~ '-form' -%}
+  {%- set acts = Button({ text: p.cancelLabel or 'Cancel', variant: 'tertiary', href: p.cancelHref, attributes: { 'data-gpa-close': true, 'data-autofocus': true if (danger and not p.requireText) else false } }) ~ Button({ text: p.confirmLabel or 'Confirm', variant: 'danger-solid' if danger else 'primary', type: 'submit', form: fid, attributes: { 'data-gpa-confirm': true } }) -%}
+  {%- set inner -%}
+    <form id="{{ fid }}" class="gpa-confirm-form" method="{{ p.method or 'post' }}"{% if p.action %} action="{{ p.action }}"{% endif %}>
+      {%- if p.csrf %}<input type="hidden" name="{{ p.csrf.name }}" value="{{ p.csrf.value }}">{% endif %}{% for f in p.hidden %}{{ HiddenField(f) }}{% endfor -%}
+      {%- if p.text or p.html or caller %}<div>{{ body(p, caller) }}</div>{% endif -%}
+      {%- if p.requireText %}{% call Field({ id: p.id ~ '-type', label: 'Type ' ~ p.requireText ~ ' to confirm', error: p.requireTextError }) %}{{ Input({ id: p.id ~ '-type', name: p.requireTextName or 'confirmText', value: p.requireTextValue, invalid: p.requireTextError, describedBy: describedBy({ id: p.id ~ '-type', error: p.requireTextError }), mono: true, placeholder: p.requireText, autocomplete: 'off', inputAttributes: { 'data-gpa-require': p.requireText } }) }}{% endcall %}{% endif -%}
+    </form>
+  {%- endset -%}
+  <gpa-confirm>{{ Dialog({ id: p.id, title: p.title, size: p.size or 'sm', tone: 'danger' if danger, open: p.open, resetOnOpen: p.resetOnOpen, closeHref: p.cancelHref, actions: acts, bodyHtml: inner, testId: p.testId, attributes: p.attributes, classes: p.classes }) }}</gpa-confirm>

@@ -391,11 +391,14 @@ describe('Loaded', () => {
     )
   })
 
-  test('the page is drawn without the old stylesheet', async () => {
+  test('the page loads only the design system’s stylesheet', async () => {
     const { $ } = await view()
 
-    expect($('link[href*="dev-ops.css"]')).toHaveLength(0)
-    expect($('script[src*="views/legacy"]')).toHaveLength(0)
+    expect(
+      $('link[rel="stylesheet"]')
+        .map((_i, link) => $(link).attr('href'))
+        .get()
+    ).toEqual(['/public/src/dev-ops/views/components/index.css'])
   })
 })
 

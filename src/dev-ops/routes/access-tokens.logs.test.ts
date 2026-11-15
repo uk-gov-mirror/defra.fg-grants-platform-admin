@@ -68,7 +68,7 @@ const secretsOf = (
   payload: string,
   sent: { tokenHash: string; tokenHint: string }
 ) => [
-  load(payload)('[data-testid="token-reveal-token"]').text(),
+  load(payload)('#token-issued-value').attr('value') ?? '',
   sent.tokenHash,
   sent.tokenHint
 ]
@@ -97,6 +97,7 @@ describe('the access token writes, as logged', () => {
 
     const { payload } = await post('/dev-ops/clients/gas/tokens', {
       clientId: 'grants-ui',
+      confirmFor: 'grants-ui',
       expiry: '90',
       date: ''
     })
@@ -144,5 +145,73 @@ describe('the access token writes, as logged', () => {
     expect(lines.join('')).toContain('Could not rotate token')
     expect(lines.join('')).not.toContain(sent.tokenHash)
     expect(lines.join('')).not.toContain(sent.tokenHint)
+  })
+})
+
+/** As @hapi/wreck rejects for GAS's answer, its body as Hapi sends it. */
+const gasAnswer = (statusCode: number, error: string, message: string) =>
+  new Boom.Boom(`Response Error: ${statusCode}`, {
+    statusCode,
+    data: {
+      isResponseError: true,
+      payload: { statusCode, error, message }
+    }
+  })
+
+const get = (url: string) =>
+  server.inject({
+    method: 'GET',
+    url,
+    auth: { strategy: 'session', credentials }
+  })
+
+const alertOf = (payload: string) => {
+  const $ = load(payload)
+  const alert = $('[data-testid="tokens-alert"]')
+
+  return {
+    warning: alert.hasClass('gpa-alert-warning'),
+    title: alert.find('.gpa-alert-title').text().trim(),
+    text: alert.find('.gpa-alert-body > div').first().text().trim(),
+    retry: alert.find('.gpa-alert-actions a').length > 0
+  }
+}
+
+describe('the tokens list, from the answers GAS gives', () => {
+  test('a GAS with no token routes answers Hapi’s 404: a warning, logged as one', async () => {
+    vi.mocked(listTokens).mockRejectedValue(
+      gasAnswer(404, 'Not Found', 'Not Found')
+    )
+
+    const { statusCode, payload } = await get('/dev-ops/clients/gas')
+
+    expect(statusCode).toBe(200)
+    expect(alertOf(payload)).toEqual({
+      warning: true,
+      title: 'This GAS doesn’t offer access tokens.',
+      text: 'It’s an older version without the access tokens API. Tokens can be managed here once GAS is upgraded.',
+      retry: false
+    })
+    expect(
+      lines
+        .map((line) => JSON.parse(line) as { level: number; msg: string })
+        .find(({ msg }) => msg.includes('has no access token routes'))?.level
+    ).toBe(40)
+  })
+
+  test('GAS’s 502 for a CW with no client routes says GAS answered with an error', async () => {
+    vi.mocked(listTokens).mockRejectedValue(
+      gasAnswer(502, 'Bad Gateway', 'CW-BE has no client routes')
+    )
+
+    const { statusCode, payload } = await get('/dev-ops/clients/cw')
+
+    expect(statusCode).toBe(503)
+    expect(alertOf(payload)).toEqual({
+      warning: false,
+      title: 'The tokens list couldn’t be loaded.',
+      text: 'GAS answered with an error. Nothing has changed — try again in a moment; if it keeps failing, check GAS’s logs.',
+      retry: true
+    })
   })
 })

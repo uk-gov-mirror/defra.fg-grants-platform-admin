@@ -1,0 +1,10 @@
+{%- from "../../core/macros.njk" import attrs, cls, iconTemplate -%}
+{%- from "../../atoms/button/macro.njk" import Button -%}
+  {%- set box = 'gpa-input gpa-input-' ~ (p.size or 'md') ~ ' gpa-datefield-typed' ~ (' is-invalid' if p.invalid else '') ~ (' is-disabled' if p.disabled else '') ~ (' gpa-width-' ~ p.width if p.width else '') -%}
+  <gpa-date-picker{% if p.clearable %} data-clearable{% endif %}{% if p.placeholder %} data-placeholder="{{ p.placeholder }}"{% endif %}{% if p.open %} data-open{% endif %}>
+    <span class="{{ cls(box, p) }}" data-gpa-ssr inert><input type="text" value="{{ gpaFormatDate(p.value) if p.value else '' }}"{% if p.invalid %} aria-invalid="true"{% endif %}{% if p.describedBy %} aria-describedby="{{ p.describedBy }}"{% endif %}{% if p.label %} aria-label="{{ p.label }}"{% endif %} placeholder="{{ p.placeholder or 'e.g. 4 Feb 2027' }}" autocomplete="off" spellcheck="false"{% if p.disabled %} disabled{% endif %} tabindex="-1"><div class="gpa-dropdown">{{ Button({ iconOnly: 'calendar', label: 'Choose a date', size: 'xs', variant: 'tertiary', classes: 'gpa-datefield-btn', haspopup: 'dialog', expanded: false, disabled: p.disabled }) }}</div></span>
+    <span class="{{ cls(box, p) }}" data-gpa-native{{ attrs(p) }}>
+      <input type="date"{% if p.id %} id="{{ p.id }}"{% endif %}{% if p.name %} name="{{ p.name }}"{% endif %}{% if p.form %} form="{{ p.form }}"{% endif %} value="{{ p.value or '' }}"{% if p.min %} min="{{ p.min }}"{% endif %}{% if p.max %} max="{{ p.max }}"{% endif %}{% if p.disabled %} disabled{% endif %}{% if p.invalid %} aria-invalid="true"{% endif %}{% if p.describedBy %} aria-describedby="{{ p.describedBy }}"{% endif %}{% if p.label %} aria-label="{{ p.label }}"{% endif %}>
+    </span>
+    {{- iconTemplate({ names: ['calendar', 'chevron-left', 'chevron-right', 'chevron-down'] }) -}}
+  </gpa-date-picker>

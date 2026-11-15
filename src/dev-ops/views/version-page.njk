@@ -5,7 +5,6 @@
 
 {#- A grant's or a workflow's version: its status, the version switcher, what needs acting on, and its tabs. -#}
 
-{% block oldPage %}{% endblock %}
 
 {% macro versionAlert(alert) -%}
   {%- set body %}{{ words(alert.text) }}{% endset -%}

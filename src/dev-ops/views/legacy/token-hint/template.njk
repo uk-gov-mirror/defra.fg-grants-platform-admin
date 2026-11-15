@@ -1,6 +1,0 @@
-{# Tailwind only sees class names written literally in this file. #}
-{%- if params.hint -%}
-<span class="font-['Noto_Sans_Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace] {{ params.class | default('text-[13px] text-base-content/85') }}" data-testid="{{ params.testId }}"><span aria-hidden="true">••••</span><span class="sr-only">ending </span>{{ params.hint }}</span>
-{%- else -%}
-<span class="font-['Noto_Sans_Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace] {{ params.class | default('text-[13px] text-base-content/85') }}" data-testid="{{ params.testId }}-none">—</span>
-{%- endif -%}

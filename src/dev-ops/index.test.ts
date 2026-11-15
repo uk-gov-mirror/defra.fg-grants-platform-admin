@@ -1,4 +1,5 @@
 import type { Server } from '@hapi/hapi'
+import type { Schema } from 'joi'
 
 import { roles } from '../common/roles.ts'
 import { statusCodes } from '../common/status-codes.ts'
@@ -149,4 +150,21 @@ describe('devOps', () => {
     },
     refusalSweepMs
   )
+
+  test('takes the shell’s Times param on every GET route under /dev-ops', () => {
+    const gets = server
+      .table()
+      .filter(({ method }) => method === 'get')
+      .filter(({ path }) => path === '/dev-ops' || path.startsWith('/dev-ops/'))
+    const refusing = gets
+      .filter(({ settings }) => {
+        const query = settings.validate?.query as Schema | null | undefined
+
+        return Boolean(query?.validate?.({ times: 'open' }).error)
+      })
+      .map(({ path }) => path)
+
+    expect(gets).not.toHaveLength(0)
+    expect(refusing).toEqual([])
+  })
 })

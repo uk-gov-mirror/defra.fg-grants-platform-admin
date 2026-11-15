@@ -36,7 +36,7 @@ import {
 const viewsPath = path.resolve(import.meta.dirname, 'views')
 
 export const environment = new nunjucks.Environment(
-  new nunjucks.FileSystemLoader([viewsPath, path.join(viewsPath, 'legacy')], {
+  new nunjucks.FileSystemLoader([viewsPath], {
     watch: config.get('nunjucks.watch'),
     noCache: config.get('nunjucks.noCache')
   }),

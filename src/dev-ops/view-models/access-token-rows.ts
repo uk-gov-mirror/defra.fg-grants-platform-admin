@@ -2,16 +2,24 @@ import type {
   ApiToken,
   ListedToken
 } from '../use-cases/access-tokens.use-case.ts'
-import { dayMs, toExpiryDay } from './access-token-dates.ts'
+import { dayMs } from './access-token-dates.ts'
+import type { ServiceWords } from './access-token-services.ts'
+import { toDayTime, toTimes } from './times.ts'
+import type { TimeText } from './times.ts'
 
-/** An active token is "expiring soon" with less than this left. */
-export const expiringSoonMs = 14 * dayMs
+/** An active token is "expiring soon" with less than this left: the list's and the Overview's rule. */
+export const expiringSoonMs = 30 * dayMs
 
 /** What the page calls a token's state: the service's status, with "expiring soon" split out of active. */
 export type TokenState = 'active' | 'expiring' | 'expired' | 'revoked'
 
-const isExpiringSoon = (expiresAt: string | null, now: Date): boolean =>
-  expiresAt !== null && Date.parse(expiresAt) - now.getTime() < expiringSoonMs
+export const isExpiringSoon = (
+  { status, expiresAt }: Pick<ApiToken, 'status' | 'expiresAt'>,
+  now: Date
+): boolean =>
+  status === 'ACTIVE' &&
+  expiresAt !== null &&
+  Date.parse(expiresAt) - now.getTime() < expiringSoonMs
 
 export const toTokenState = (token: ApiToken, now: Date): TokenState => {
   if (token.status === 'REVOKED') {
@@ -22,15 +30,15 @@ export const toTokenState = (token: ApiToken, now: Date): TokenState => {
     return 'expired'
   }
 
-  return isExpiringSoon(token.expiresAt, now) ? 'expiring' : 'active'
+  return isExpiringSoon(token, now) ? 'expiring' : 'active'
 }
 
-/** Named by meaning: the classes are in status-badge/template.njk. */
-const stateBadges: Record<TokenState, { label: string; role: string }> = {
-  active: { label: 'Active', role: 'success' },
-  expiring: { label: 'Expiring soon', role: 'warning' },
-  expired: { label: 'Expired', role: 'neutral' },
-  revoked: { label: 'Revoked', role: 'error' }
+/** A fixed set of states, so each has its own tone. */
+export const tokenStates: Record<TokenState, { text: string; tone: string }> = {
+  active: { text: 'Active', tone: 'success' },
+  expiring: { text: 'Expiring soon', tone: 'warning' },
+  expired: { text: 'Expired', tone: 'neutral' },
+  revoked: { text: 'Revoked', tone: 'danger' }
 }
 
 const compareText = (a: string, b: string): number => {
@@ -66,106 +74,58 @@ export const toCompareTokens =
     stateRank[toTokenState(a, now)] - stateRank[toTokenState(b, now)] ||
     createdMs(b) - createdMs(a)
 
-export const toOpenLabel = ({ clientId }: ApiToken) =>
-  clientId ? `Open token for ${clientId}` : 'Open token with no client ID'
-
-export interface DateText {
-  text: string
-  instant: string | null
-}
-
-const toExpiresCell = (expiresAt: string | null): DateText =>
-  expiresAt === null
-    ? { text: 'Never', instant: null }
-    : { text: toExpiryDay(new Date(expiresAt)), instant: expiresAt }
-
-export interface TokenFact {
-  id: string
-  label: string
-  text: string | null
-  instant?: string | null
-  hint?: string | null
-}
-
-const toExpiresFact = (expiresAt: string | null): TokenFact =>
-  expiresAt === null
-    ? { id: 'expires', label: 'Expires', text: 'Never' }
-    : {
-        id: 'expires',
-        label: 'Expires',
-        text: toExpiryDay(new Date(expiresAt)),
-        instant: expiresAt
-      }
-
-const toFacts = (token: ApiToken): TokenFact[] => [
-  { id: 'client', label: 'Client ID', text: token.clientId },
-  toExpiresFact(token.expiresAt),
-  { id: 'token', label: 'Token', text: null, hint: token.tokenHint }
-]
-
+/**
+ * The actions each state has. The services rotate and revoke only an active
+ * token and delete only one that isn't; an expiry can change in any state,
+ * but a revoked token offers Delete alone, as the design does. A row with no
+ * valid name can be addressed by no route, so it has none.
+ */
 export interface TokenActions {
   rotate: boolean
-  /** Rotate is drawn but can't be pressed: a token that no longer works can't be rotated. */
-  rotateLocked: boolean
   expiry: boolean
   revoke: boolean
   delete: boolean
 }
 
-/**
- * A row with no valid name can be addressed by no route. Revoke is for a
- * working token other than the one in use, which the service refuses to
- * revoke anyway; Delete for one that already can't call, so never the token
- * in use either.
- */
-export const toActions = (token: ApiToken): TokenActions => {
-  const named = token.clientId !== null
-  const ended = token.status !== 'ACTIVE'
-
-  return {
-    rotate: named,
-    rotateLocked: ended,
-    expiry: named,
-    revoke: named && !ended && !token.inUse,
-    delete: named && ended
-  }
+const none: TokenActions = {
+  rotate: false,
+  expiry: false,
+  revoke: false,
+  delete: false
 }
 
-/** Why an action is missing, for a token with no name or one that no longer works. */
-const toActionNote = (token: ApiToken): string | null => {
-  if (token.clientId === null) {
-    return "This token has no valid client ID, so it can't be changed here."
-  }
-
-  return token.status === 'ACTIVE'
-    ? null
-    : 'This token no longer works. Change its expiry to bring it back, or delete it.'
+const stateActions: Record<TokenState, TokenActions> = {
+  active: { rotate: true, expiry: true, revoke: true, delete: false },
+  expiring: { rotate: true, expiry: true, revoke: true, delete: false },
+  expired: { rotate: false, expiry: true, revoke: false, delete: true },
+  revoked: { ...none, delete: true }
 }
+
+export const toActions = (token: ApiToken, state: TokenState): TokenActions =>
+  token.clientId === null ? none : stateActions[state]
 
 export interface TokenRow {
   tokenId: string
   clientId: string | null
   hint: string | null
-  inUse: boolean
   state: TokenState
-  badge: { label: string; role: string }
-  expires: DateText
-  openLabel: string
-  facts: TokenFact[]
+  status: { text: string; tone: string }
+  /** Null is never. */
+  expires: TimeText | null
+  expiresAt: string | null
+  inUse: boolean
   document: string
   actions: TokenActions
-  actionNote: string | null
-  /** Deleting it takes the client off the list and frees its name. */
-  lastToken: boolean
+  /** Why Revoke is off: the token in use is never revoked. */
+  revokeOff: string | null
 }
 
-const isOnlyToken = (token: ApiToken, tokens: ApiToken[]): boolean =>
-  tokens.filter(({ clientId }) => clientId === token.clientId).length === 1
+/** An expiry is a UK day by rule (it ends at 23:59:59 UK time), so it is written as one whatever Times says; its title names the zone. */
+const ukTimes = toTimes('uk')
 
 const toRow = (
   token: ListedToken,
-  tokens: ListedToken[],
-  now: Date
+  { now, words }: { now: Date; words: ServiceWords }
 ): TokenRow => {
   const state = toTokenState(token, now)
 
@@ -173,20 +133,24 @@ const toRow = (
     tokenId: token.tokenId,
     clientId: token.clientId,
     hint: token.tokenHint,
-    inUse: token.inUse,
     state,
-    badge: stateBadges[state],
-    expires: toExpiresCell(token.expiresAt),
-    openLabel: toOpenLabel(token),
-    facts: toFacts(token),
+    status: tokenStates[state],
+    expires:
+      token.expiresAt === null
+        ? null
+        : toDayTime(new Date(token.expiresAt), ukTimes),
+    expiresAt: token.expiresAt,
+    inUse: token.inUse,
     document: JSON.stringify(token.stored, null, 2),
-    actions: toActions(token),
-    actionNote: toActionNote(token),
-    lastToken: isOnlyToken(token, tokens)
+    actions: toActions(token, state),
+    revokeOff: token.inUse ? `${words.inUse.calling} Rotate it instead.` : null
   }
 }
 
-export const toTokenRows = (tokens: ListedToken[], now: Date): TokenRow[] =>
+export const toTokenRows = (
+  tokens: ListedToken[],
+  context: { now: Date; words: ServiceWords }
+): TokenRow[] =>
   tokens
-    .toSorted(toCompareTokens(now))
-    .map((token) => toRow(token, tokens, now))
+    .toSorted(toCompareTokens(context.now))
+    .map((token) => toRow(token, context))

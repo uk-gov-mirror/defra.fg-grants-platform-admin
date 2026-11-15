@@ -179,7 +179,11 @@ describe('the workflow version page', () => {
 
     expect(textOf($, 'version-back')).toBe('Back to Workflows')
     expect(part($, 'version-back').attr('href')).toBe('/dev-ops/workflows')
-    expect($('link[href*="dev-ops.css"]')).toHaveLength(0)
+    expect(
+      $('link[rel="stylesheet"]')
+        .map((_i, link) => $(link).attr('href'))
+        .get()
+    ).toEqual(['/public/src/dev-ops/views/components/index.css'])
   })
 })
 

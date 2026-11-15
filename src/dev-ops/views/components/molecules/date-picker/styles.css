@@ -1,0 +1,29 @@
+.gpa-datefield {
+  justify-content: flex-start;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.gpa-datefield .gpa-select-value {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-md);
+}
+.gpa-datefield[aria-expanded="true"] .gpa-select-chevron {
+  transform: rotate(180deg);
+}
+.gpa-datefield-typed {
+  padding-inline-end: var(--inset-tag-xs);
+}
+.gpa-datefield-typed input {
+  font-variant-numeric: tabular-nums;
+}
+.gpa-datefield-typed .gpa-dropdown {
+  margin-inline-start: auto;
+}
+@supports (-webkit-touch-callout: none) {
+  .gpa-datefield-typed input {
+    font-size: var(--font-size-lg);
+  }
+}

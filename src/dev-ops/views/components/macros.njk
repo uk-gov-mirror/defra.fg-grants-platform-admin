@@ -293,6 +293,10 @@
   {%- set __html %}{% include "./molecules/calendar/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
 {%- endmacro %}
+{% macro DatePicker(p) -%}
+  {%- set __html %}{% include "./molecules/date-picker/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
 {% macro BulkActionBar(p) -%}
   {%- set __html %}{% include "./molecules/bulk-action-bar/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
@@ -343,6 +347,10 @@
 {%- endmacro %}
 {% macro ErrorSummary(p) -%}
   {%- set __html %}{% include "./molecules/error-summary/template.njk" %}{% endset -%}
+  {{- __html | trim | safe -}}
+{%- endmacro %}
+{% macro ConfirmDialog(p) -%}
+  {%- set __html %}{% include "./organisms/confirm-dialog/template.njk" %}{% endset -%}
   {{- __html | trim | safe -}}
 {%- endmacro %}
 {% macro StatusPage(p) -%}

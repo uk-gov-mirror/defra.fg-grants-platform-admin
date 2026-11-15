@@ -1,291 +1,60 @@
 {% extends 'layouts/page.njk' %}
+{% import "components/macros.njk" as gpa %}
+{% import "partials/access-tokens/token.njk" as token %}
+{% import "partials/access-tokens/new-token.njk" as newToken_ %}
 
-{% from "expiry-picker/macro.njk" import expiryPicker %}
-{% from "field-error/macro.njk" import fieldError %}
-{% from "icon/macro.njk" import icon %}
-{% from "token-dialog/macro.njk" import tokenDialog %}
-{% from "token-hint/macro.njk" import tokenHint %}
-{% from "token-toast/macro.njk" import tokenToast %}
 
-{# Drawn to the owner's design. Tailwind only sees class names written literally in this file. Red and amber text take lighter shades in dark mode, where the design's own fall under 4.5:1. #}
-{% set mono = "font-['Noto_Sans_Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace]" %}
-{% set focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]" %}
-{% set btn = "btn h-[38px] min-h-0 gap-1.5 rounded-lg border-base-content/12 bg-base-100 px-3.5 text-sm font-medium shadow-none hover:bg-base-200" %}
-{% set btnSmall = "btn h-[30px] min-h-0 rounded-lg border-base-content/12 bg-base-100 px-2.5 text-[13px] font-medium shadow-none hover:bg-base-200" %}
-{% set btnPrimary = "btn btn-neutral h-[38px] min-h-0 gap-1.5 rounded-lg px-3.5 text-sm font-medium shadow-none disabled:border-neutral! disabled:bg-neutral! disabled:text-neutral-content! disabled:opacity-45" %}
-{% set btnDanger = "btn h-[38px] min-h-0 rounded-lg border-[#b91c1c] bg-[#b91c1c] px-3.5 text-sm font-medium text-white shadow-none hover:border-[#991b1b] hover:bg-[#991b1b] disabled:border-[#b91c1c]! disabled:bg-[#b91c1c]! disabled:text-white! disabled:opacity-45" %}
-{% set btnGhostDanger = "btn h-[38px] min-h-0 gap-1.5 rounded-lg border-[#fecaca] bg-base-100 px-3.5 text-sm font-medium text-[#b91c1c] shadow-none hover:bg-[#fef2f2] [[data-theme=dark]_&]:text-[#f87171] [[data-theme=dark]_&]:hover:bg-base-200 [@media(prefers-color-scheme:dark)]:[:root:not([data-theme])_&]:text-[#f87171] [@media(prefers-color-scheme:dark)]:[:root:not([data-theme])_&]:hover:bg-base-200 aria-disabled:cursor-not-allowed aria-disabled:opacity-45 aria-disabled:hover:bg-base-100" %}
-{% set textInput = "h-[38px] w-full rounded-lg border border-base-content/20 bg-base-100 px-3 text-sm" %}
-{% set dialogFoot = "flex justify-end gap-2 border-t border-base-content/6 px-6 pt-4 pb-5" %}
-{% set hintText = "text-[13px] text-base-content/75" %}
-{% set dots = { active: "bg-[#16a34a]", expiring: "bg-[#d97706]", expired: "bg-[#a1a1aa]", revoked: "bg-[#dc2626]" } %}
-{% set weights = { active: "font-normal", expiring: "font-medium", expired: "font-normal", revoked: "font-normal" } %}
-
-{% macro status(row, testId) %}
-  <span class="inline-flex items-center gap-[7px] text-sm whitespace-nowrap" data-testid="{{ testId }}"><span class="size-2 shrink-0 rounded-full {{ dots[row.state] }}" aria-hidden="true"></span><span class="{{ weights[row.state] }}" data-testid="{{ testId }}-label">{{ row.badge.label }}</span></span>
-{% endmacro %}
-
-{% macro fact(item, testId) %}
-  <dt class="text-base-content/75">{{ item.label }}</dt>
-  <dd class="min-w-0 break-all" data-testid="{{ testId }}-{{ item.id }}">
-    {%- if item.id == "token" -%}
-      {{ tokenHint({ hint: item.hint, class: 'text-sm text-base-content/85', testId: testId ~ "-hint" }) }}
-    {%- elif item.instant -%}
-      <time class="{{ mono }}" datetime="{{ item.instant }}">{{ item.text }}</time>
-    {%- elif item.text -%}
-      <span class="{{ mono }}">{{ item.text }}</span>
-    {%- else -%}
-      <span class="{{ mono }}">—</span>
-    {%- endif -%}
-  </dd>
-{% endmacro %}
-
-{% macro tokenPanel(row) %}
-  {%- set testId = "token-panel-" ~ row.tokenId -%}
-  <section class="flex flex-1 flex-col" aria-labelledby="{{ testId }}-title" data-token-panel="{{ row.tokenId }}" hidden data-testid="{{ testId }}">
-    <div class="flex items-start justify-between gap-3 border-b border-base-content/6 px-6 pt-5 pb-4">
-      <div class="flex min-w-0 flex-col gap-1.5">
-        <h2 class="flex flex-col gap-1.5 focus:outline-none" id="{{ testId }}-title" tabindex="-1" data-drawer-heading>
-          <span class="text-xs font-normal text-base-content/75">{{ words.short }} Access token</span>
-          <span class="{{ mono }} text-lg font-bold break-all">{% if row.clientId %}{{ row.clientId }}{% else %}—<span class="sr-only"> no client ID</span>{% endif %}</span>
-        </h2>
-        {{ status(row, testId ~ "-status") }}
-      </div>
-      <button class="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-base-content/12 bg-base-100 hover:bg-base-200 {{ focusRing }}" type="button" aria-label="Close token details" data-drawer-close data-testid="{{ testId }}-close">{{ icon({ name: 'x', class: 'size-4' }) }}</button>
-    </div>
-
-    <div class="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-5">
-      <dl class="grid grid-cols-[120px_minmax(0,1fr)] gap-x-4 gap-y-3 text-sm" data-testid="{{ testId }}-facts">
-        {% for item in row.facts %}{{ fact(item, testId) }}{% endfor %}
-      </dl>
-
-      <details class="rounded-lg border border-base-content/8" data-testid="{{ testId }}-document">
-        <summary class="cursor-pointer rounded-lg px-3 py-2.5 text-[13px] font-semibold {{ focusRing }}">Stored document</summary>
-        <pre class="{{ mono }} border-t border-base-content/8 bg-base-content/[0.02] p-3 text-xs leading-[1.55] break-all whitespace-pre-wrap" data-testid="{{ testId }}-json">{{ row.document }}</pre>
-      </details>
-    </div>
-
-    <div class="flex flex-col gap-2.5 border-t border-base-content/6 px-6 py-4" data-testid="{{ testId }}-actions">
-      {% if row.actions.rotate or row.actions.expiry %}
-        <div class="flex flex-wrap gap-2">
-          {% if row.actions.rotate %}<button class="{{ btn }} aria-disabled:cursor-not-allowed aria-disabled:opacity-45 aria-disabled:hover:bg-base-100" type="button"{% if row.actions.rotateLocked %} aria-disabled="true" aria-describedby="{{ testId }}-note"{% else %} data-modal-open="{{ row.dialogs.rotate.id }}"{% endif %} data-testid="{{ testId }}-rotate">{{ icon({ name: 'refresh-ccw', class: 'size-[15px]' }) }}Rotate</button>{% endif %}
-          {% if row.actions.expiry %}<button class="{{ btn }}" type="button" data-modal-open="{{ row.dialogs.expiry.id }}" data-testid="{{ testId }}-expiry">{{ icon({ name: 'calendar', class: 'size-[15px]' }) }}Change expiry</button>{% endif %}
-          {% if row.actions.revoke %}<button class="{{ btnGhostDanger }} ml-auto" type="button" data-modal-open="{{ row.dialogs.revoke.id }}" data-testid="{{ testId }}-revoke">{{ icon({ name: 'ban', class: 'size-[15px]' }) }}Revoke</button>{% endif %}
-          {% if row.actions.delete %}<button class="{{ btnGhostDanger }} ml-auto" type="button" data-modal-open="{{ row.dialogs.delete.id }}" data-testid="{{ testId }}-delete">{{ icon({ name: 'trash', class: 'size-[15px]' }) }}Delete</button>{% endif %}
-        </div>
-      {% endif %}
-      {% if row.actionNote %}<p class="text-xs text-base-content/75" id="{{ testId }}-note" data-testid="{{ testId }}-note">{{ row.actionNote }}</p>{% endif %}
-    </div>
-  </section>
-{% endmacro %}
-
-{% macro rotateDialog(row) %}
-  {%- set dialog = row.dialogs.rotate -%}
-  {% call tokenDialog({ id: dialog.id, open: dialog.open, formError: dialog.formError, title: "Rotate token", clientId: row.clientId }) %}
-    <form class="flex min-h-0 flex-col" method="post" action="{{ dialog.action }}">
-      <div class="flex flex-col gap-4 overflow-y-auto px-6 py-4 text-sm leading-normal">
-        <p>Issues a new token for <strong class="{{ mono }}">{{ row.clientId }}</strong> with the same expiry ({{ dialog.sameExpiry }}). Keep the old one valid long enough for the caller to switch over.</p>
-        <fieldset class="flex flex-col gap-2">
-          <legend class="mb-2 font-semibold">Old token</legend>
-          {% for choice in dialog.choices %}
-            <label class="flex cursor-pointer flex-col items-start gap-0.5 rounded-lg border border-base-content/12 bg-base-100 px-3 py-2.5 hover:border-base-content/40 has-checked:border-base-content has-checked:shadow-[inset_0_0_0_1px_var(--color-base-content)] has-disabled:cursor-not-allowed has-disabled:opacity-45 has-disabled:hover:border-base-content/12 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-[#2563eb]" data-testid="{{ dialog.id }}-{{ choice.value }}-label">
-              <input class="sr-only" type="radio" name="keepOld" value="{{ choice.value }}" aria-describedby="{{ dialog.id }}-{{ choice.value }}-hint{% if choice.disabled %} {{ dialog.id }}-locked{% endif %}"{% if choice.checked %} checked{% endif %}{% if choice.resetChecked %} data-reset-checked{% endif %}{% if choice.disabled %} disabled{% endif %} data-testid="{{ dialog.id }}-{{ choice.value }}">
-              <span class="text-sm font-semibold">{{ choice.label }}</span>
-              <span class="{{ hintText }}" id="{{ dialog.id }}-{{ choice.value }}-hint">{{ choice.hint }}</span>
-            </label>
-            {% if choice.disabled %}<p class="-mt-1 text-xs text-base-content/75" id="{{ dialog.id }}-locked" data-testid="{{ dialog.id }}-locked">{{ dialog.lockedReason }}</p>{% endif %}
-          {% endfor %}
-        </fieldset>
-      </div>
-      <div class="{{ dialogFoot }}">
-        <button class="{{ btn }}" type="button" data-modal-close>Cancel</button>
-        <button class="{{ btnPrimary }}" type="submit" data-testid="{{ dialog.id }}-submit">Rotate token</button>
-      </div>
-    </form>
-  {% endcall %}
-{% endmacro %}
-
-{% macro expiryDialog(row) %}
-  {%- set dialog = row.dialogs.expiry -%}
-  {% call tokenDialog({ id: dialog.id, open: dialog.open, formError: dialog.formError, title: "Change expiry", clientId: row.clientId }) %}
-    <form class="flex min-h-0 flex-col" method="post" action="{{ dialog.action }}" novalidate>
-      <input type="hidden" name="hint" value="{{ row.hint or '' }}">
-      <input type="hidden" name="current" value="{{ dialog.current }}">
-      <div class="flex flex-col gap-2.5 overflow-y-auto px-6 py-4 text-sm">
-        <p class="text-base-content/75" data-testid="{{ dialog.id }}-currently">Currently: <span class="{{ mono }} text-base-content">{{ dialog.currently }}</span></p>
-        {{ expiryPicker({ picker: dialog.picker, legendHidden: true }) }}
-      </div>
-      <div class="{{ dialogFoot }}">
-        <button class="{{ btn }}" type="button" data-modal-close>Cancel</button>
-        <button class="{{ btnPrimary }}" type="submit" data-testid="{{ dialog.id }}-submit">Save expiry</button>
-      </div>
-    </form>
-  {% endcall %}
-{% endmacro %}
-
-{% macro revokeDialog(row) %}
-  {%- set dialog = row.dialogs.revoke -%}
-  {%- set field = dialog.id ~ "-confirm" -%}
-  {% call tokenDialog({ id: dialog.id, open: dialog.open, formError: dialog.formError, title: "Revoke token", clientId: row.clientId }) %}
-    <form class="flex min-h-0 flex-col" method="post" action="{{ dialog.action }}" novalidate>
-      <input type="hidden" name="hint" value="{{ row.hint or '' }}">
-      <div class="flex flex-col gap-3.5 overflow-y-auto px-6 py-4 text-sm leading-normal">
-        <p>Sets <span class="{{ mono }}">expiresAt</span> to now. {{ words.rejecter }} rejects the token with 401 on the caller's next request. The record stays for audit.</p>
-        <do-confirm-field class="flex flex-col gap-1.5" data-expected="{{ row.clientId }}">
-          <label for="{{ field }}">Type <strong class="{{ mono }}">{{ row.clientId }}</strong> to confirm</label>
-          <input class="{{ textInput }} {{ focusRing }}" type="text" id="{{ field }}" name="confirm" value="{{ dialog.value }}" data-reset-value="" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore autocapitalize="off" spellcheck="false"{% if dialog.error %} aria-invalid="true" aria-describedby="{{ field }}-error"{% endif %} data-testid="{{ field }}">
-          {% if dialog.error %}{{ fieldError({ id: field ~ "-error", text: dialog.error, reset: true, testId: field ~ "-error" }) }}{% endif %}
-        </do-confirm-field>
-      </div>
-      <div class="{{ dialogFoot }}">
-        <button class="{{ btn }}" type="button" data-modal-close>Cancel</button>
-        <button class="{{ btnDanger }}" type="submit" data-testid="{{ dialog.id }}-submit">Revoke token</button>
-      </div>
-    </form>
-  {% endcall %}
-{% endmacro %}
-
-{% macro deleteDialog(row) %}
-  {%- set dialog = row.dialogs.delete -%}
-  {% call tokenDialog({ id: dialog.id, open: dialog.open, formError: dialog.formError, title: "Delete token", clientId: row.clientId }) %}
-    <form class="flex min-h-0 flex-col" method="post" action="{{ dialog.action }}">
-      <input type="hidden" name="hint" value="{{ row.hint or '' }}">
-      <div class="flex flex-col gap-3.5 overflow-y-auto px-6 py-4 text-sm leading-normal">
-        <p>Permanently removes this record from <span class="{{ mono }}">access_tokens</span>. The token already doesn't work, so callers aren't affected — but the record and its history are gone for good.</p>
-      </div>
-      <div class="{{ dialogFoot }}">
-        <button class="{{ btn }}" type="button" data-modal-close>Cancel</button>
-        <button class="{{ btnDanger }}" type="submit" data-testid="{{ dialog.id }}-submit">Delete token</button>
-      </div>
-    </form>
-  {% endcall %}
-{% endmacro %}
-
-{% macro newTokenDialog(dialog) %}
-  {%- set field = dialog.id ~ "-client" -%}
-  {% call tokenDialog({ id: dialog.id, open: dialog.open, formError: dialog.formError, title: "New access token" }) %}
-    <form class="flex min-h-0 flex-col" method="post" action="{{ dialog.action }}" novalidate>
-      <div class="flex flex-col gap-[18px] overflow-y-auto px-6 py-4">
-        <do-client-field class="flex flex-col gap-1.5" data-active-counts="{{ dialog.activeCounts }}">
-          <label class="text-sm font-semibold" for="{{ field }}">Client ID</label>
-          <p class="{{ hintText }}" id="{{ field }}-hint">The calling service, usually its CDP name. Lowercase letters, digits and hyphens.</p>
-          <input class="{{ textInput }} {{ focusRing }}" type="text" id="{{ field }}" name="clientId" value="{{ dialog.clientId }}" data-reset-value="" placeholder="e.g. grants-ui" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore autocapitalize="off" spellcheck="false" aria-describedby="{{ field }}-hint {{ field }}-error {{ field }}-active"{% if dialog.clientError %} aria-invalid="true"{% endif %} data-testid="{{ field }}">
-          {{ fieldError({ id: field ~ "-error", text: dialog.clientError or "Use lowercase letters, digits and hyphens only.", hidden: not dialog.clientError, live: true, testId: field ~ "-error" }) }}
-          <p class="text-[13px] text-[#92400e] [[data-theme=dark]_&]:text-[#fbbf24] [@media(prefers-color-scheme:dark)]:[:root:not([data-theme])_&]:text-[#fbbf24] empty:hidden" id="{{ field }}-active" aria-live="polite" data-client-active data-testid="{{ field }}-active"></p>
-        </do-client-field>
-        {{ expiryPicker({ picker: dialog.picker }) }}
-      </div>
-      <div class="{{ dialogFoot }}">
-        <button class="{{ btn }}" type="button" data-modal-close>Cancel</button>
-        <button class="{{ btnPrimary }}" type="submit" data-testid="{{ dialog.id }}-submit">Create token</button>
-      </div>
-    </form>
-  {% endcall %}
-{% endmacro %}
-
-{# Rendered only in the response to the POST that issued the token; no address shows it again. #}
-{% macro revealDialog(reveal) %}
-  {% call tokenDialog({ id: "token-reveal", open: true, locked: true, title: "Token issued" }) %}
-    <do-token-reveal class="flex min-h-0 flex-col">
-      <form class="flex min-h-0 flex-col" method="get" action="{{ path }}">
-        <div class="flex flex-col gap-4 overflow-y-auto px-6 py-4 text-sm leading-normal">
-          <p class="flex items-start gap-2.5 rounded-lg border border-[#fcd34d] bg-[#fffbeb] px-3.5 py-3 text-[13px] text-[#78350f]" data-testid="token-reveal-warning">{{ icon({ name: 'triangle-alert', class: 'size-[18px] shrink-0' }) }}<span>Copy the bearer token now. Only its hash is kept, so it can't be shown again.</span></p>
-          <div class="flex flex-col gap-1.5">
-            <p class="font-semibold">Bearer token for <span class="{{ mono }}">{{ reveal.clientId }}</span></p>
-            <div class="flex items-center gap-2">
-              <textarea class="{{ mono }} min-w-0 flex-1 resize-none rounded-lg border-0 bg-[#18181b] px-3 py-2.5 text-[13px] break-all text-[#fafafa] [field-sizing:content] {{ focusRing }}" rows="1" readonly aria-label="Token" spellcheck="false" data-reveal-token data-testid="token-reveal-token">{{ reveal.raw }}</textarea>
-              <button class="{{ btnSmall }}" type="button" aria-label="Copy token" data-reveal-copy hidden data-testid="token-reveal-copy"><span data-reveal-copy-label>Copy</span></button>
-            </div>
-            <p class="sr-only" aria-live="polite" data-reveal-status data-testid="token-reveal-status"></p>
-            <p class="{{ hintText }}">Send it as <span class="{{ mono }}">Authorization: Bearer &lt;token&gt;</span></p>
-          </div>
-          <p class="{{ hintText }}">Written to <span class="{{ mono }}">access_tokens</span> — it shows in the list as {{ tokenHint({ hint: reveal.hint, class: 'text-[13px]', testId: "token-reveal-hint" }) }}. It works now. Give it to <span class="{{ mono }}">{{ reveal.clientId }}</span> as a secret in the CDP portal — and issue a separate token per environment.</p>
-          <label class="flex cursor-pointer items-center gap-2.5 text-sm">
-            <input class="size-[18px] accent-[#18181b]" type="checkbox" required data-reveal-ack data-testid="token-reveal-ack">
-            I've stored the token somewhere safe
-          </label>
-        </div>
-        <div class="{{ dialogFoot }}">
-          <button class="{{ btnPrimary }}" type="submit" data-reveal-done data-testid="token-reveal-done">Done</button>
-        </div>
-      </form>
-    </do-token-reveal>
-  {% endcall %}
-{% endmacro %}
-
-{% macro tokenRow(row) %}
-  <tr class="cursor-pointer border-t border-base-content/6 hover:bg-base-content/[0.02]" data-drawer-row data-testid="token-row">
-    <td class="py-3.5 pr-2 pl-5">
-      <span class="flex flex-wrap items-center gap-2">
-        {%- if row.clientId -%}
-          <span class="{{ mono }} text-sm font-bold break-all" data-testid="token-row-client">{{ row.clientId }}</span>
-        {%- else -%}
-          <span class="{{ mono }} text-sm" data-testid="token-row-client-none">—</span>
-        {%- endif -%}
-      </span>
-    </td>
-    <td class="px-2 py-3.5">{{ tokenHint({ hint: row.hint, testId: "token-row-hint" }) }}</td>
-    <td class="px-2 py-3.5">{{ status(row, "token-row-status") }}</td>
-    <td class="{{ mono }} px-2 py-3.5 text-right text-[13px] whitespace-nowrap" data-testid="token-row-expires">{% if row.expires.instant %}<time datetime="{{ row.expires.instant }}">{{ row.expires.text }}</time>{% else %}{{ row.expires.text }}{% endif %}</td>
-    <td class="py-3.5 pr-5 pl-2 text-right"><button class="inline-flex h-[30px] w-8 cursor-pointer items-center justify-center rounded-lg border border-base-content/12 bg-base-100 hover:bg-base-200 {{ focusRing }}" type="button" aria-label="{{ row.openLabel }}" data-drawer-open="{{ row.tokenId }}" data-testid="token-row-open">{{ icon({ name: 'chevron-right', class: 'size-4' }) }}</button></td>
-  </tr>
-{% endmacro %}
-
+{#- A service's access tokens: the list, each token's drawer and its dialogs, all drawn on the page so the script opens them in place; the address opens any of them without one. -#}
 {% block content %}
-  <do-token-drawer class="drawer drawer-end flex-1"{% if openTokenId %} data-open-token="{{ openTokenId }}"{% endif %} data-testid="token-drawer">
-    <input class="drawer-toggle" type="checkbox" id="token-drawer-toggle" tabindex="-1" aria-hidden="true" data-drawer-toggle>
-    <div class="drawer-content" data-drawer-page>
-      <div class="mx-auto flex w-full max-w-[1240px] flex-col gap-4 pt-1 lg:px-2">
-        <div class="mb-2 flex min-h-[38px] flex-wrap items-center justify-between gap-3">
-          <h1 class="text-2xl font-bold" data-testid="tokens-title">{{ pageTitle }}</h1>
-          {% if list %}<button class="{{ btnPrimary }}" type="button" data-modal-open="{{ list.newToken.id }}" data-testid="tokens-new">{{ icon({ name: 'plus', class: 'size-4' }) }}New token</button>{% endif %}
-        </div>
+  {%- set newButton = gpa.Button({ text: 'New token', variant: 'primary', iconStart: 'plus', href: newHref, attributes: { 'data-gpa-open': newToken.id }, testId: 'token-new-open' }) if newToken else '' -%}
+  {%- set alertHtml -%}
+    {%- call gpa.Stack({ gap: 'lg' }) -%}
+      {%- for a in alerts -%}
+        {%- set retry = gpa.Button({ text: 'Try again', size: 'sm', iconStart: 'refresh-cw', href: a.retryHref }) if a.retryHref else '' -%}
+        {{ gpa.Alert({ tone: a.tone, title: a.title, text: a.text, actions: retry, focusOnArrival: a.focusOnArrival, testId: 'tokens-alert' }) }}
+      {%- endfor -%}
+    {%- endcall -%}
+  {%- endset -%}
 
-        {% if not list %}
-          <div class="rounded-[10px] border border-base-content/8 bg-base-100 p-4" data-testid="tokens-card">
-            <p class="flex items-start gap-2.5 rounded-lg border border-[#fecaca] bg-[#fef2f2] px-3.5 py-3 text-[13px] text-[#7f1d1d]" role="alert" data-testid="tokens-error">{{ icon({ name: 'exclamation-circle', class: 'mt-0.5 size-4 shrink-0' }) }}<span>{{ pageTitle }} could not be loaded.</span></p>
-          </div>
-        {% else %}
-          <div class="relative overflow-x-auto rounded-[10px] border border-base-content/8 bg-base-100" data-testid="tokens-card">
-            <table class="w-full min-w-[900px] table-fixed text-left text-sm" data-testid="tokens-table">
-              <colgroup><col class="w-[43.3%]"><col><col><col class="w-[166px]"><col class="w-[60px]"></colgroup>
-              <thead class="text-[13px] leading-[18px] font-semibold text-base-content/75">
-                <tr>
-                  <th class="py-3.5 pr-2 pl-5 font-semibold" scope="col">Client ID</th>
-                  <th class="px-2 py-3.5 font-semibold" scope="col">Token</th>
-                  <th class="px-2 py-3.5 font-semibold" scope="col">Status</th>
-                  <th class="px-2 py-3.5 text-right font-semibold" scope="col">Expires</th>
-                  <th class="py-3.5 pr-5 pl-2" scope="col"><span class="sr-only">Details</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for row in list.rows %}{{ tokenRow(row) }}{% else %}<tr class="border-t border-base-content/6" data-testid="tokens-none"><td class="px-5 py-10 text-center text-sm text-base-content/75" colspan="5">No access tokens yet.</td></tr>{% endfor %}
-              </tbody>
-            </table>
-          </div>
-          <p class="text-xs text-base-content/65" data-testid="tokens-foot">Tokens are stored as SHA-256 hashes — the bearer value itself is shown once, when it's issued, and never again.</p>
-        {% endif %}
-      </div>
-    </div>
+  {%- call gpa.ListPage({ title: 'Access tokens', meta: meta, actions: newButton, alert: alertHtml if alerts.length }) -%}
+    {%- if tokens -%}
+      {%- call gpa.DataTable({
+        styleNonce: styleNonce,
+        label: 'Access tokens',
+        link: true,
+        testId: 'tokens-table',
+        empty: { title: 'No access tokens yet', icon: 'inbox' } if not tokens.length,
+        columns: [
+          { key: 'client', label: 'Client ID', width: 'auto', mono: true },
+          { key: 'hint', label: 'Token', width: 'auto', mono: true },
+          { key: 'status', label: 'Status', width: 'auto' },
+          { key: 'expires', label: 'Expires', width: 'max-content', align: 'right' }
+        ]
+      }) -%}
+        {%- for t in tokens -%}
+          {%- call gpa.TableRow({ link: true, selected: t.open, testId: 'token-row' }) -%}
+            <td role="cell" class="gpa-cell-mono">{{ gpa.RowLink({ html: (t.clientId | escape) if t.clientId else gpa.NoValue(), href: t.href, mono: true, attributes: { 'data-gpa-open': t.id } }) }}</td>
+            <td role="cell" class="gpa-cell-mono">{{ token.hint(t) }}</td>
+            <td role="cell">{{ gpa.StatusDot({ tone: t.status.tone, text: t.status.text }) }}</td>
+            <td role="cell" class="gpa-right">
+              {%- if t.expires %}{{ gpa.Time({ datetime: t.expires.datetime, text: t.expires.text, title: t.expires.title }) }}{% else %}{{ gpa.Text({ text: 'Never', tone: 'subtle' }) }}{% endif -%}
+            </td>
+            {{ gpa.RowChevron() }}
+          {%- endcall -%}
+        {%- endfor -%}
+      {%- endcall -%}
+    {%- endif -%}
+  {%- endcall -%}
 
-    <div class="drawer-side z-50 [&>.drawer-overlay]:bg-[#18181b]/32" data-testid="token-drawer-side">
-      <label class="drawer-overlay" for="token-drawer-toggle" aria-label="Close token details"></label>
-      <div class="flex min-h-full w-[min(500px,100%)] flex-col border-l border-base-content/12 bg-base-100 shadow-[-12px_0_32px_rgba(0,0,0,.08)]">
-        {% for row in list.rows %}{{ tokenPanel(row) }}{% endfor %}
-      </div>
-    </div>
-  </do-token-drawer>
-
-  {% if list %}
-    {{ newTokenDialog(list.newToken) }}
-    {% for row in list.rows %}
-      {# A dialog a refusal came back to stays, though its action may no longer apply. #}
-      {% if (row.actions.rotate and not row.actions.rotateLocked) or row.dialogs.rotate.open %}{{ rotateDialog(row) }}{% endif %}
-      {% if row.actions.expiry or row.dialogs.expiry.open %}{{ expiryDialog(row) }}{% endif %}
-      {% if row.actions.revoke or row.dialogs.revoke.open %}{{ revokeDialog(row) }}{% endif %}
-      {% if row.actions.delete or row.dialogs.delete.open %}{{ deleteDialog(row) }}{% endif %}
-    {% endfor %}
-  {% endif %}
-  {% if reveal %}{{ revealDialog(reveal) }}{% endif %}
-  {% if toast %}{{ tokenToast({ toast: toast }) }}{% endif %}
+  {%- for t in tokens -%}
+    {{ token.drawer(t) }}
+  {%- endfor -%}
+  {%- if newToken %}{{ newToken_.newTokenDialog(newToken, prod) }}{% endif -%}
+  {%- for t in tokens -%}
+    {%- if t.rotate %}{{ token.rotateDialog(t, prod) }}{% endif -%}
+    {%- if t.expiry %}{{ token.expiryDialog(t, prod) }}{% endif -%}
+    {%- if t.revoke and t.revoke.dialog %}{{ token.revokeDialog(t, prod, shortName) }}{% endif -%}
+    {%- if t.delete %}{{ token.deleteDialog(t, prod) }}{% endif -%}
+  {%- endfor -%}
+  {%- if reveal %}{{ newToken_.issuedDialog(reveal) }}{% endif -%}
 {% endblock %}

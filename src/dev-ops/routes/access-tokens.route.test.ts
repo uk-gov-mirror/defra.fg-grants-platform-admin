@@ -1,11 +1,22 @@
 import { load } from 'cheerio'
+import type { CheerioAPI } from 'cheerio'
 import type { Request, ResponseToolkit, Server } from '@hapi/hapi'
 
 import { config } from '../../common/config.ts'
 import { createServer } from '../../server/index.ts'
-import { statusCodes } from '../../common/status-codes.ts'
 import { devOps } from '../index.ts'
-import type { ListedToken } from '../use-cases/access-tokens.use-case.ts'
+import {
+  closeHrefOf,
+  expectTablesStyled,
+  isOpenWithoutScript,
+  resetsOnOpen,
+  tableStyles
+} from '../test-utils.ts'
+import { getCatalogueUseCase } from '../use-cases/get-catalogue.use-case.ts'
+import type {
+  ListResult,
+  ListedToken
+} from '../use-cases/access-tokens.use-case.ts'
 import {
   changeTokenExpiryUseCase,
   deleteAccessTokenUseCase,
@@ -16,7 +27,15 @@ import {
 } from '../use-cases/access-tokens.use-case.ts'
 
 vi.mock(import('../use-cases/get-catalogue.use-case.ts'))
-vi.mock(import('../use-cases/access-tokens.use-case.ts'))
+vi.mock(import('../use-cases/access-tokens.use-case.ts'), async (original) => ({
+  ...(await original()),
+  listAccessTokensUseCase: vi.fn(),
+  issueAccessTokenUseCase: vi.fn(),
+  rotateAccessTokenUseCase: vi.fn(),
+  changeTokenExpiryUseCase: vi.fn(),
+  revokeAccessTokenUseCase: vi.fn(),
+  deleteAccessTokenUseCase: vi.fn()
+}))
 
 const credentials = {
   user: { name: 'Ada Lovelace' },
@@ -24,14 +43,15 @@ const credentials = {
 }
 
 const sameOrigin = { 'sec-fetch-site': 'same-origin' }
-
-const tokenId = '6650c1f2a9e4b1d07c20bd91'
+const day = 86_400_000
 const raw = 'Zq3pLm8Rt2Vw9Xy4Ab7Cd1Ef6Gh0Ij5Kl3Mn8Op2x7Qa'
 
+const inDays = (days: number) => new Date(Date.now() + days * day).toISOString()
+
 const token = (fields: Partial<ListedToken> = {}): ListedToken => ({
-  tokenId,
+  tokenId: '6650c1f2a9e4b1d07c20bd91',
   clientId: 'grants-ui',
-  tokenHint: 'x7Qa',
+  tokenHint: '3e1d',
   status: 'ACTIVE',
   createdAt: '2026-11-02T10:00:00.000Z',
   createdBy: 'Alex Operator',
@@ -47,37 +67,81 @@ const token = (fields: Partial<ListedToken> = {}): ListedToken => ({
   ...fields
 })
 
-const tokens: ListedToken[] = [
-  token(),
+const ids = {
+  inUse: '6650c1f2a9e4b1d07c20bd90',
+  active: '6650c1f2a9e4b1d07c20bd91',
+  dated: '6650c1f2a9e4b1d07c20bd92',
+  expiring: '6650c1f2a9e4b1d07c20bd93',
+  revoked: '6650c1f2a9e4b1d07c20bd94',
+  expired: '6650c1f2a9e4b1d07c20bd95',
+  legacy: '6650c1f2a9e4b1d07c20bd96'
+}
+
+const gasTokens: ListedToken[] = [
   token({
-    tokenId: '6650c1f2a9e4b1d07c20bd92',
+    tokenId: ids.inUse,
     clientId: 'fg-grants-platform-admin',
-    tokenHint: 'Lp2e',
+    tokenHint: '0c4a',
     inUse: true
   }),
+  token({ tokenId: ids.active }),
   token({
-    tokenId: '6650c1f2a9e4b1d07c20bd93',
-    clientId: 'example-legacy-caller',
-    tokenHint: null,
+    tokenId: ids.dated,
+    clientId: 'farming-grants-agreements-ui',
+    tokenHint: '7f2c',
+    expiresAt: '2027-01-31T23:59:59.000Z'
+  }),
+  token({
+    tokenId: ids.expiring,
+    clientId: 'fg-gss-pmf',
+    tokenHint: 'e91a',
+    expiresAt: inDays(4)
+  }),
+  token({
+    tokenId: ids.revoked,
+    clientId: 'old-caller',
+    tokenHint: 'b4d0',
     status: 'REVOKED',
-    revokedAt: '2026-11-01T09:00:00.000Z',
-    revokedBy: 'Sam Revoker',
-    expiresAt: '2026-11-01T09:00:00.000Z'
-  })
+    expiresAt: '2026-10-01T09:00:00.000Z'
+  }),
+  token({
+    tokenId: ids.expired,
+    clientId: 'land-grants-api',
+    tokenHint: '91aa',
+    status: 'EXPIRED',
+    expiresAt: '2026-11-01T23:59:59.000Z'
+  }),
+  token({ tokenId: ids.legacy, clientId: null, tokenHint: null })
 ]
 
-const tokenPath = `/dev-ops/clients/gas/grants-ui/tokens/${tokenId}`
+const cwTokens: ListedToken[] = [
+  token({
+    tokenId: ids.inUse,
+    clientId: 'fg-gas-backend',
+    tokenHint: 'a6f1',
+    inUse: true
+  }),
+  token({ tokenId: ids.active, clientId: 'fg-cw-frontend', tokenHint: '52aa' })
+]
+
+const listed = (tokens: ListedToken[]): ListResult => ({
+  outcome: 'done',
+  tokens
+})
 
 const flatten = (text: string) => text.replace(/\s+/g, ' ').trim()
-
-/** The hint's mask, and the stored hash's between its first and last 3 characters. */
-const withoutMasks = (text: string) =>
-  text.replaceAll('••••••', '').replaceAll('••••', '')
 
 let server: Server
 let sessions: string[]
 
-const get = async (url: string, cookie?: string) => {
+interface Page {
+  statusCode: number
+  headers: Record<string, unknown>
+  payload: string
+  $: CheerioAPI
+}
+
+const get = async (url: string, cookie?: string): Promise<Page> => {
   const response = await server.inject({
     method: 'GET',
     url,
@@ -85,14 +149,17 @@ const get = async (url: string, cookie?: string) => {
     auth: { strategy: 'session', credentials }
   })
 
-  return { ...response, $: load(response.payload) }
+  const $ = load(response.payload)
+  expectTablesStyled($, response.headers['content-security-policy'])
+
+  return { ...response, $ }
 }
 
 const post = async (
   url: string,
   payload: Record<string, string> = {},
   headers: Record<string, string> = sameOrigin
-) => {
+): Promise<Page> => {
   const response = await server.inject({
     method: 'POST',
     url,
@@ -108,16 +175,62 @@ const sessionCookie = (response: { headers: Record<string, unknown> }) =>
   (response.headers['set-cookie'] as string[])[0].split(';')[0]
 
 /** The write, then the page it redirects to, as a browser does it. */
-const postAndFollow = async (url: string, payload: Record<string, string>) => {
+const postAndFollow = async (
+  url: string,
+  payload: Record<string, string> = {}
+) => {
   const written = await post(url, payload)
   const cookie = sessionCookie(written)
 
-  return { written, cookie, page: await get('/dev-ops/clients/gas', cookie) }
+  return {
+    written,
+    cookie,
+    page: await get(written.headers.location as string, cookie)
+  }
 }
 
-const toastOf = ($: ReturnType<typeof load>) => ({
-  role: $('[data-testid="token-toast"]').attr('role'),
-  text: flatten($('[data-testid="token-toast-message"]').text())
+const isChoice = (type: string | undefined) =>
+  type === 'radio' || type === 'checkbox'
+
+/** A form as a browser without a script would send it: its fields, the ones picked, and its hidden values. */
+const formOf = ($: CheerioAPI, formId: string): Record<string, string> =>
+  Object.fromEntries(
+    $(`form#${formId} input[name]`)
+      .filter(
+        (_i, input) =>
+          !isChoice($(input).attr('type')) || $(input).is('[checked]')
+      )
+      .map((_i, input) => [
+        [$(input).attr('name') as string, $(input).attr('value') ?? '']
+      ])
+      .get()
+  )
+
+const text = ($: CheerioAPI, selector: string) => flatten($(selector).text())
+
+/** Each choice of a radio group as read aloud: its label, then its hint. */
+const choicesOf = ($: CheerioAPI, selector: string) =>
+  $(`${selector} .gpa-group-options .gpa-check`)
+    .map((_i, o) =>
+      flatten(
+        $(o)
+          .find('.gpa-check-text > span')
+          .add($(o).children('span:not(.gpa-radio-dot):not(.gpa-check-text)'))
+          .map((_j, part) => $(part).text())
+          .get()
+          .join(' ')
+      )
+    )
+    .get()
+const tokenPath = (id: string, client = 'grants-ui') =>
+  `/dev-ops/clients/gas/${client}/tokens/${id}`
+const drawerOf = ($: CheerioAPI, id: string) => $(`dialog#token-${id}`)
+const toastOf = ($: CheerioAPI) => ({
+  tone: ($('[data-testid="toast"]').attr('class') ?? '').replace(
+    /.*gpa-toast-(\w+).*/,
+    '$1'
+  ),
+  text: text($, '[data-testid="toast"] .gpa-toast-text')
 })
 
 beforeAll(async () => {
@@ -135,1292 +248,1772 @@ beforeAll(async () => {
 
 beforeEach(() => {
   sessions = []
-  vi.mocked(listAccessTokensUseCase).mockResolvedValue(tokens)
+  vi.mocked(listAccessTokensUseCase).mockImplementation(async (service) =>
+    listed(service === 'gas' ? gasTokens : cwTokens)
+  )
 })
 
 afterAll(async () => {
   await server.stop()
 })
 
-describe('the access tokens page', () => {
-  test.each([
-    ['gas', 'GAS access tokens'],
-    ['cw', 'CW access tokens']
-  ] as const)('draws the %s page', async (service, title) => {
-    const { statusCode, $ } = await get(`/dev-ops/clients/${service}`)
+describe('the list', () => {
+  test('Loaded (GAS): four columns, each token’s row opening its drawer, and the page never cached', async () => {
+    const { statusCode, headers, $ } = await get('/dev-ops/clients/gas')
 
-    expect(statusCode).toBe(statusCodes.ok)
-    expect($('title').text()).toBe(`${title} – Grants Platform`)
-    expect($('h1').text()).toBe(title)
-    expect(listAccessTokensUseCase).toHaveBeenCalledWith(service)
-  })
-
-  test('is never stored by the browser', async () => {
-    const { headers } = await get('/dev-ops/clients/gas')
-
+    expect(statusCode).toBe(200)
     expect(headers['cache-control']).toBe('no-store')
-  })
-
-  test("marks its own service in the navigation, each link in its service's group", async () => {
-    const { $ } = await get('/dev-ops/clients/cw')
-
-    expect($('[data-testid="shell-nav-clients-cw"]').attr('aria-current')).toBe(
-      'page'
-    )
+    expect(text($, 'h1')).toBe('Access tokens')
     expect(
-      $('[data-testid="shell-nav-clients-gas"]').attr('aria-current')
-    ).toBeUndefined()
-    expect(
-      $('[data-testid="shell-nav-clients-gas"]')
-        .closest('[role="group"]')
-        .attr('aria-label')
-    ).toBe('Grant Application Service')
-    expect(
-      $('[data-testid="shell-nav-clients-cw"]')
-        .closest('[role="group"]')
-        .attr('aria-label')
-    ).toBe('Caseworking')
-  })
-
-  test('draws one row per token, sorted, with the hint masked and the token in use tagged', async () => {
-    const { $ } = await get('/dev-ops/clients/gas')
-    const rows = $('[data-testid="token-row"]')
-
-    expect(
-      rows
-        .find(
-          '[data-testid="token-row-client"], [data-testid="token-row-client-none"]'
-        )
-        .map((_i, cell) => $(cell).text())
+      $('.gpa-pageheader-meta .gpa-meta-item')
+        .map((_i, m) => flatten($(m).text()))
         .get()
     ).toEqual([
-      'example-legacy-caller',
-      'fg-grants-platform-admin',
-      'grants-ui'
+      'Grant Application Service',
+      'Tokens are stored as SHA-256 hashes; the value is shown once, when it’s issued.'
     ])
-    expect(
-      flatten(rows.eq(2).find('[data-testid="token-row-hint"]').text())
-    ).toBe('••••ending x7Qa')
-    expect(
-      rows
-        .eq(2)
-        .find('[data-testid="token-row-hint"] [aria-hidden="true"]')
-        .text()
-    ).toBe('••••')
-    expect(rows.eq(0).find('[data-testid="token-row-hint-none"]').text()).toBe(
-      '—'
-    )
-    expect(rows.find('[data-testid="token-row-tag"]')).toHaveLength(0)
-    expect(flatten(rows.text())).not.toContain('this portal')
-    expect(
-      rows.eq(2).find('[data-testid="token-row-open"]').attr('aria-label')
-    ).toBe('Open token for grants-ui')
-    expect(
-      rows.eq(2).find('[data-testid="token-row-open"]').attr('data-drawer-open')
-    ).toBe(tokenId)
-    expect(rows.eq(2).is('[data-drawer-row]')).toBe(true)
-    expect(rows.eq(2).find('button, [href], [tabindex]')).toHaveLength(1)
-  })
-
-  test('heads the table Client ID, Token, Status and Expires, with no filters', async () => {
-    const { $ } = await get('/dev-ops/clients/gas')
-
     expect(
       $('[data-testid="tokens-table"] th')
         .map((_i, th) => flatten($(th).text()))
         .get()
-    ).toEqual(['Client ID', 'Token', 'Status', 'Expires', 'Details'])
-    expect($('input[type="search"]')).toHaveLength(0)
-    expect($('[aria-pressed]')).toHaveLength(0)
+    ).toEqual(['Client ID', 'Token', 'Status', 'Expires'])
+
+    const newButton = $('[data-testid="token-new-open"]')
+    expect(newButton.attr('href')).toBe('/dev-ops/clients/gas?dialog=new')
+    expect(newButton.attr('data-gpa-open')).toBe('token-new')
+
+    const rows = $('[data-testid="token-row"]')
+    expect(rows).toHaveLength(7)
+
+    const first = rows.first()
+    expect(first.find('.gpa-rowlink').attr('href')).toBe(
+      `/dev-ops/clients/gas?token=${ids.dated}`
+    )
+    expect(first.find('.gpa-rowlink').attr('data-gpa-open')).toBe(
+      `token-${ids.dated}`
+    )
+    expect(first.find('.gpa-rowlink').hasClass('gpa-mono')).toBe(true)
+    expect(flatten(first.find('td').eq(1).text())).toBe('…7f2c')
+    expect(first.find('.gpa-dot').hasClass('gpa-dot-success')).toBe(true)
+    expect(flatten(first.find('time').text())).toBe('31 Jan 2027')
   })
 
-  test('offers no Revoke and no note on the token in use, and Delete only on one that no longer works', async () => {
+  test('Loaded: each state has its tone, and a token that never expires says Never, faintly', async () => {
     const { $ } = await get('/dev-ops/clients/gas')
-    const panel = (id: string) => $(`[data-token-panel="${id}"]`)
-    const inUse = panel(tokens[1].tokenId)
+    const rowOf = (id: string) =>
+      $(`[data-testid="token-row"]:has(a[data-gpa-open="token-${id}"])`)
 
-    expect(panel(tokenId).find('[data-testid$="-revoke"]')).toHaveLength(1)
-    expect(panel(tokenId).find('[data-testid$="-delete"]')).toHaveLength(0)
-    expect(inUse.find('[data-testid$="-revoke"]')).toHaveLength(0)
+    expect(rowOf(ids.expiring).find('.gpa-dot').attr('class')).toContain(
+      'gpa-dot-warning'
+    )
+    expect(flatten(rowOf(ids.expiring).find('.gpa-status').text())).toBe(
+      'Expiring soon'
+    )
+    expect(rowOf(ids.revoked).find('.gpa-dot').attr('class')).toContain(
+      'gpa-dot-danger'
+    )
+    expect(rowOf(ids.expired).find('.gpa-dot').attr('class')).toContain(
+      'gpa-dot-neutral'
+    )
     expect(
-      inUse
-        .find('[data-testid$="-actions"] button')
-        .map((_i, b) => flatten($(b).text()))
+      rowOf(ids.active).find('td').eq(3).find('.gpa-text-subtle').text()
+    ).toBe('Never')
+  })
+
+  test('Loaded: a row with no client ID or hint shows Not set, and sorts last', async () => {
+    const { $ } = await get('/dev-ops/clients/gas')
+    const last = $('[data-testid="token-row"]').last()
+
+    expect(last.find('.gpa-rowlink .gpa-fact-empty').attr('aria-label')).toBe(
+      'Not set'
+    )
+    expect(last.find('td').eq(1).find('.gpa-fact-empty')).toHaveLength(1)
+  })
+
+  test('Loaded (CW): Caseworking named in full under the title', async () => {
+    const { $ } = await get('/dev-ops/clients/cw')
+
+    expect(text($, '.gpa-pageheader-meta .gpa-meta-item:first-child')).toBe(
+      'Caseworking'
+    )
+    expect($('[data-testid="token-row"]')).toHaveLength(2)
+  })
+
+  test('loads only the design system’s stylesheet, with no inline style but the table’s nonce’d widths', async () => {
+    const { payload, headers, $ } = await get('/dev-ops/clients/gas')
+
+    expect(
+      $('link[rel="stylesheet"]')
+        .map((_i, link) => $(link).attr('href'))
         .get()
-    ).toEqual(['Rotate', 'Change expiry'])
-    expect(inUse.find('[data-testid$="-in-use"]')).toHaveLength(0)
-    expect(inUse.text()).not.toContain('Only this portal may call')
-    expect($(`#token-${tokens[1].tokenId}-revoke`)).toHaveLength(0)
-    expect(
-      panel(tokens[2].tokenId).find('[data-testid$="-delete"]')
-    ).toHaveLength(1)
-    expect(
-      panel(tokens[2].tokenId).find('[data-testid$="-revoke"]')
-    ).toHaveLength(0)
+    ).toEqual(['/public/src/dev-ops/views/components/index.css'])
+    expect(payload).not.toMatch(/style="/)
+    expect($('style')).toHaveLength(1)
+    expect(tableStyles($, headers['content-security-policy'])).toEqual([
+      { label: 'Access tokens', nonced: true, widths: true }
+    ])
   })
 
-  test('draws Rotate on a token that no longer works as disabled, pointing at the line that says why', async () => {
-    const { $ } = await get('/dev-ops/clients/gas')
-    const id = `token-panel-${tokens[2].tokenId}`
-    const rotate = $(`[data-testid="${id}-rotate"]`)
-
-    expect(rotate.attr('aria-disabled')).toBe('true')
-    expect(rotate.attr('data-modal-open')).toBeUndefined()
-    expect(rotate.attr('aria-describedby')).toBe(`${id}-note`)
-    expect(flatten($(`#${id}-note`).text())).toBe(
-      'This token no longer works. Change its expiry to bring it back, or delete it.'
-    )
-    expect($('body').text()).not.toContain('Only working tokens can be rotated')
-    expect($(`#token-${tokens[2].tokenId}-rotate`)).toHaveLength(0)
-    expect(
-      $(`[data-testid="token-panel-${tokenId}-rotate"]`).attr('aria-disabled')
-    ).toBeUndefined()
-  })
-
-  test('offers the token in use no immediate end on Rotate, saying why', async () => {
-    const { $ } = await get('/dev-ops/clients/gas')
-    const id = `token-${tokens[1].tokenId}-rotate`
-
-    expect($(`#${id} [value="none"]`).attr('disabled')).toBe('disabled')
-    expect(flatten($(`[data-testid="${id}-locked"]`).text())).toContain(
-      'Not for the token in use'
-    )
-    expect(
-      $(`#token-${tokenId}-rotate [value="none"]`).attr('disabled')
-    ).toBeUndefined()
-  })
-
-  test('shows the drawer facts and the stored document as the design does', async () => {
-    const { $ } = await get('/dev-ops/clients/gas')
-    const panel = $(`[data-token-panel="${tokens[2].tokenId}"]`)
-
-    expect(flatten(panel.find('h2 span').first().text())).toBe(
-      'GAS Access token'
-    )
-    expect(
-      panel
-        .find('dt')
-        .map((_i, dt) => $(dt).text())
-        .get()
-    ).toEqual(['Client ID', 'Expires', 'Token'])
-    expect(flatten(panel.find('[data-testid$="-token"]').text())).toBe('—')
-    expect(flatten(panel.find('[data-testid$="-expires"]').text())).toBe(
-      '1 Nov 2026'
-    )
-    expect($(`[data-token-panel="${tokenId}"]`).text()).not.toContain(
-      'Only expired or revoked tokens can be deleted'
-    )
-    expect(
-      $(`[data-token-panel="${tokenId}"] [data-testid$="-note"]`)
-    ).toHaveLength(0)
-    expect(JSON.parse(panel.find('pre').text())).toEqual(tokens[2].stored)
-  })
-
-  test('opens no dialog and no drawer on a plain visit', async () => {
-    const { $ } = await get('/dev-ops/clients/gas')
-
-    expect($('do-modal[data-open]')).toHaveLength(0)
-    expect(
-      $('[data-testid="token-drawer"]').attr('data-open-token')
-    ).toBeUndefined()
-    expect($('[data-testid="token-reveal"]')).toHaveLength(0)
-  })
-
-  test('names no one who created or revoked a token', async () => {
-    const { payload } = await get('/dev-ops/clients/gas')
-
-    expect(payload).not.toContain('Alex Operator')
-    expect(payload).not.toContain('Sam Revoker')
-    expect(payload).not.toContain('createdBy')
-    expect(payload).not.toContain('revokedBy')
-  })
-
-  test('draws no character icons but the hint mask', async () => {
-    const { $ } = await get('/dev-ops/clients/gas')
-    const text = withoutMasks($('body').text())
-
-    expect(text).not.toMatch(/[…·›→•]/)
-  })
-
-  test('says when there are no tokens yet, keeping New token', async () => {
-    vi.mocked(listAccessTokensUseCase).mockResolvedValue([])
+  test('No matches is the empty list: no tokens yet, with no body (tokens have no filters)', async () => {
+    vi.mocked(listAccessTokensUseCase).mockResolvedValue(listed([]))
 
     const { $ } = await get('/dev-ops/clients/gas')
 
-    expect(flatten($('[data-testid="tokens-none"]').text())).toBe(
-      'No access tokens yet.'
-    )
-    expect($('[data-testid="tokens-new"]')).toHaveLength(1)
+    expect(text($, '.gpa-empty-title')).toBe('No access tokens yet')
+    expect($('.gpa-empty-body')).toHaveLength(0)
+    expect($('[data-testid="token-row"]')).toHaveLength(0)
   })
 
-  test('says the list could not be loaded, with no table', async () => {
-    vi.mocked(listAccessTokensUseCase).mockResolvedValue(null)
+  test('Unavailable: GAS didn’t answer, so no table, a way to try again, and New token stays', async () => {
+    vi.mocked(listAccessTokensUseCase).mockResolvedValue({ outcome: 'unknown' })
+
+    const { statusCode, $ } = await get('/dev-ops/clients/gas')
+    const alert = $('[data-testid="tokens-alert"]')
+
+    expect(statusCode).toBe(503)
+    expect(alert.hasClass('gpa-alert-danger')).toBe(true)
+    expect(text($, '[data-testid="tokens-alert"] .gpa-alert-title')).toBe(
+      'The tokens list couldn’t be loaded.'
+    )
+    expect(flatten(alert.find('.gpa-alert-body > div').first().text())).toBe(
+      'GAS didn’t answer in time. Nothing has changed — try again in a moment.'
+    )
+    expect(alert.find('.gpa-alert-actions a').attr('href')).toBe(
+      '/dev-ops/clients/gas'
+    )
+    expect(text($, '.gpa-alert-actions')).toBe('Try again')
+    expect($('[data-testid="tokens-table"]')).toHaveLength(0)
+    expect($('[data-testid="token-new-open"]')).toHaveLength(1)
+    expect($('dialog#token-new')).toHaveLength(1)
+  })
+
+  test('Unavailable: GAS answered with an error, as when CW has no client routes, names GAS', async () => {
+    vi.mocked(listAccessTokensUseCase).mockResolvedValue({ outcome: 'errored' })
 
     const { statusCode, $ } = await get('/dev-ops/clients/cw')
+    const alert = $('[data-testid="tokens-alert"]')
 
-    expect(statusCode).toBe(statusCodes.ok)
-    expect(flatten($('[data-testid="tokens-error"]').text())).toBe(
-      'CW access tokens could not be loaded.'
+    expect(statusCode).toBe(503)
+    expect(alert.hasClass('gpa-alert-danger')).toBe(true)
+    expect(flatten(alert.find('.gpa-alert-body > div').first().text())).toBe(
+      'GAS answered with an error. Nothing has changed — try again in a moment; if it keeps failing, check GAS’s logs.'
     )
-    expect($('[data-testid="tokens-table"]')).toHaveLength(0)
-    expect($('[data-testid="tokens-new"]')).toHaveLength(0)
+    expect(text($, '.gpa-alert-actions')).toBe('Try again')
   })
 
-  test('refuses a service it does not know', async () => {
-    const { statusCode } = await get('/dev-ops/clients/payments')
+  test.each(['gas', 'cw'] as const)(
+    'Not offered: a GAS with no token routes says so on the %s page, with nothing to retry and no New token',
+    async (service) => {
+      vi.mocked(listAccessTokensUseCase).mockResolvedValue({
+        outcome: 'not-offered'
+      })
 
-    expect(statusCode).toBe(statusCodes.badRequest)
+      const { statusCode, $ } = await get(`/dev-ops/clients/${service}`)
+      const alert = $('[data-testid="tokens-alert"]')
+
+      expect(statusCode).toBe(200)
+      expect(alert).toHaveLength(1)
+      expect(alert.hasClass('gpa-alert-warning')).toBe(true)
+      expect(alert.is('[data-focus-on-arrival]')).toBe(false)
+      expect(text($, '[data-testid="tokens-alert"] .gpa-alert-title')).toBe(
+        'This GAS doesn’t offer access tokens.'
+      )
+      expect(flatten(alert.find('.gpa-alert-body > div').first().text())).toBe(
+        'It’s an older version without the access tokens API. Tokens can be managed here once GAS is upgraded.'
+      )
+      expect(alert.find('.gpa-alert-actions')).toHaveLength(0)
+      expect($('[data-testid="tokens-table"]')).toHaveLength(0)
+      expect($('[data-testid="token-new-open"]')).toHaveLength(0)
+      expect($('dialog#token-new')).toHaveLength(0)
+    }
+  )
+
+  test('Not offered: an address asking for New token opens nothing', async () => {
+    vi.mocked(listAccessTokensUseCase).mockResolvedValue({
+      outcome: 'not-offered'
+    })
+
+    const { $ } = await get('/dev-ops/clients/gas?dialog=new')
+
+    expect($('dialog#token-new')).toHaveLength(0)
+    expect($('dialog[open]')).toHaveLength(0)
+  })
+
+  test('Unavailable: the alert isn’t news, so it doesn’t take the focus', async () => {
+    vi.mocked(listAccessTokensUseCase).mockResolvedValue({ outcome: 'unknown' })
+
+    const { $ } = await get('/dev-ops/clients/gas')
+
+    expect(
+      $('[data-testid="tokens-alert"]').is('[data-focus-on-arrival]')
+    ).toBe(false)
+  })
+
+  test('Unavailable: CW not reached behind GAS names CW', async () => {
+    vi.mocked(listAccessTokensUseCase).mockResolvedValue({
+      outcome: 'unreachable',
+      errorCode: 'CW_UNREACHABLE'
+    })
+
+    const { $ } = await get('/dev-ops/clients/cw')
+
+    expect(
+      flatten(
+        $('[data-testid="tokens-alert"] .gpa-alert-body > div').first().text()
+      )
+    ).toBe(
+      'CW couldn’t be reached. Nothing has changed — try again in a moment.'
+    )
+  })
+
+  test('Catalogue down: the tokens page still works, and the sidebar keeps only Access tokens', async () => {
+    vi.mocked(getCatalogueUseCase).mockResolvedValueOnce(null)
+
+    const { statusCode, $ } = await get('/dev-ops/clients/gas')
+
+    expect(statusCode).toBe(200)
+    expect($('[data-testid="token-row"]')).toHaveLength(7)
+    expect(
+      $('[data-testid="shell-nav"] a')
+        .map((_i, a) => $(a).attr('href'))
+        .get()
+    ).toEqual(['/dev-ops/clients/gas', '/dev-ops/clients/cw'])
+  })
+
+  test('a token, dialog or param the address can’t mean is a bad request', async () => {
+    expect((await get('/dev-ops/clients/gas?token=nope')).statusCode).toBe(400)
+    expect((await get('/dev-ops/clients/gas?dialog=burn')).statusCode).toBe(400)
+    expect((await get('/dev-ops/clients/gas?status=active')).statusCode).toBe(
+      400
+    )
+  })
+
+  test('opens Times from the address over an open drawer, which stays open', async () => {
+    const page = `/dev-ops/clients/gas?token=${ids.dated}`
+    const { statusCode, $ } = await get(`${page}&times=open`)
+
+    expect(statusCode).toBe(200)
+    expect(isOpenWithoutScript($, 'times-dialog')).toBe(true)
+    expect($('#times-dialog .gpa-dialog-close').attr('href')).toBe(page)
+    expect(isOpenWithoutScript($, `token-${ids.dated}`)).toBe(true)
   })
 })
 
-describe('the access token writes', () => {
-  test.each([
-    [
-      '/dev-ops/clients/gas/tokens',
-      { clientId: 'grants-ui', expiry: '90', date: '' }
-    ],
-    [`${tokenPath}/rotate`, { keepOld: '24h' }],
-    [`${tokenPath}/expiry`, { expiry: 'never', date: '', hint: 'x7Qa' }],
-    [`${tokenPath}/revoke`, { confirm: 'grants-ui', hint: 'x7Qa' }],
-    [`${tokenPath}/delete`, { hint: 'x7Qa' }]
-  ])('refuses a cross-site POST to %s', async (url, payload) => {
-    const refused: Record<string, string>[] = [
-      { 'sec-fetch-site': 'cross-site', origin: 'https://evil.example' },
-      {
-        'sec-fetch-site': 'same-site',
-        origin: 'https://other.cdp-int.defra.cloud'
-      },
-      {}
-    ]
-    const answers = await Promise.all(
-      refused.map(
-        async (headers) => (await post(url, payload, headers)).statusCode
+describe('the drawer', () => {
+  test('is drawn for every token, closed, so the script can open it in place', async () => {
+    const { $ } = await get('/dev-ops/clients/gas')
+
+    expect($('[data-testid="token-drawer"]')).toHaveLength(7)
+    expect($('dialog[open]')).toHaveLength(0)
+  })
+
+  test('Active: mono title, state under it, the three facts, the stored document and three actions', async () => {
+    const { $ } = await get(`/dev-ops/clients/gas?token=${ids.dated}`)
+    const drawer = drawerOf($, ids.dated)
+
+    expect(isOpenWithoutScript($, `token-${ids.dated}`)).toBe(true)
+    expect(drawer.find(`#token-${ids.dated}-title`).hasClass('gpa-mono')).toBe(
+      true
+    )
+    expect(flatten(drawer.find(`#token-${ids.dated}-title`).text())).toBe(
+      'farming-grants-agreements-ui'
+    )
+    expect(flatten(drawer.find('.gpa-drawer-sub').text())).toBe('Active')
+    expect(
+      drawer
+        .find('dt')
+        .map((_i, dt) => $(dt).text())
+        .get()
+    ).toEqual(['Client ID', 'Token', 'Expires'])
+    expect(drawer.find('dd').eq(0).find('gpa-copy').attr('data-value')).toBe(
+      'farming-grants-agreements-ui'
+    )
+    expect(flatten(drawer.find('dd').eq(1).text())).toBe('…7f2c')
+    expect(drawer.find('dd').eq(2).find('time').attr('datetime')).toBe(
+      '2027-01-31T23:59:59Z'
+    )
+    expect(text($, `dialog#token-${ids.dated} .gpa-card-head`)).toBe(
+      'Stored document'
+    )
+    expect(JSON.parse(drawer.find('pre').text())).toMatchObject({
+      clientId: 'farming-grants-agreements-ui'
+    })
+    expect(
+      drawer
+        .find('.gpa-drawer-foot .gpa-btn')
+        .map((_i, b) => flatten($(b).text()))
+        .get()
+    ).toEqual(['Rotate', 'Change expiry', 'Revoke'])
+    expect(drawer.find('[data-testid="token-rotate"]').attr('href')).toBe(
+      `/dev-ops/clients/gas?token=${ids.dated}&dialog=rotate`
+    )
+    expect(
+      drawer.find('[data-testid="token-rotate"]').attr('data-gpa-open')
+    ).toBe(`token-${ids.dated}-rotate`)
+    expect(drawer.find('.gpa-dialog-close').attr('href')).toBe(
+      '/dev-ops/clients/gas'
+    )
+    expect(
+      $(`tr:has(a[data-gpa-open="token-${ids.dated}"])`).hasClass('is-selected')
+    ).toBe(true)
+  })
+
+  test('Expiring soon', async () => {
+    const { $ } = await get(`/dev-ops/clients/gas?token=${ids.expiring}`)
+
+    expect(
+      flatten(drawerOf($, ids.expiring).find('.gpa-drawer-sub').text())
+    ).toBe('Expiring soon')
+  })
+
+  test('Expired: Change expiry and Delete, as the services refuse rotating or revoking it', async () => {
+    const { $ } = await get(`/dev-ops/clients/gas?token=${ids.expired}`)
+    const drawer = drawerOf($, ids.expired)
+
+    expect(flatten(drawer.find('.gpa-drawer-sub').text())).toBe('Expired')
+    expect(
+      drawer
+        .find('.gpa-drawer-foot .gpa-btn')
+        .map((_i, b) => flatten($(b).text()))
+        .get()
+    ).toEqual(['Change expiry', 'Delete'])
+  })
+
+  test('Revoked: Delete only', async () => {
+    const { $ } = await get(`/dev-ops/clients/gas?token=${ids.revoked}`)
+
+    expect(
+      drawerOf($, ids.revoked)
+        .find('.gpa-drawer-foot .gpa-btn')
+        .map((_i, b) => flatten($(b).text()))
+        .get()
+    ).toEqual(['Delete'])
+  })
+
+  test('In use (GAS): says Dev Ops calls GAS with it, and Revoke is off with the reason as its description', async () => {
+    const { $ } = await get(`/dev-ops/clients/gas?token=${ids.inUse}`)
+    const drawer = drawerOf($, ids.inUse)
+    const revoke = drawer.find('[data-testid="token-revoke"]')
+
+    expect(
+      text(
+        $,
+        `dialog#token-${ids.inUse} [data-testid="token-in-use"] .gpa-alert-title`
       )
+    ).toBe('Dev Ops calls GAS with this token.')
+    expect(
+      flatten(
+        drawer.find('[data-testid="token-in-use"] .gpa-alert-body > div').text()
+      )
+    ).toBe(
+      'Revoking it would cut Dev Ops off from GAS. Rotate it instead, keeping the old one valid while the new one is deployed.'
+    )
+    expect(revoke.attr('aria-disabled')).toBe('true')
+    expect(revoke.attr('data-gpa-open')).toBeUndefined()
+    expect(revoke.attr('href')).toBeUndefined()
+    expect(flatten($(`#${revoke.attr('aria-describedby')}`).text())).toBe(
+      'Dev Ops is calling GAS with this token. Rotate it instead.'
+    )
+    expect($(`dialog#token-${ids.inUse}-revoke`)).toHaveLength(0)
+  })
+
+  test('In use (CW): GAS calls CW with it', async () => {
+    const { $ } = await get(`/dev-ops/clients/cw?token=${ids.inUse}`)
+    const drawer = drawerOf($, ids.inUse)
+
+    expect(
+      flatten(
+        drawer.find('[data-testid="token-in-use"] .gpa-alert-title').text()
+      )
+    ).toBe('GAS calls CW with this token.')
+    expect(
+      flatten(
+        drawer.find('[data-testid="token-in-use"] .gpa-alert-body > div').text()
+      )
+    ).toBe(
+      'Revoking it would cut GAS, and Dev Ops through it, off from CW. Rotate it instead, keeping the old one valid while the new one is deployed.'
+    )
+    expect(
+      flatten(
+        $(
+          `#${drawer.find('[data-testid="token-revoke"]').attr('aria-describedby')}`
+        ).text()
+      )
+    ).toBe('GAS is calling CW with this token. Rotate it instead.')
+  })
+
+  test('A row with no client ID or hint: Not set, no actions, and why', async () => {
+    const { $ } = await get(`/dev-ops/clients/gas?token=${ids.legacy}`)
+    const drawer = drawerOf($, ids.legacy)
+
+    expect(flatten(drawer.find(`#token-${ids.legacy}-title`).text())).toBe(
+      'Not set'
+    )
+    expect(drawer.find(`#token-${ids.legacy}-title`).hasClass('gpa-mono')).toBe(
+      false
+    )
+    expect(drawer.find('dd').eq(0).find('.gpa-fact-empty')).toHaveLength(1)
+    expect(drawer.find('dd').eq(1).find('.gpa-fact-empty')).toHaveLength(1)
+    expect(drawer.find('.gpa-drawer-foot')).toHaveLength(0)
+    expect(
+      text($, `dialog#token-${ids.legacy} [data-testid="token-no-actions"]`)
+    ).toBe('This token has no valid client ID, so it can’t be changed here.')
+  })
+
+  test('a token the list doesn’t have opens nothing', async () => {
+    const { statusCode, $ } = await get(
+      '/dev-ops/clients/gas?token=ffffffffffffffffffffffff&dialog=rotate'
     )
 
-    expect(answers).toEqual(refused.map(() => statusCodes.forbidden))
-
-    expect(issueAccessTokenUseCase).not.toHaveBeenCalled()
-    expect(rotateAccessTokenUseCase).not.toHaveBeenCalled()
-    expect(changeTokenExpiryUseCase).not.toHaveBeenCalled()
-    expect(revokeAccessTokenUseCase).not.toHaveBeenCalled()
-    expect(deleteAccessTokenUseCase).not.toHaveBeenCalled()
-  })
-
-  test('accepts a write whose Origin is this app, from a browser that sends no Sec-Fetch-Site', async () => {
-    vi.mocked(deleteAccessTokenUseCase).mockResolvedValue({ outcome: 'done' })
-
-    const { statusCode } = await post(
-      `${tokenPath}/delete`,
-      { hint: 'x7Qa' },
-      {
-        origin: new URL(config.get('auth.appBaseUrl')).origin
-      }
-    )
-
-    expect(statusCode).toBe(statusCodes.seeOther)
-  })
-
-  test.each([
-    [
-      'a client ID outside the name rule',
-      '/dev-ops/clients/gas/Grants_UI/tokens/6650c1f2a9e4b1d07c20bd91/revoke'
-    ],
-    [
-      'a token id that is not an object id',
-      '/dev-ops/clients/gas/grants-ui/tokens/x/revoke'
-    ],
-    [
-      'a service it does not know',
-      '/dev-ops/clients/pay/grants-ui/tokens/6650c1f2a9e4b1d07c20bd91/revoke'
-    ]
-  ])('refuses %s', async (_name, url) => {
-    const { statusCode } = await post(url, { confirm: 'grants-ui', hint: '' })
-
-    expect(statusCode).toBe(statusCodes.badRequest)
-    expect(revokeAccessTokenUseCase).not.toHaveBeenCalled()
-  })
-
-  test('answers no GET at a write address', async () => {
-    const { statusCode } = await get(`${tokenPath}/revoke`)
-
-    expect(statusCode).toBe(statusCodes.notFound)
+    expect(statusCode).toBe(200)
+    expect($('dialog[open]')).toHaveLength(0)
   })
 })
 
 describe('New token', () => {
-  const url = '/dev-ops/clients/gas/tokens'
-
-  beforeEach(() => {
-    vi.mocked(issueAccessTokenUseCase).mockResolvedValue({
-      outcome: 'issued',
-      raw,
-      token: token({ tokenId: '6650c1f2a9e4b1d07c20bd99' })
-    })
-  })
-
-  test('issues for the client with the chosen expiry, to the end of its UK day', async () => {
+  test('opens from the address, over the list: client ID, expiry choices each saying where they land, 90 days picked', async () => {
     vi.useFakeTimers({
-      now: new Date('2026-11-04T13:50:00.000Z'),
-      toFake: ['Date']
+      toFake: ['Date'],
+      now: new Date('2026-11-10T15:00:00.000Z')
     })
-    await post(url, { clientId: ' grants-ui ', expiry: '90', date: '' })
-    vi.useRealTimers()
+    try {
+      const { $ } = await get('/dev-ops/clients/gas?dialog=new')
+      const dialog = $('dialog#token-new')
 
-    expect(issueAccessTokenUseCase).toHaveBeenCalledWith(
-      'gas',
-      'grants-ui',
-      '2027-02-02T23:59:59.000Z'
-    )
-  })
-
-  test('reveals the token in the response to the POST, uncached, and nowhere else', async () => {
-    const { statusCode, headers, payload, $ } = await post(url, {
-      clientId: 'grants-ui',
-      expiry: 'never',
-      date: ''
-    })
-
-    expect(statusCode).toBe(statusCodes.ok)
-    expect(headers['cache-control']).toBe('no-store')
-    expect(headers.location).toBeUndefined()
-    expect($('[data-testid="token-reveal-token"]').text()).toBe(raw)
-    expect($('[data-testid="token-reveal-modal"]').attr('data-open')).toBe('')
-    expect($('[data-testid="token-reveal-modal"]').attr('data-locked')).toBe('')
-    expect(flatten($('[data-testid="token-reveal-hint"]').text())).toBe(
-      '••••ending x7Qa'
-    )
-    expect(payload.split(raw)).toHaveLength(2)
-    expect(JSON.stringify(headers)).not.toContain(raw)
-    expect(sessions.join('')).not.toContain(raw)
-  })
-
-  test('says the token is live on the page Done leads to, naming only the client', async () => {
-    const written = await post(url, {
-      clientId: 'grants-ui',
-      expiry: 'never',
-      date: ''
-    })
-    const page = await get('/dev-ops/clients/gas', sessionCookie(written))
-
-    expect(toastOf(page.$)).toEqual({
-      role: 'status',
-      text: 'Token for grants-ui is live'
-    })
-    expect(sessions.join('')).not.toContain(raw)
-  })
-
-  test('lets Done leave only once the token is stored, without a word in the url', async () => {
-    const { $ } = await post(url, {
-      clientId: 'grants-ui',
-      expiry: 'never',
-      date: ''
-    })
-    const done = $('[data-testid="token-reveal-done"]').closest('form')
-
-    expect(done.attr('method')).toBe('get')
-    expect(done.attr('action')).toBe('/dev-ops/clients/gas')
-    expect($('[data-testid="token-reveal-ack"]').attr('required')).toBe(
-      'required'
-    )
-    expect($('[data-testid="token-reveal-ack"]').attr('name')).toBeUndefined()
-  })
-
-  test.each([
-    [{ clientId: '', expiry: '90', date: '' }, 'Enter a client ID.'],
-    [
-      { clientId: 'Grants_UI', expiry: '90', date: '' },
-      'Use lowercase letters, digits and hyphens only.'
-    ],
-    [
-      { clientId: 'grants-ui', expiry: 'custom', date: '2020-01-01' },
-      'Pick a date in the future.'
-    ],
-    [
-      { clientId: 'grants-ui', expiry: 'custom', date: '2027-13-01' },
-      'Pick a date.'
-    ]
-  ])('opens the dialog again on %j', async (payload, message) => {
-    const { statusCode, headers, $ } = await post(url, payload)
-
-    expect(statusCode).toBe(statusCodes.badRequest)
-    expect(headers['cache-control']).toBe('no-store')
-    expect($('[data-testid="token-new-modal"]').attr('data-open')).toBe('')
-    expect(
-      flatten(
-        $(
-          '[data-testid="token-new-client-error"]:not([hidden]), [data-testid="token-new-expires-summary"]'
-        ).text()
+      expect(isOpenWithoutScript($, 'token-new')).toBe(true)
+      expect(flatten(dialog.find('h2').text())).toBe('New token')
+      expect(dialog.find('.gpa-dialog-close').attr('href')).toBe(
+        '/dev-ops/clients/gas'
       )
-    ).toContain(message)
-    expect($('[data-testid="token-new-client"]').attr('value')).toBe(
-      payload.clientId
+      expect(text($, 'label[for="token-new-client"]')).toBe('Client ID')
+      expect(text($, '#token-new-client-hint')).toBe(
+        'The calling service, usually its CDP name. Lowercase letters, digits and hyphens.'
+      )
+      expect($('#token-new-client').attr('placeholder')).toBe('grants-ui')
+      expect(text($, '#token-new-expiry-hint')).toBe(
+        'The token stops working at the end of that day, UK time.'
+      )
+      expect(choicesOf($, 'dialog#token-new')).toEqual([
+        'Never Not recommended for a service.',
+        '30 days Ends 10 Dec 2026.',
+        '90 days Ends 8 Feb 2027.',
+        '1 year Ends 10 Nov 2027.',
+        'Custom date'
+      ])
+      expect(dialog.find('input[name="expiry"][checked]').val()).toBe('90')
+      expect(
+        dialog
+          .find('#token-new-expiry-5-conditional input[type="date"]')
+          .attr('min')
+      ).toBe('2026-11-11')
+      expect(
+        dialog
+          .find('.gpa-dialog-foot .gpa-btn')
+          .map((_i, b) => flatten($(b).text()))
+          .get()
+      ).toEqual(['Cancel', 'Issue token'])
+      expect(dialog.find('[data-testid="token-new-submit"]').attr('form')).toBe(
+        'token-new-form'
+      )
+      expect(
+        dialog
+          .find('[data-testid="token-new-submit"]')
+          .is('[data-gpa-loading-on-submit]')
+      ).toBe(true)
+      expect($('[data-testid="token-prod-note"]')).toHaveLength(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('a client ID that breaks the rule comes back on the field and in the summary', async () => {
+    const { statusCode, headers, $ } = await post(
+      '/dev-ops/clients/gas/tokens',
+      { clientId: 'Grants UI', expiry: '90', date: '' }
     )
+
+    expect(statusCode).toBe(400)
+    expect(headers['cache-control']).toBe('no-store')
+    expect(isOpenWithoutScript($, 'token-new')).toBe(true)
+    expect(text($, '#token-new-client-err')).toBe(
+      'Use lowercase letters, digits and hyphens only.'
+    )
+    expect($('#token-new-client').attr('value')).toBe('Grants UI')
+    expect($('#token-new-client').attr('aria-invalid')).toBe('true')
+    expect($('.gpa-errorsummary a').attr('href')).toBe('#token-new-client')
     expect(issueAccessTokenUseCase).not.toHaveBeenCalled()
   })
 
-  test('marks the field that is wrong', async () => {
-    const { $ } = await post(url, { clientId: 'Bad', expiry: '90', date: '' })
-
-    expect($('[data-testid="token-new-client"]').attr('aria-invalid')).toBe(
-      'true'
-    )
-    expect(
-      $('[data-testid="token-new-client"]').attr('aria-describedby')
-    ).toContain('token-new-client-error')
-    expect(
-      $('[data-testid="token-new-client-error"]').attr('hidden')
-    ).toBeUndefined()
-  })
-
-  test.each([
-    ['API_CLIENT_EXISTS', 'Someone has just created this client.'],
-    ['API_CLIENT_NOT_FOUND', 'This client has just lost its last token.'],
-    [
-      'API_CLIENT_INVALID_NAME',
-      'Use lowercase letters, digits and hyphens only.'
-    ]
-  ])('puts a %s refusal on the field', async (errorCode, message) => {
-    vi.mocked(issueAccessTokenUseCase).mockResolvedValue({
-      outcome: 'refused',
-      statusCode: 409,
-      errorCode
+  test('Custom date with no date asks for one on the date box, Custom date still picked', async () => {
+    const { statusCode, $ } = await post('/dev-ops/clients/gas/tokens', {
+      clientId: 'grants-ui',
+      expiry: 'custom',
+      date: ''
     })
 
-    const { statusCode, $ } = await post(url, {
+    expect(statusCode).toBe(400)
+    expect(text($, '#token-new-expiry-date-err')).toBe(
+      'Enter an expiry date like 4 Feb 2027.'
+    )
+    expect($('dialog#token-new input[name="expiry"][checked]').val()).toBe(
+      'custom'
+    )
+    expect($('.gpa-errorsummary a').attr('href')).toBe('#token-new-expiry-date')
+  })
+
+  test('a date of today or before asks for a later one', async () => {
+    const { $ } = await post('/dev-ops/clients/gas/tokens', {
       clientId: 'grants-ui',
+      expiry: 'custom',
+      date: '2020-01-01'
+    })
+
+    expect(text($, '#token-new-expiry-date-err')).toBe(
+      'Pick a date after today.'
+    )
+    expect($('#token-new-expiry-date').attr('value')).toBe('2020-01-01')
+  })
+
+  test('a client ID over 64 characters', async () => {
+    const { $ } = await post('/dev-ops/clients/gas/tokens', {
+      clientId: 'a'.repeat(65),
       expiry: '90',
       date: ''
     })
 
-    expect(statusCode).toBe(statusCodes.badRequest)
-    expect(
-      flatten($('[data-testid="token-new-client-error"]').text())
-    ).toContain(message)
-    expect($('[data-testid="token-reveal"]')).toHaveLength(0)
+    expect(text($, '#token-new-client-err')).toBe('Use 64 characters or fewer.')
   })
 
   test.each([
     [
-      { outcome: 'unknown' },
-      'alert',
-      'New token status unknown — refresh to check.'
+      'API_CLIENT_EXISTS',
+      'Someone has just created this client. Issue again to add a token to it.'
     ],
     [
-      { outcome: 'unreachable' },
-      'alert',
-      'Not issued — fg-gas-backend could not be reached. Nothing has changed.'
+      'API_CLIENT_NOT_FOUND',
+      'This client has just lost its last token. Issue again to make it afresh.'
     ]
-  ] as const)(
-    'goes back to the page with a toast, and no token, for %j',
-    async (result, role, text) => {
-      vi.mocked(issueAccessTokenUseCase).mockResolvedValue(result)
+  ])(
+    'a race on the client (%s) comes back on the field',
+    async (errorCode, message) => {
+      vi.mocked(issueAccessTokenUseCase).mockResolvedValue({
+        outcome: 'refused',
+        statusCode: 409,
+        errorCode
+      })
 
-      const { written, page } = await postAndFollow(url, {
-        clientId: 'grants-ui',
+      const { statusCode, $ } = await post('/dev-ops/clients/gas/tokens', {
+        clientId: 'new-caller',
         expiry: '90',
         date: ''
       })
 
-      expect(written.statusCode).toBe(statusCodes.seeOther)
-      expect(written.headers.location).toBe('/dev-ops/clients/gas')
-      expect(toastOf(page.$)).toEqual({
-        role,
-        text: expect.stringContaining(text)
-      })
-      expect(page.$('[data-testid="token-reveal"]')).toHaveLength(0)
-      expect(sessions.join('')).not.toContain(raw)
+      expect(statusCode).toBe(400)
+      expect(text($, '#token-new-client-err')).toBe(message)
     }
   )
-})
 
-describe('Rotate', () => {
-  const url = `${tokenPath}/rotate`
+  test('a client with active tokens is warned about once, and issuing again goes ahead', async () => {
+    vi.mocked(issueAccessTokenUseCase).mockResolvedValueOnce({
+      outcome: 'has-active',
+      active: 2
+    })
 
-  test('reveals the new token in the response to the POST', async () => {
-    vi.mocked(rotateAccessTokenUseCase).mockResolvedValue({
+    const warned = await post('/dev-ops/clients/gas/tokens', {
+      clientId: 'grants-ui',
+      expiry: '30',
+      date: ''
+    })
+
+    expect(warned.statusCode).toBe(200)
+    expect(isOpenWithoutScript(warned.$, 'token-new')).toBe(true)
+    expect(text(warned.$, '#token-new-client-warn')).toBe(
+      'grants-ui already has 2 active tokens. If this replaces one, rotate that token instead; to add another, issue it again.'
+    )
+    expect(warned.$('#token-new-client').attr('aria-describedby')).toContain(
+      'token-new-client-warn'
+    )
+    expect(warned.$('.gpa-errorsummary')).toHaveLength(0)
+    expect(vi.mocked(issueAccessTokenUseCase).mock.calls[0][2]).toEqual({
+      expiresAt: expect.any(String),
+      confirmed: false
+    })
+
+    const again = formOf(warned.$, 'token-new-form')
+    expect(again).toEqual({
+      confirmFor: 'grants-ui',
+      clientId: 'grants-ui',
+      expiry: '30',
+      date: ''
+    })
+
+    vi.mocked(issueAccessTokenUseCase).mockResolvedValueOnce({
       outcome: 'issued',
       raw,
       token: token()
     })
+    const issued = await post('/dev-ops/clients/gas/tokens', again)
 
-    const { statusCode, headers, $ } = await post(url, { keepOld: '7d' })
-
-    expect(rotateAccessTokenUseCase).toHaveBeenCalledWith(
-      { service: 'gas', clientId: 'grants-ui', tokenId },
-      '7d'
-    )
-    expect(statusCode).toBe(statusCodes.ok)
-    expect(headers['cache-control']).toBe('no-store')
-    expect($('[data-testid="token-reveal-token"]').text()).toBe(raw)
-    expect(sessions.join('')).not.toContain(raw)
-  })
-
-  test('refuses an overlap it does not offer', async () => {
-    const { statusCode } = await post(url, { keepOld: '30d' })
-
-    expect(statusCode).toBe(statusCodes.badRequest)
-    expect(rotateAccessTokenUseCase).not.toHaveBeenCalled()
+    expect(vi.mocked(issueAccessTokenUseCase).mock.calls[1][2]).toMatchObject({
+      confirmed: true
+    })
+    expect(issued.$('#token-issued-value').attr('value')).toBe(raw)
   })
 
   test.each([
     [
-      { outcome: 'refused', statusCode: 404, errorCode: 'API_TOKEN_NOT_FOUND' },
-      'Not rotated — fg-gas-backend no longer has this token. Nothing has changed.'
+      { outcome: 'unreachable' },
+      'Not issued.',
+      'GAS couldn’t be reached. Nothing has changed.'
     ],
-    [{ outcome: 'unknown' }, 'Rotation status unknown — refresh to check.']
+    [
+      { outcome: 'unchecked' },
+      'Not issued.',
+      'GAS couldn’t list the tokens to check this client. Nothing has changed.'
+    ]
   ] as const)(
-    'goes back to the page with a toast for %j',
-    async (result, text) => {
-      vi.mocked(rotateAccessTokenUseCase).mockResolvedValue(result)
+    'a write that didn’t happen (%j) says so at the top of the dialog',
+    async (failure, title, body) => {
+      vi.mocked(issueAccessTokenUseCase).mockResolvedValue(failure)
 
-      const { written, page } = await postAndFollow(url, { keepOld: 'none' })
+      const { statusCode, $ } = await post('/dev-ops/clients/gas/tokens', {
+        clientId: 'new-caller',
+        expiry: '90',
+        date: ''
+      })
 
-      expect(written.statusCode).toBe(statusCodes.seeOther)
-      expect(toastOf(page.$).text).toContain(text)
-      expect(page.$('[data-testid="token-reveal"]')).toHaveLength(0)
+      expect(statusCode).toBe(400)
+      expect(
+        text(
+          $,
+          'dialog#token-new [data-testid="token-refusal"] .gpa-alert-title'
+        )
+      ).toBe(title)
+      expect(
+        text(
+          $,
+          'dialog#token-new [data-testid="token-refusal"] .gpa-alert-body > div'
+        )
+      ).toBe(body)
+      expect($('#token-new-client').attr('value')).toBe('new-caller')
+    }
+  )
+
+  test('a stale New token against a GAS with no token routes: 400, the page says so, and no dialog', async () => {
+    vi.mocked(listAccessTokensUseCase).mockResolvedValue({
+      outcome: 'not-offered'
+    })
+    vi.mocked(issueAccessTokenUseCase).mockResolvedValue({
+      outcome: 'not-offered'
+    })
+
+    const { statusCode, $ } = await post('/dev-ops/clients/gas/tokens', {
+      clientId: 'new-caller',
+      expiry: '90',
+      date: ''
+    })
+
+    expect(statusCode).toBe(400)
+    expect(text($, '[data-testid="tokens-alert"] .gpa-alert-title')).toBe(
+      'This GAS doesn’t offer access tokens.'
+    )
+    expect($('dialog#token-new')).toHaveLength(0)
+    expect($('dialog[open]')).toHaveLength(0)
+  })
+})
+
+describe('Rotate', () => {
+  test('says what it does with the same expiry and the old hint; starts on Keep valid until end of tomorrow', async () => {
+    const { $ } = await get(
+      `/dev-ops/clients/gas?token=${ids.dated}&dialog=rotate`
+    )
+    const dialog = $(`dialog#token-${ids.dated}-rotate`)
+
+    expect(isOpenWithoutScript($, `token-${ids.dated}-rotate`)).toBe(true)
+    expect(isOpenWithoutScript($, `token-${ids.dated}`)).toBe(true)
+    expect(flatten(dialog.find('form p').first().text())).toBe(
+      'Issues a new token for farming-grants-agreements-ui with the same expiry (31 Jan 2027). Keep the old one (…7f2c) valid long enough for the caller to switch over.'
+    )
+    expect(dialog.find('form p code').text()).toBe(
+      'farming-grants-agreements-ui'
+    )
+    expect(choicesOf($, `dialog#token-${ids.dated}-rotate`)).toEqual([
+      'Expire immediately The caller fails until it has the new token.',
+      'Keep valid until end of tomorrow Enough for a same-day redeploy of the caller.',
+      'Keep valid for 7 days, to end of day For callers released on a slower cycle.'
+    ])
+    expect(dialog.find('input[name="keepOld"][checked]').val()).toBe('24h')
+    expect(dialog.find('.gpa-dialog-foot a').first().attr('href')).toBe(
+      `/dev-ops/clients/gas?token=${ids.dated}`
+    )
+    expect(flatten(dialog.find('[data-testid$="-submit"]').text())).toBe(
+      'Rotate token'
+    )
+  })
+
+  test('a token that never expires says so', async () => {
+    const { $ } = await get(
+      `/dev-ops/clients/gas?token=${ids.active}&dialog=rotate`
+    )
+
+    expect(
+      flatten($(`dialog#token-${ids.active}-rotate form p`).first().text())
+    ).toContain('with the same expiry (never expires)')
+  })
+
+  test('In use: Expire immediately is off, with the reason under it', async () => {
+    const { $ } = await get(
+      `/dev-ops/clients/gas?token=${ids.inUse}&dialog=rotate`
+    )
+    const none = $(`dialog#token-${ids.inUse}-rotate input[value="none"]`)
+
+    expect(none.is('[disabled]')).toBe(true)
+    expect(flatten($(`#${none.attr('id')}-why`).text())).toBe(
+      'Not for the token in use: Dev Ops would be locked out of GAS until it has the new token.'
+    )
+  })
+
+  test.each([
+    [
+      'API_TOKEN_NOT_ACTIVE',
+      'This token is no longer active. Nothing has changed.'
+    ],
+    [
+      'API_TOKEN_IN_USE',
+      'Dev Ops is calling GAS with this token. Keep the old one valid until the new one is deployed. Nothing has changed.'
+    ],
+    [
+      'API_TOKEN_DUPLICATE',
+      'The new token matched one already stored. Try again for a fresh one. Nothing has changed.'
+    ]
+  ])(
+    'a refusal (%s) comes back in the dialog, on the choice it was sent with',
+    async (errorCode, body) => {
+      vi.mocked(rotateAccessTokenUseCase).mockResolvedValue({
+        outcome: 'refused',
+        statusCode: 409,
+        errorCode
+      })
+
+      const { statusCode, $ } = await post(`${tokenPath(ids.active)}/rotate`, {
+        keepOld: '7d'
+      })
+      const dialog = $(`dialog#token-${ids.active}-rotate`)
+
+      expect(statusCode).toBe(400)
+      expect(isOpenWithoutScript($, `token-${ids.active}-rotate`)).toBe(true)
+      expect(
+        flatten(
+          dialog.find('[data-testid="token-refusal"] .gpa-alert-title').text()
+        )
+      ).toBe('Not rotated.')
+      expect(
+        flatten(
+          dialog
+            .find('[data-testid="token-refusal"] .gpa-alert-body > div')
+            .text()
+        )
+      ).toBe(body)
+      expect(dialog.find('input[name="keepOld"][checked]').val()).toBe('7d')
     }
   )
 })
 
 describe('Change expiry', () => {
-  const url = `${tokenPath}/expiry`
-
-  beforeEach(() => {
-    vi.mocked(changeTokenExpiryUseCase).mockResolvedValue({
-      outcome: 'done',
-      token: token({ expiresAt: '2027-02-01T23:59:59.000Z' })
-    })
-  })
-
-  test('sets the end of the chosen day, and says so', async () => {
-    const { written, page } = await postAndFollow(url, {
-      expiry: 'custom',
-      date: '2027-02-01',
-      hint: 'x7Qa'
-    })
-
-    expect(changeTokenExpiryUseCase).toHaveBeenCalledWith(
-      { service: 'gas', clientId: 'grants-ui', tokenId },
-      '2027-02-01T23:59:59.000Z'
+  test('from a date: says what it is now and starts on it', async () => {
+    const { $ } = await get(
+      `/dev-ops/clients/gas?token=${ids.dated}&dialog=expiry`
     )
-    expect(written.statusCode).toBe(statusCodes.seeOther)
-    expect(toastOf(page.$).role).toBe('status')
-    expect(toastOf(page.$).text).toMatch(
-      /^Expiry updated — expires 1 Feb 2027$/
+    const dialog = $(`dialog#token-${ids.dated}-expiry`)
+
+    expect(isOpenWithoutScript($, `token-${ids.dated}-expiry`)).toBe(true)
+    expect(flatten(dialog.find('form p').first().text())).toBe(
+      'Currently: 31 Jan 2027.'
+    )
+    expect(dialog.find('input[name="expiry"][checked]').val()).toBe('custom')
+    expect(dialog.find('input[type="date"]').attr('value')).toBe('2027-01-31')
+    expect(flatten(dialog.find('[data-testid$="-submit"]').text())).toBe(
+      'Save expiry'
     )
   })
 
-  test('keeps the exact current expiry when the date is left on its day', async () => {
-    await post(url, {
-      expiry: 'custom',
-      date: '2027-02-01',
-      current: '2027-02-01T10:00:00.000Z',
-      hint: 'x7Qa'
-    })
-
-    expect(changeTokenExpiryUseCase).toHaveBeenCalledWith(
-      { service: 'gas', clientId: 'grants-ui', tokenId },
-      '2027-02-01T10:00:00.000Z'
+  test('from never', async () => {
+    const { $ } = await get(
+      `/dev-ops/clients/gas?token=${ids.active}&dialog=expiry`
     )
-  })
+    const dialog = $(`dialog#token-${ids.active}-expiry`)
 
-  test('opens the dialog again, in its drawer, on a date in the past', async () => {
-    const { statusCode, $ } = await post(url, {
-      expiry: 'custom',
-      date: '2020-01-01',
-      hint: 'x7Qa'
-    })
-
-    expect(statusCode).toBe(statusCodes.badRequest)
-    expect(
-      $(`[data-testid="token-${tokenId}-expiry-modal"]`).attr('data-open')
-    ).toBe('')
-    expect($('[data-testid="token-drawer"]').attr('data-open-token')).toBe(
-      tokenId
+    expect(flatten(dialog.find('form p').first().text())).toBe(
+      'Currently: never expires.'
     )
-    expect(
-      flatten($(`[data-testid="token-${tokenId}-expires-summary"]`).text())
-    ).toContain('Pick a date in the future.')
-    expect(
-      $(`[data-testid="token-${tokenId}-expires-custom-date"]`)
-    ).toHaveLength(1)
-    expect(
-      $(`[data-testid="token-${tokenId}-expires-date"]`).attr('value')
-    ).toBe('2020-01-01')
-    expect(changeTokenExpiryUseCase).not.toHaveBeenCalled()
+    expect(dialog.find('input[name="expiry"][checked]').val()).toBe('never')
   })
 
-  test('opens the dialog again on a date that is not in the calendar', async () => {
-    const { statusCode, $ } = await post(url, {
+  test('Custom date with no date comes back on the date box', async () => {
+    const { statusCode, $ } = await post(`${tokenPath(ids.active)}/expiry`, {
       expiry: 'custom',
-      date: '2027-13-01',
-      hint: 'x7Qa'
-    })
-
-    expect(statusCode).toBe(statusCodes.badRequest)
-    expect(
-      flatten($(`[data-testid="token-${tokenId}-expires-summary"]`).text())
-    ).toBe('Pick a date.')
-    expect(changeTokenExpiryUseCase).not.toHaveBeenCalled()
-  })
-
-  test('puts a refused expiry on the field', async () => {
-    vi.mocked(changeTokenExpiryUseCase).mockResolvedValue({
-      outcome: 'refused',
-      statusCode: 400,
-      errorCode: 'API_TOKEN_INVALID_EXPIRY'
-    })
-
-    const { statusCode, $ } = await post(url, {
-      expiry: '30',
       date: '',
-      hint: 'x7Qa'
+      hint: '3e1d'
     })
 
-    expect(statusCode).toBe(statusCodes.badRequest)
-    expect(
-      $(`[data-testid="token-${tokenId}-expiry-modal"]`).attr('data-open')
-    ).toBe('')
-  })
-
-  test.each([
-    [
-      { outcome: 'unknown' },
-      'alert',
-      'Expiry change status unknown — refresh to check.'
-    ]
-  ] as const)(
-    'goes back to the page with a toast for %j',
-    async (result, role, text) => {
-      vi.mocked(changeTokenExpiryUseCase).mockResolvedValue(result)
-
-      const { page } = await postAndFollow(url, {
-        expiry: 'never',
-        date: '',
-        hint: 'x7Qa'
-      })
-
-      expect(toastOf(page.$)).toEqual({ role, text })
-    }
-  )
-})
-
-describe('Revoke', () => {
-  const url = `${tokenPath}/revoke`
-
-  beforeEach(() => {
-    vi.mocked(revokeAccessTokenUseCase).mockResolvedValue({ outcome: 'done' })
-  })
-
-  test('revokes once the client name is typed, and says so', async () => {
-    const { written, page } = await postAndFollow(url, {
-      confirm: 'grants-ui',
-      hint: 'x7Qa'
-    })
-
-    expect(revokeAccessTokenUseCase).toHaveBeenCalledWith({
-      service: 'gas',
-      clientId: 'grants-ui',
-      tokenId
-    })
-    expect(written.headers.location).toBe('/dev-ops/clients/gas')
-    expect(toastOf(page.$)).toEqual({
-      role: 'status',
-      text: 'Token revoked — grants-ui gets 401 from now on'
-    })
-  })
-
-  test.each(['', 'grants', 'GRANTS-UI', 'x7Qa'])(
-    'opens the dialog again when "%s" is typed, revoking nothing',
-    async (confirm) => {
-      const { statusCode, $ } = await post(url, { confirm, hint: 'x7Qa' })
-      const field = $(`[data-testid="token-${tokenId}-revoke-confirm"]`)
-
-      expect(statusCode).toBe(statusCodes.badRequest)
-      expect(
-        $(`[data-testid="token-${tokenId}-revoke-modal"]`).attr('data-open')
-      ).toBe('')
-      expect(
-        flatten(
-          $(`[data-testid="token-${tokenId}-revoke-confirm-error"]`).text()
-        )
-      ).toBe("That doesn't match.")
-      expect(field.attr('aria-invalid')).toBe('true')
-      expect(field.attr('value')).toBe(confirm)
-      expect(revokeAccessTokenUseCase).not.toHaveBeenCalled()
-    }
-  )
-
-  test.each([
-    [
-      { outcome: 'unknown' },
-      'alert',
-      'Revoke status unknown — refresh to check.'
-    ],
-    [
-      { outcome: 'unreachable' },
-      'alert',
-      'Not revoked — fg-gas-backend could not be reached. Nothing has changed.'
-    ]
-  ] as const)(
-    'goes back to the page with a toast for %j',
-    async (result, role, text) => {
-      vi.mocked(revokeAccessTokenUseCase).mockResolvedValue(result)
-
-      const { page } = await postAndFollow(url, {
-        confirm: 'grants-ui',
-        hint: 'x7Qa'
-      })
-
-      expect(toastOf(page.$)).toEqual({ role, text })
-    }
-  )
-
-  test('says what the write did after a reveal left without Done', async () => {
-    vi.mocked(issueAccessTokenUseCase).mockResolvedValue({
-      outcome: 'issued',
-      raw,
-      token: token({ tokenId: '6650c1f2a9e4b1d07c20bd99' })
-    })
-    vi.mocked(revokeAccessTokenUseCase).mockResolvedValue({
-      outcome: 'unknown'
-    })
-
-    const revealed = await post('/dev-ops/clients/gas/tokens', {
-      clientId: 'grants-ui',
-      expiry: 'never',
-      date: ''
-    })
-    const written = await post(
-      url,
-      { confirm: 'grants-ui', hint: 'x7Qa' },
-      { ...sameOrigin, cookie: sessionCookie(revealed) }
+    expect(statusCode).toBe(400)
+    expect(text($, `#token-${ids.active}-expiry-choice-date-err`)).toBe(
+      'Enter an expiry date like 4 Feb 2027.'
     )
-    const page = await get('/dev-ops/clients/gas', sessionCookie(written))
-
-    expect(toastOf(page.$)).toEqual({
-      role: 'alert',
-      text: 'Revoke status unknown — refresh to check.'
-    })
-  })
-
-  test('says it once: the toast is gone by the next visit', async () => {
-    const { cookie } = await postAndFollow(url, {
-      confirm: 'grants-ui',
-      hint: 'x7Qa'
-    })
-    const again = await get('/dev-ops/clients/gas', cookie)
-
-    expect(again.$('[data-testid="token-toast"]')).toHaveLength(0)
-  })
-
-  test("drops the toast, rather than move it, when the other service's page is opened first", async () => {
-    const cookie = sessionCookie(
-      await post(url, { confirm: 'grants-ui', hint: 'x7Qa' })
-    )
-
-    expect(
-      (await get('/dev-ops/clients/cw', cookie)).$(
-        '[data-testid="token-toast"]'
-      )
-    ).toHaveLength(0)
-    expect(
-      (await get('/dev-ops/clients/gas', cookie)).$(
-        '[data-testid="token-toast"]'
-      )
-    ).toHaveLength(0)
-  })
-})
-
-describe('Delete', () => {
-  const url = `${tokenPath}/delete`
-
-  test('deletes, and says so', async () => {
-    vi.mocked(deleteAccessTokenUseCase).mockResolvedValue({ outcome: 'done' })
-
-    const { page } = await postAndFollow(url, { hint: 'x7Qa' })
-
-    expect(deleteAccessTokenUseCase).toHaveBeenCalledWith({
-      service: 'gas',
-      clientId: 'grants-ui',
-      tokenId
-    })
-    expect(toastOf(page.$)).toEqual({
-      role: 'status',
-      text: 'Token deleted — grants-ui ••••ending x7Qa'
-    })
-  })
-
-  test.each([
-    [{ outcome: 'unknown' }, 'Delete status unknown — refresh to check.']
-  ] as const)(
-    'goes back to the page with a toast for %j',
-    async (result, text) => {
-      vi.mocked(deleteAccessTokenUseCase).mockResolvedValue(result)
-
-      const { page } = await postAndFollow(url, { hint: '' })
-
-      expect(toastOf(page.$).text).toBe(text)
-    }
-  )
-})
-
-const banned = /[…·›→•]/
-
-/** Every character icon is banned but the `••••` of a hint mask. */
-const bannedIn = ($: ReturnType<typeof load>) =>
-  banned.test(withoutMasks($('body').text()))
-
-describe('refusals the operator can act on', () => {
-  const revoked = token({
-    status: 'REVOKED',
-    revokedAt: '2026-11-01T09:00:00.000Z',
-    expiresAt: '2026-11-01T09:00:00.000Z'
-  })
-
-  test.each([
-    [
-      'a rotation of a token that has just stopped',
-      `${tokenPath}/rotate`,
-      { keepOld: '24h' },
-      rotateAccessTokenUseCase,
-      'API_TOKEN_NOT_ACTIVE',
-      `token-${tokenId}-rotate`,
-      'Not rotated — this token is no longer active. Nothing has changed.'
-    ],
-    [
-      'a rotation that would end the token in use',
-      `${tokenPath}/rotate`,
-      { keepOld: 'none' },
-      rotateAccessTokenUseCase,
-      'API_TOKEN_IN_USE',
-      `token-${tokenId}-rotate`,
-      'Not rotated — this is the token GPA is calling with. Choose Keep valid until end of tomorrow or Keep valid for 7 days, to end of day. Nothing has changed.'
-    ],
-    [
-      'a new token whose hash is already stored',
-      `${tokenPath}/rotate`,
-      { keepOld: '7d' },
-      rotateAccessTokenUseCase,
-      'API_TOKEN_DUPLICATE',
-      `token-${tokenId}-rotate`,
-      'Not rotated — the new token matched one already stored. Try again for a fresh one. Nothing has changed.'
-    ],
-    [
-      'an expiry that would end the token in use',
-      `${tokenPath}/expiry`,
-      { expiry: '30', date: '', hint: 'x7Qa' },
-      changeTokenExpiryUseCase,
-      'API_TOKEN_IN_USE',
-      `token-${tokenId}-expiry`,
-      "Not changed — this is the token GPA is calling with, so it can't expire now. Nothing has changed."
-    ],
-    [
-      'a revoke of the token in use',
-      `${tokenPath}/revoke`,
-      { confirm: 'grants-ui', hint: 'x7Qa' },
-      revokeAccessTokenUseCase,
-      'API_TOKEN_IN_USE',
-      `token-${tokenId}-revoke`,
-      'Not revoked — Grants Platform Admin is calling GAS with this token. Rotate it instead. Nothing has changed.'
-    ],
-    [
-      'a delete of a token someone has just brought back',
-      `${tokenPath}/delete`,
-      { hint: 'x7Qa' },
-      deleteAccessTokenUseCase,
-      'API_TOKEN_ACTIVE',
-      `token-${tokenId}-delete`,
-      'Not deleted. Nothing has changed.'
-    ]
-  ] as const)(
-    'reopens the dialog on %s, saying why, linked to it',
-    async (_name, url, payload, useCase, errorCode, dialogId, text) => {
-      vi.mocked(useCase).mockResolvedValue({
-        outcome: 'refused',
-        statusCode: 409,
-        errorCode
-      } as never)
-
-      const { statusCode, headers, $ } = await post(url, payload)
-
-      expect(statusCode).toBe(statusCodes.badRequest)
-      expect(headers.location).toBeUndefined()
-      expect($(`[data-testid="${dialogId}-modal"]`).attr('data-open')).toBe('')
-      expect($(`#${dialogId}`).attr('aria-describedby')).toBe(
-        `${dialogId}-form-error`
-      )
-      expect(flatten($(`#${dialogId}-form-error`).text())).toBe(text)
-      expect($(`#${dialogId}-form-error`).attr('role')).toBe('alert')
-      expect($('[data-testid="token-drawer"]').attr('data-open-token')).toBe(
-        tokenId
-      )
-      expect($('[data-testid="token-toast"]')).toHaveLength(0)
-    }
-  )
-
-  test('reopens Rotate on the overlap it was sent with, starting afresh on 24 hours', async () => {
-    vi.mocked(rotateAccessTokenUseCase).mockResolvedValue({
-      outcome: 'refused',
-      statusCode: 409,
-      errorCode: 'API_TOKEN_DUPLICATE'
-    })
-
-    const { $ } = await post(`${tokenPath}/rotate`, { keepOld: '7d' })
-    const choice = (value: string) =>
-      $(`[data-testid="token-${tokenId}-rotate-${value}"]`)
-
-    expect(choice('7d').attr('checked')).toBe('checked')
-    expect(choice('24h').attr('checked')).toBeUndefined()
-    expect(choice('24h').attr('data-reset-checked')).toBe('')
-    expect(choice('7d').attr('data-reset-checked')).toBeUndefined()
-  })
-
-  test('reopens the dialog of an action that no longer applies, as the page now stands', async () => {
-    vi.mocked(listAccessTokensUseCase).mockResolvedValue([revoked])
-    vi.mocked(revokeAccessTokenUseCase).mockResolvedValue({
-      outcome: 'refused',
-      statusCode: 409,
-      errorCode: 'API_TOKEN_NOT_ACTIVE'
-    })
-
-    const { $ } = await post(`${tokenPath}/revoke`, {
-      confirm: 'grants-ui',
-      hint: 'x7Qa'
-    })
-
-    expect(
-      $(`[data-testid="token-${tokenId}-revoke-modal"]`).attr('data-open')
-    ).toBe('')
-    expect(flatten($(`#token-${tokenId}-revoke-form-error`).text())).toBe(
-      'Not revoked — this token is no longer active. Nothing has changed.'
-    )
-  })
-
-  test('says it as a toast when the token has gone from the list', async () => {
-    vi.mocked(listAccessTokensUseCase).mockResolvedValue([])
-    vi.mocked(rotateAccessTokenUseCase).mockResolvedValue({
-      outcome: 'refused',
-      statusCode: 409,
-      errorCode: 'API_TOKEN_NOT_ACTIVE'
-    })
-
-    const { $ } = await post(`${tokenPath}/rotate`, { keepOld: '24h' })
-
-    expect(toastOf($)).toEqual({
-      role: 'alert',
-      text: 'Not rotated — this token is no longer active. Nothing has changed.'
-    })
-  })
-
-  test('reopens New token on a hash already stored, keeping what was typed, revealing nothing', async () => {
-    vi.mocked(issueAccessTokenUseCase).mockResolvedValue({
-      outcome: 'refused',
-      statusCode: 409,
-      errorCode: 'API_TOKEN_DUPLICATE'
-    })
-
-    const { $ } = await post('/dev-ops/clients/gas/tokens', {
-      clientId: 'grants-ui',
-      expiry: '30',
-      date: ''
-    })
-
-    expect($('[data-testid="token-new-modal"]').attr('data-open')).toBe('')
-    expect(flatten($('#token-new-form-error').text())).toBe(
-      'Not issued — the new token matched one already stored. Try again for a fresh one. Nothing has changed.'
-    )
-    expect($('[data-testid="token-new-client"]').attr('value')).toBe(
-      'grants-ui'
-    )
-    expect($('[data-testid="token-new-expires-30"]').attr('checked')).toBe(
-      'checked'
-    )
-    expect($('[data-testid="token-reveal"]')).toHaveLength(0)
-    expect(bannedIn($)).toBe(false)
-  })
-})
-
-describe('the drawer and dialogs, as the design and QA settled them', () => {
-  test('points nothing at a note that is no longer drawn', async () => {
-    const { $ } = await get('/dev-ops/clients/gas')
-    const described = $('[aria-describedby]')
-      .map((_i, el) => $(el).attr('aria-describedby')!.split(' '))
-      .get()
-
-    expect(described.filter((id) => id.endsWith('-in-use'))).toEqual([])
-  })
-
-  test('sets Revoked in the weight Active and Expired take, in the table and the drawer', async () => {
-    const { $ } = await get('/dev-ops/clients/gas')
-    const labels = $('[data-testid$="-status-label"]')
-      .filter((_i, label) => $(label).text() === 'Revoked')
-      .map((_i, label) => $(label).attr('class'))
-      .get()
-
-    expect(labels).toEqual(['font-normal', 'font-normal'])
-  })
-
-  test('sets the client ID in the table in mono, as the design does', async () => {
-    const { $ } = await get('/dev-ops/clients/gas')
-
-    expect(
-      $('[data-testid="token-row-client"]').first().attr('class')
-    ).toContain('Noto_Sans_Mono')
-  })
-
-  test('labels the custom date as the end of that day, with no zone', async () => {
-    const { $ } = await get('/dev-ops/clients/gas')
-
-    expect(flatten($('label[for="token-new-expires-date"]').text())).toBe(
-      'Expiry date (end of day)'
-    )
-  })
-
-  test('names the Change expiry choices "Expires" for a screen reader', async () => {
-    const { $ } = await get('/dev-ops/clients/gas')
-
-    expect(
-      flatten($(`[data-testid="token-${tokenId}-expires"] legend`).text())
-    ).toBe('Expires')
-  })
-
-  test.each(['gas', 'cw'])(
-    'says only the date in every %s dialog, and never the service in full',
-    async (service) => {
-      vi.mocked(listAccessTokensUseCase).mockResolvedValue([
-        token({ expiresAt: '2027-02-01T10:00:00.000Z' })
-      ])
-
-      const { $ } = await get(`/dev-ops/clients/${service}`)
-      const tokenDialogs = $('dialog').not('#times-dialog')
-      const dialogs = flatten(tokenDialogs.text())
-
-      expect(tokenDialogs).toHaveLength(4)
-      expect(
-        flatten($(`[data-testid="token-${tokenId}-expiry-currently"]`).text())
-      ).toBe('Currently: 1 Feb 2027')
-      expect(dialogs).not.toMatch(/\bin \d+[dh]\b|\b\d+[dh] ago\b/)
-      expect(dialogs).not.toMatch(/\bin \d+ days?\b|\bdays? ago\b/)
-      expect(dialogs).not.toContain('Grant Application Service')
-      expect(dialogs).not.toContain('Caseworking Backend')
-    }
-  )
-
-  test('opens Change expiry on the exact current expiry, and on Never for none', async () => {
-    vi.mocked(listAccessTokensUseCase).mockResolvedValue([
-      token({ expiresAt: '2027-02-01T10:00:00.000Z' }),
-      token({ tokenId: '6650c1f2a9e4b1d07c20bd95', expiresAt: null })
-    ])
-
-    const { $ } = await get('/dev-ops/clients/gas')
-    const picker = $(`[data-testid="token-${tokenId}-expires"]`)
-
-    expect(picker.attr('data-current')).toBe('2027-02-01T10:00:00.000Z')
-    expect(
-      $(`[data-testid="token-${tokenId}-expires-custom"]`).attr('checked')
-    ).toBe('checked')
-    expect(flatten(picker.find('[data-expiry-summary]').text())).toMatch(
-      /^Expires 1 Feb 2027\.$/
-    )
-    expect(
-      $('[data-testid="token-6650c1f2a9e4b1d07c20bd95-expires-never"]').attr(
-        'checked'
-      )
-    ).toBe('checked')
-  })
-
-  test('holds Save on a token that has stopped until a new expiry is picked', async () => {
-    const { $ } = await get('/dev-ops/clients/gas')
-
-    expect(
-      flatten(
-        $(`[data-testid="token-${tokens[2].tokenId}-expires-summary"]`).text()
-      )
-    ).toBe('Pick a date in the future.')
-  })
-
-  test('never revives a stopped token on an untouched Save', async () => {
-    const { statusCode } = await post(
-      `/dev-ops/clients/gas/example-legacy-caller/tokens/${tokens[2].tokenId}/expiry`,
-      {
-        expiry: 'custom',
-        date: '2026-11-01',
-        current: '2026-11-01T09:00:00.000Z',
-        hint: ''
-      }
-    )
-
-    expect(statusCode).toBe(statusCodes.badRequest)
     expect(changeTokenExpiryUseCase).not.toHaveBeenCalled()
   })
 
-  test('links a past date to its field, with the error on the page from the start', async () => {
-    const { $ } = await post(`${tokenPath}/expiry`, {
-      expiry: 'custom',
-      date: '2020-01-01',
-      hint: 'x7Qa'
-    })
-    const date = $(`[data-testid="token-${tokenId}-expires-date"]`)
-    const error = $(`#token-${tokenId}-expires-error`)
-
-    expect(date.attr('aria-invalid')).toBe('true')
-    expect(date.attr('aria-describedby')).toBe(`token-${tokenId}-expires-error`)
-    expect(flatten(error.text())).toBe('Pick a date in the future.')
-  })
-
-  test('shows a row with no valid name as "—", with a drawer that offers nothing', async () => {
-    vi.mocked(listAccessTokensUseCase).mockResolvedValue([
-      token({ clientId: null })
-    ])
-
-    const { $ } = await get('/dev-ops/clients/gas')
-    const panel = $(`[data-token-panel="${tokenId}"]`)
-
-    expect(flatten($('[data-testid="token-row-client-none"]').text())).toBe('—')
-    expect(panel.find('[data-testid$="-actions"] button')).toHaveLength(0)
-    expect(flatten(panel.find('[data-testid$="-note"]').text())).toBe(
-      "This token has no valid client ID, so it can't be changed here."
-    )
-    expect($(`[id^="token-${tokenId}-"]`).filter('dialog')).toHaveLength(0)
-  })
-})
-
-describe('the CW page', () => {
-  const cwPath = `/dev-ops/clients/cw/grants-ui/tokens/${tokenId}`
-
-  beforeEach(() => {
-    vi.mocked(listAccessTokensUseCase).mockImplementation(async (service) =>
-      service === 'cw' ? tokens : tokens.slice(0, 1)
-    )
-  })
-
-  test('tags no row, and draws no note or Revoke on the token GAS calls with', async () => {
-    const { $ } = await get('/dev-ops/clients/cw')
-    const inUse = $(`[data-token-panel="${tokens[1].tokenId}"]`)
-
-    expect($('[data-testid="token-row-tag"]')).toHaveLength(0)
-    expect(inUse.find('[data-testid$="-in-use"]')).toHaveLength(0)
-    expect(inUse.text()).not.toContain(
-      'This is the token GAS calls Caseworking with'
-    )
-    expect(inUse.find('[data-testid$="-revoke"]')).toHaveLength(0)
-    expect(bannedIn($)).toBe(false)
-  })
-
-  test('says CW could not be loaded while GAS still can', async () => {
-    vi.mocked(listAccessTokensUseCase).mockImplementation(async (service) =>
-      service === 'cw' ? null : tokens
-    )
-
-    const cw = await get('/dev-ops/clients/cw')
-    const gas = await get('/dev-ops/clients/gas')
-
-    expect(flatten(cw.$('[data-testid="tokens-error"]').text())).toBe(
-      'CW access tokens could not be loaded.'
-    )
-    expect(gas.$('[data-testid="token-row"]')).toHaveLength(3)
-  })
-
-  test.each([
-    [
-      { outcome: 'refused', statusCode: 403, errorCode: null },
-      'Not revoked — CW-BE refused the request. Nothing has changed.'
-    ],
-    [
-      { outcome: 'refused', statusCode: 404, errorCode: 'API_TOKEN_NOT_FOUND' },
-      'Not revoked — CW-BE no longer has this token. Nothing has changed.'
-    ],
-    [
-      { outcome: 'unreachable', errorCode: 'CW_UNREACHABLE' },
-      'Not revoked — CW-BE could not be reached. Nothing has changed.'
-    ],
-    [
-      { outcome: 'unreachable' },
-      'Not revoked — fg-gas-backend could not be reached. Nothing has changed.'
-    ],
-    [{ outcome: 'unknown' }, 'Revoke status unknown — refresh to check.']
-  ] as const)('names who failed for %j', async (result, text) => {
-    vi.mocked(revokeAccessTokenUseCase).mockResolvedValue(result)
-
-    const written = await post(`${cwPath}/revoke`, {
-      confirm: 'grants-ui',
-      hint: 'x7Qa'
-    })
-    const page = await get('/dev-ops/clients/cw', sessionCookie(written))
-
-    expect(toastOf(page.$).text).toBe(text)
-    expect(bannedIn(page.$)).toBe(false)
-  })
-
-  test('refuses an in-use revoke in the dialog, in the Caseworking words', async () => {
-    vi.mocked(revokeAccessTokenUseCase).mockResolvedValue({
+  test('refused for the token in use, in the dialog', async () => {
+    vi.mocked(changeTokenExpiryUseCase).mockResolvedValue({
       outcome: 'refused',
       statusCode: 409,
       errorCode: 'API_TOKEN_IN_USE'
     })
 
-    const { $ } = await post(`${cwPath}/revoke`, {
-      confirm: 'grants-ui',
-      hint: 'x7Qa'
-    })
+    const { $ } = await post(
+      `${tokenPath(ids.inUse, 'fg-grants-platform-admin')}/expiry`,
+      { expiry: '30', date: '', hint: '0c4a' }
+    )
 
-    expect(flatten($(`#token-${tokenId}-revoke-form-error`).text())).toBe(
-      'Not revoked — fg-gas-backend is calling CW-BE with this token. Rotate it instead. Nothing has changed.'
+    expect(
+      text(
+        $,
+        `dialog#token-${ids.inUse}-expiry [data-testid="token-refusal"] .gpa-alert-body > div`
+      )
+    ).toBe(
+      'Dev Ops is calling GAS with this token. Its expiry has to stay in the future. Nothing has changed.'
     )
   })
 })
 
-describe('what a failed rotation leaves', () => {
-  test.each([
-    ['a 500', { outcome: 'unknown' }],
-    ['a 504', { outcome: 'unknown' }]
-  ] as const)(
-    'shows no token after %s, in the page or the session',
-    async (_name, result) => {
-      vi.mocked(rotateAccessTokenUseCase).mockResolvedValue(result)
+describe('Revoke', () => {
+  test('asks for the client to be typed, and says what it does', async () => {
+    const { $ } = await get(
+      `/dev-ops/clients/gas?token=${ids.active}&dialog=revoke`
+    )
+    const dialog = $(`dialog#token-${ids.active}-revoke`)
 
-      const { written, page } = await postAndFollow(`${tokenPath}/rotate`, {
-        keepOld: '24h'
-      })
+    expect(isOpenWithoutScript($, `token-${ids.active}-revoke`)).toBe(true)
+    expect(dialog.find('section').attr('role')).toBe('alertdialog')
+    expect(dialog.find('section').hasClass('gpa-dialog-sm')).toBe(true)
+    expect(flatten(dialog.find('h2').text())).toBe('Revoke token')
+    expect(flatten(dialog.find('form p').text())).toBe(
+      'Sets expiresAt to now. GAS rejects the token with 401 on the caller’s next request. The record stays for audit.'
+    )
+    expect(text($, `label[for="token-${ids.active}-revoke-type"]`)).toBe(
+      'Type grants-ui to confirm'
+    )
+    expect(
+      dialog.find('input[name="confirmText"]').attr('data-gpa-require')
+    ).toBe('grants-ui')
+    expect(dialog.find('.gpa-dialog-foot a').attr('href')).toBe(
+      `/dev-ops/clients/gas?token=${ids.active}`
+    )
+    expect(dialog.find('.gpa-dialog-foot a').hasClass('gpa-btn-tertiary')).toBe(
+      true
+    )
+    expect(
+      dialog.find('[data-gpa-confirm]').hasClass('gpa-btn-danger-solid')
+    ).toBe(true)
+    expect(flatten(dialog.find('[data-gpa-confirm]').text())).toBe('Revoke')
+  })
 
-      expect(written.payload).not.toContain(raw)
-      expect(page.payload).not.toContain(raw)
-      expect(page.$('[data-testid="token-reveal"]')).toHaveLength(0)
-      expect(sessions.join('')).not.toContain(raw)
-      expect(toastOf(page.$).text).toBe(
-        'Rotation status unknown — refresh to check. If a new token was issued, revoke it: its value is gone.'
-      )
-    }
-  )
+  test('on CW, CW rejects it', async () => {
+    const { $ } = await get(
+      `/dev-ops/clients/cw?token=${ids.active}&dialog=revoke`
+    )
+
+    expect(
+      flatten($(`dialog#token-${ids.active}-revoke form p`).text())
+    ).toContain('CW rejects the token with 401')
+  })
+
+  test('typed text that doesn’t match comes back, checked on the server', async () => {
+    const { statusCode, $ } = await post(`${tokenPath(ids.active)}/revoke`, {
+      confirmText: 'grants',
+      hint: '3e1d'
+    })
+
+    const field = $(`#token-${ids.active}-revoke-type`)
+
+    expect(statusCode).toBe(400)
+    expect(isOpenWithoutScript($, `token-${ids.active}-revoke`)).toBe(true)
+    expect(field.attr('value')).toBe('grants')
+    expect(field.attr('aria-invalid')).toBe('true')
+    expect(field.attr('aria-describedby')).toContain(
+      `token-${ids.active}-revoke-type-err`
+    )
+    expect(text($, `#token-${ids.active}-revoke-type-err`)).toBe(
+      'That doesn’t match.'
+    )
+    expect(
+      $(`dialog#token-${ids.active}-revoke .gpa-errorsummary`)
+    ).toHaveLength(0)
+    expect(revokeAccessTokenUseCase).not.toHaveBeenCalled()
+  })
+
+  test('typed text comes back as text, never as markup', async () => {
+    const typed = '"><b id="injected">x</b>'
+    const { $ } = await post(`${tokenPath(ids.active)}/revoke`, {
+      confirmText: typed,
+      hint: '3e1d'
+    })
+
+    expect($(`#token-${ids.active}-revoke-type`).attr('value')).toBe(typed)
+    expect($('#injected')).toHaveLength(0)
+  })
+
+  test('a refusal for a token the list no longer has is a toast', async () => {
+    vi.mocked(revokeAccessTokenUseCase).mockResolvedValue({
+      outcome: 'refused',
+      statusCode: 404,
+      errorCode: 'API_TOKEN_NOT_FOUND'
+    })
+    vi.mocked(listAccessTokensUseCase).mockResolvedValue(listed([gasTokens[0]]))
+
+    const { statusCode, $ } = await post(`${tokenPath(ids.active)}/revoke`, {
+      confirmText: 'grants-ui',
+      hint: '3e1d'
+    })
+
+    expect(statusCode).toBe(400)
+    expect($('dialog[open]')).toHaveLength(0)
+    expect($('.gpa-toast-region')).toHaveLength(1)
+    expect(toastOf($)).toEqual({
+      tone: 'danger',
+      text: 'Not revoked. GAS no longer has this token. Nothing has changed.'
+    })
+  })
 })
 
-describe('character icons', () => {
-  test('appear nowhere but the hint mask on a reveal, an error re-render or a toast', async () => {
+describe('Delete', () => {
+  test('says what happens to the record, Cancel the way out', async () => {
+    const { $ } = await get(
+      `/dev-ops/clients/gas?token=${ids.revoked}&dialog=delete`
+    )
+    const dialog = $(`dialog#token-${ids.revoked}-delete`)
+
+    expect(isOpenWithoutScript($, `token-${ids.revoked}-delete`)).toBe(true)
+    expect(flatten(dialog.find('h2').text())).toBe('Delete token record')
+    expect(flatten(dialog.find('form p').text())).toBe(
+      'Removes the token’s record, so this list won’t show it again. Its audit events stay.'
+    )
+    expect(dialog.find('.gpa-dialog-foot a').hasClass('gpa-btn-tertiary')).toBe(
+      true
+    )
+    expect(flatten(dialog.find('[data-gpa-confirm]').text())).toBe('Delete')
+    expect(dialog.find('form').attr('action')).toBe(
+      `${tokenPath(ids.revoked, 'old-caller')}/delete`
+    )
+  })
+
+  test('refused for an active token, in the dialog', async () => {
+    vi.mocked(deleteAccessTokenUseCase).mockResolvedValue({
+      outcome: 'refused',
+      statusCode: 409,
+      errorCode: 'API_TOKEN_ACTIVE'
+    })
+
+    const { statusCode, $ } = await post(
+      `${tokenPath(ids.revoked, 'old-caller')}/delete`
+    )
+
+    expect(statusCode).toBe(400)
+    expect(
+      text(
+        $,
+        `dialog#token-${ids.revoked}-delete [data-testid="token-refusal"] .gpa-alert-title`
+      )
+    ).toBe('Not deleted.')
+    expect(
+      text(
+        $,
+        `dialog#token-${ids.revoked}-delete [data-testid="token-refusal"] .gpa-alert-body > div`
+      )
+    ).toBe(
+      'Only a revoked or expired token can be deleted. Nothing has changed.'
+    )
+  })
+})
+
+/** The code GAS refuses with, by the reason the page gives for it. */
+const codeFor = (body: string): string =>
+  [
+    ['Dev Ops is calling', 'API_TOKEN_IN_USE'],
+    ['Only a revoked', 'API_TOKEN_ACTIVE']
+  ].find(([lead]) => body.startsWith(lead))?.[1] ?? 'API_TOKEN_NOT_ACTIVE'
+
+/** The token changed state while its dialog was open: the fresh list no longer offers the action, so the drawer says why. */
+describe('a refusal whose dialog isn’t drawn any more', () => {
+  const withToken = (fields: Partial<ListedToken>) =>
+    vi
+      .mocked(listAccessTokensUseCase)
+      .mockResolvedValue(
+        listed(
+          gasTokens.map((t) =>
+            t.tokenId === ids.active ? { ...t, ...fields } : t
+          )
+        )
+      )
+
+  const drawerRefusal = ($: CheerioAPI, id: string) => ({
+    title: text(
+      $,
+      `dialog#token-${id} [data-testid="token-drawer-refusal"] .gpa-alert-title`
+    ),
+    text: text(
+      $,
+      `dialog#token-${id} [data-testid="token-drawer-refusal"] .gpa-alert-body > div`
+    )
+  })
+
+  test.each([
+    [
+      'rotate',
+      'revoked',
+      { status: 'REVOKED' as const },
+      rotateAccessTokenUseCase,
+      { keepOld: '24h' },
+      'Not rotated.',
+      'This token is no longer active. Nothing has changed.'
+    ],
+    [
+      'rotate',
+      'expired',
+      { status: 'EXPIRED' as const },
+      rotateAccessTokenUseCase,
+      { keepOld: '24h' },
+      'Not rotated.',
+      'This token is no longer active. Nothing has changed.'
+    ],
+    [
+      'revoke',
+      'revoked',
+      { status: 'REVOKED' as const },
+      revokeAccessTokenUseCase,
+      { confirmText: 'grants-ui' },
+      'Not revoked.',
+      'This token is no longer active. Nothing has changed.'
+    ],
+    [
+      'revoke',
+      'now the token in use',
+      { inUse: true },
+      revokeAccessTokenUseCase,
+      { confirmText: 'grants-ui' },
+      'Not revoked.',
+      'Dev Ops is calling GAS with this token. Rotate it instead. Nothing has changed.'
+    ],
+    [
+      'delete',
+      'revived',
+      { status: 'ACTIVE' as const },
+      deleteAccessTokenUseCase,
+      {},
+      'Not deleted.',
+      'Only a revoked or expired token can be deleted. Nothing has changed.'
+    ]
+  ] as const)(
+    '%s on a token %s meanwhile: the refusal at the top of its drawer',
+    async (action, _state, fields, useCase, payload, title, body) => {
+      const errorCode = codeFor(body)
+      vi.mocked(useCase).mockResolvedValue({
+        outcome: 'refused',
+        statusCode: 409,
+        errorCode
+      })
+      withToken(fields)
+
+      const { statusCode, $ } = await post(
+        `${tokenPath(ids.active)}/${action}`,
+        payload
+      )
+
+      expect(statusCode).toBe(400)
+      expect(isOpenWithoutScript($, `token-${ids.active}`)).toBe(true)
+      expect($(`dialog#token-${ids.active}-${action}[open]`)).toHaveLength(0)
+      expect(drawerRefusal($, ids.active)).toEqual({ title, text: body })
+      expect(
+        $(`dialog#token-${ids.active} [data-testid="token-drawer-refusal"]`).is(
+          '[data-focus-on-arrival]'
+        )
+      ).toBe(true)
+      expect(toastOf($).text).toBe('')
+    }
+  )
+
+  test('a refusal whose dialog is still drawn stays in the dialog, not the drawer', async () => {
+    vi.mocked(rotateAccessTokenUseCase).mockResolvedValue({
+      outcome: 'refused',
+      statusCode: 409,
+      errorCode: 'API_TOKEN_DUPLICATE'
+    })
+
+    const { $ } = await post(`${tokenPath(ids.active)}/rotate`, {
+      keepOld: '24h'
+    })
+
+    expect(
+      $(`dialog#token-${ids.active}-rotate [data-testid="token-refusal"]`)
+    ).toHaveLength(1)
+    expect($('[data-testid="token-drawer-refusal"]')).toHaveLength(0)
+  })
+
+  test('change expiry on a token that changed under it says so in its dialog, which every state has', async () => {
+    vi.mocked(changeTokenExpiryUseCase).mockResolvedValue({
+      outcome: 'refused',
+      statusCode: 409,
+      errorCode: 'API_TOKEN_NOT_ACTIVE'
+    })
+    withToken({ status: 'REVOKED' })
+
+    const { $ } = await post(`${tokenPath(ids.active)}/expiry`, {
+      expiry: '30',
+      date: '',
+      hint: '3e1d'
+    })
+
+    expect(drawerRefusal($, ids.active)).toEqual({
+      title: 'Expiry not changed.',
+      text: 'The token changed while this was open. Refresh and try again. Nothing has changed.'
+    })
+  })
+})
+
+describe('Change expiry reads the current expiry from GAS, not the form', () => {
+  test('a forged current is refused', async () => {
+    const { statusCode } = await post(
+      `${tokenPath(ids.dated, 'farming-grants-agreements-ui')}/expiry`,
+      {
+        expiry: 'custom',
+        date: '2027-01-31',
+        current: '2027-01-31T12:00:00.000Z',
+        hint: ''
+      }
+    )
+
+    expect(statusCode).toBe(400)
+    expect(changeTokenExpiryUseCase).not.toHaveBeenCalled()
+  })
+})
+
+describe('a dialog the address opens', () => {
+  const list = '/dev-ops/clients/gas'
+  const drawer = (tokenId: string) => `${list}?token=${tokenId}`
+
+  test.each([
+    ['the drawer', drawer(ids.dated), `token-${ids.dated}`, list],
+    ['New token', `${list}?dialog=new`, 'token-new', list],
+    [
+      'Rotate',
+      `${drawer(ids.dated)}&dialog=rotate`,
+      `token-${ids.dated}-rotate`,
+      drawer(ids.dated)
+    ],
+    [
+      'Change expiry',
+      `${drawer(ids.dated)}&dialog=expiry`,
+      `token-${ids.dated}-expiry`,
+      drawer(ids.dated)
+    ],
+    [
+      'Revoke',
+      `${drawer(ids.active)}&dialog=revoke`,
+      `token-${ids.active}-revoke`,
+      drawer(ids.active)
+    ],
+    [
+      'Delete',
+      `${drawer(ids.revoked)}&dialog=delete`,
+      `token-${ids.revoked}-delete`,
+      drawer(ids.revoked)
+    ]
+  ])(
+    '%s closes to the page without its opener',
+    async (_name, url, id, closed) => {
+      const { $ } = await get(url)
+
+      expect(isOpenWithoutScript($, id)).toBe(true)
+      expect(closeHrefOf($, id)).toBe(closed)
+    }
+  )
+
+  test.each([
+    ['the drawer', drawer(ids.dated), `token-${ids.dated}`, false],
+    ['New token', `${list}?dialog=new`, 'token-new', true],
+    [
+      'Rotate',
+      `${drawer(ids.dated)}&dialog=rotate`,
+      `token-${ids.dated}-rotate`,
+      true
+    ],
+    [
+      'Change expiry',
+      `${drawer(ids.dated)}&dialog=expiry`,
+      `token-${ids.dated}-expiry`,
+      true
+    ],
+    [
+      'Revoke',
+      `${drawer(ids.active)}&dialog=revoke`,
+      `token-${ids.active}-revoke`,
+      true
+    ],
+    [
+      'Delete',
+      `${drawer(ids.revoked)}&dialog=delete`,
+      `token-${ids.revoked}-delete`,
+      false
+    ]
+  ])(
+    '%s starts clean when opened again from the page only if it holds fields',
+    async (_name, url, id, resets) => {
+      const { $ } = await get(url)
+
+      expect(resetsOnOpen($, id)).toBe(resets)
+    }
+  )
+
+  test('a dialog handed back with its errors closes to the list, not the address it posted to', async () => {
+    const { $ } = await post(`${list}/tokens`, {
+      clientId: 'Grants UI',
+      expiry: '90',
+      date: ''
+    })
+
+    expect(isOpenWithoutScript($, 'token-new')).toBe(true)
+    expect(closeHrefOf($, 'token-new')).toBe(list)
+  })
+})
+
+describe('Token issued', () => {
+  test('shows the token once, in the answer to the POST, not dismissible, never stored or cached', async () => {
     vi.mocked(issueAccessTokenUseCase).mockResolvedValue({
+      outcome: 'issued',
+      raw,
+      token: token({ clientId: 'new-caller' })
+    })
+
+    const { statusCode, headers, $, payload } = await post(
+      '/dev-ops/clients/gas/tokens',
+      { clientId: 'new-caller', expiry: 'never', date: '' }
+    )
+    const dialog = $('dialog#token-issued')
+
+    expect(statusCode).toBe(200)
+    expect(headers['cache-control']).toBe('no-store')
+    expect(isOpenWithoutScript($, 'token-issued')).toBe(true)
+    expect(dialog.parent('gpa-dialog').attr('data-dismissible')).toBe('false')
+    expect(dialog.find('.gpa-dialog-close')).toHaveLength(0)
+    expect(text($, 'dialog#token-issued .gpa-alert-title')).toBe('Copy it now.')
+    expect(text($, 'dialog#token-issued .gpa-alert-body > div')).toBe(
+      'This is the only time the token is shown. Only its hash is stored.'
+    )
+    expect(text($, 'label[for="token-issued-value"]')).toBe(
+      'Token for new-caller'
+    )
+    expect($('#token-issued-value').attr('value')).toBe(raw)
+    expect($('#token-issued-value').is('[readonly]')).toBe(true)
+    expect(dialog.find('gpa-copy').attr('data-value')).toBe(raw)
+    expect(dialog.find('gpa-copy [data-gpa-copy]').is('[hidden]')).toBe(false)
+    expect(dialog.find('[data-testid="token-issued-done"]').attr('href')).toBe(
+      '/dev-ops/clients/gas'
+    )
+    expect(payload.split(raw)).toHaveLength(3)
+    expect(sessions.join('')).not.toContain(raw)
+    expect(sessions.join('')).not.toContain(raw.slice(-4))
+  })
+
+  test('after a rotation: the old token’s drawer stays open behind, and Done goes back to it', async () => {
+    vi.mocked(rotateAccessTokenUseCase).mockResolvedValue({
+      outcome: 'issued',
+      raw,
+      token: token({ tokenId: 'ffffffffffffffffffffffff' })
+    })
+
+    const { $ } = await post(`${tokenPath(ids.active)}/rotate`, {
+      keepOld: '24h'
+    })
+
+    expect(isOpenWithoutScript($, 'token-issued')).toBe(true)
+    expect(isOpenWithoutScript($, `token-${ids.active}`)).toBe(true)
+    expect($('[data-testid="token-issued-done"]').attr('href')).toBe(
+      `/dev-ops/clients/gas?token=${ids.active}`
+    )
+    expect(rotateAccessTokenUseCase).toHaveBeenCalledWith(
+      { service: 'gas', clientId: 'grants-ui', tokenId: ids.active },
+      '24h'
+    )
+  })
+
+  test('the next page has no token in it', async () => {
+    const { payload } = await get('/dev-ops/clients/gas')
+
+    expect(payload).not.toContain(raw)
+    expect(payload).not.toContain('token-issued')
+  })
+})
+
+describe('in production', () => {
+  afterEach(() => {
+    config.set('environmentLabel', 'local')
+  })
+
+  test('every dialog that changes something says so first; Token issued doesn’t', async () => {
+    config.set('environmentLabel', 'prod')
+
+    const { $ } = await get(`/dev-ops/clients/gas?token=${ids.active}`)
+    const notes = (id: string) =>
+      $(`dialog#${id} [data-testid="token-prod-note"]`)
+
+    for (const id of [
+      'token-new',
+      `token-${ids.active}-rotate`,
+      `token-${ids.active}-expiry`,
+      `token-${ids.active}-revoke`,
+      `token-${ids.revoked}-delete`
+    ]) {
+      expect(notes(id)).toHaveLength(1)
+      expect(flatten(notes(id).find('.gpa-badge').text())).toBe('prod')
+      expect(flatten(notes(id).find('.gpa-badge + span').text())).toBe(
+        'This changes production.'
+      )
+      expect(notes(id).find('.gpa-badge').attr('class')).toContain(
+        'gpa-badge-danger gpa-badge-outline'
+      )
+    }
+  })
+
+  test('none elsewhere', async () => {
+    const { $ } = await get('/dev-ops/clients/gas')
+
+    expect($('[data-testid="token-prod-note"]')).toHaveLength(0)
+  })
+})
+
+describe('the outcome of a write', () => {
+  test.each([
+    [
+      'issue',
+      '/dev-ops/clients/gas/tokens',
+      { clientId: 'new-caller', expiry: '90', date: '' },
+      issueAccessTokenUseCase,
+      'New token status unknown.'
+    ],
+    [
+      'rotate',
+      `${tokenPath(ids.active)}/rotate`,
+      { keepOld: '24h' },
+      rotateAccessTokenUseCase,
+      'Rotation status unknown.'
+    ],
+    [
+      'expiry',
+      `${tokenPath(ids.active)}/expiry`,
+      { expiry: '30', date: '', hint: '3e1d' },
+      changeTokenExpiryUseCase,
+      'Expiry change status unknown.'
+    ],
+    [
+      'revoke',
+      `${tokenPath(ids.active)}/revoke`,
+      { confirmText: 'grants-ui', hint: '3e1d' },
+      revokeAccessTokenUseCase,
+      'Revoke status unknown.'
+    ],
+    [
+      'delete',
+      `${tokenPath(ids.revoked, 'old-caller')}/delete`,
+      {},
+      deleteAccessTokenUseCase,
+      'Delete status unknown.'
+    ]
+  ] as const)(
+    'unknown after %s: back to the list with a warning, once',
+    async (action, url, payload, useCase, title) => {
+      vi.mocked(useCase).mockResolvedValue({ outcome: 'unknown' })
+
+      const { written, page, cookie } = await postAndFollow(url, payload)
+      const alert = page.$('[data-testid="tokens-alert"]')
+
+      expect(written.statusCode).toBe(303)
+      expect(written.headers.location).toBe('/dev-ops/clients/gas')
+      expect(alert.hasClass('gpa-alert-warning')).toBe(true)
+      expect(alert.is('[data-focus-on-arrival]')).toBe(true)
+      expect(flatten(alert.find('.gpa-alert-title').text())).toBe(title)
+      expect(flatten(alert.find('.gpa-alert-body > div').text())).toMatch(
+        action === 'issue' || action === 'rotate'
+          ? /^GAS didn’t answer in time\. Refresh to see .* before trying again\. If a token was issued, revoke it: its value can’t be shown again\.$/
+          : /^GAS didn’t answer in time\. Refresh to see .* before trying again\.$/
+      )
+      expect(
+        (await get('/dev-ops/clients/gas', cookie)).$(
+          '[data-testid="tokens-alert"]'
+        )
+      ).toHaveLength(0)
+    }
+  )
+
+  test('an error GAS answered a write with: back to the list, naming GAS', async () => {
+    vi.mocked(revokeAccessTokenUseCase).mockResolvedValue({
+      outcome: 'errored'
+    })
+
+    const { written, page } = await postAndFollow(
+      `${tokenPath(ids.active)}/revoke`,
+      { confirmText: 'grants-ui', hint: '3e1d' }
+    )
+    const alert = page.$('[data-testid="tokens-alert"]')
+
+    expect(written.statusCode).toBe(303)
+    expect(alert.hasClass('gpa-alert-warning')).toBe(true)
+    expect(flatten(alert.find('.gpa-alert-title').text())).toBe(
+      'Revoke status unknown.'
+    )
+    expect(flatten(alert.find('.gpa-alert-body > div').text())).toBe(
+      'GAS answered with an error. Refresh to see whether the token was revoked before trying again.'
+    )
+  })
+
+  test('a GAS with no token routes refuses a write in its dialog', async () => {
+    vi.mocked(revokeAccessTokenUseCase).mockResolvedValue({
+      outcome: 'not-offered'
+    })
+
+    const { statusCode, $ } = await post(`${tokenPath(ids.active)}/revoke`, {
+      confirmText: 'grants-ui',
+      hint: '3e1d'
+    })
+    const refusal = `dialog#token-${ids.active}-revoke [data-testid="token-refusal"]`
+
+    expect(statusCode).toBe(400)
+    expect(text($, `${refusal} .gpa-alert-title`)).toBe('Not revoked.')
+    expect(text($, `${refusal} .gpa-alert-body > div`)).toBe(
+      'GAS doesn’t offer access tokens. Nothing has changed.'
+    )
+  })
+
+  test('a notice isn’t shown on the other service’s page', async () => {
+    vi.mocked(deleteAccessTokenUseCase).mockResolvedValue({ outcome: 'done' })
+
+    const written = await post(`${tokenPath(ids.revoked, 'old-caller')}/delete`)
+
+    expect(
+      toastOf((await get('/dev-ops/clients/cw', sessionCookie(written))).$).text
+    ).toBe('')
+  })
+})
+
+describe('Times', () => {
+  test.each([
+    [
+      'utc',
+      '2027-01-31T23:59:59.000Z',
+      '31 Jan 2027',
+      '31 Jan 2027 23:59:59 GMT'
+    ],
+    [
+      'uk',
+      '2027-01-31T23:59:59.000Z',
+      '31 Jan 2027',
+      '31 Jan 2027 23:59:59 GMT'
+    ],
+    [
+      'utc',
+      '2027-07-31T22:59:59.000Z',
+      '31 Jul 2027',
+      '31 Jul 2027 23:59:59 BST'
+    ],
+    [
+      'uk',
+      '2027-07-31T22:59:59.000Z',
+      '31 Jul 2027',
+      '31 Jul 2027 23:59:59 BST'
+    ],
+    [
+      'utc',
+      '2027-05-30T23:59:59.000Z',
+      '31 May 2027',
+      '31 May 2027 00:59:59 BST'
+    ],
+    [
+      'uk',
+      '2027-05-30T23:59:59.000Z',
+      '31 May 2027',
+      '31 May 2027 00:59:59 BST'
+    ]
+  ])(
+    'under %s, an expiry of %s is the UK day %s, as the dialog and toasts say it, with the title %s',
+    async (choice, expiresAt, day, title) => {
+      vi.mocked(listAccessTokensUseCase).mockResolvedValue(
+        listed([token({ expiresAt })])
+      )
+
+      const { $ } = await get('/dev-ops/clients/gas', `dev-ops-times=${choice}`)
+      const time = $('[data-testid="token-row"] time')
+
+      expect(time.text()).toBe(day.replace(' ', '\u00a0'))
+      expect(time.attr('title')).toBe(title)
+      expect(time.attr('datetime')).toBe(expiresAt.replace('.000', ''))
+    }
+  )
+
+  test('the list writes an expiry the same under UTC and UK time', async () => {
+    vi.mocked(listAccessTokensUseCase).mockResolvedValue(
+      listed([token({ expiresAt: '2027-05-30T23:59:59.000Z' })])
+    )
+
+    const expiryUnder = async (choice: string) => {
+      const time = (
+        await get('/dev-ops/clients/gas', `dev-ops-times=${choice}`)
+      ).$('[data-testid="token-row"] time')
+
+      return { text: time.text(), title: time.attr('title') }
+    }
+
+    const utc = await expiryUnder('utc')
+
+    expect(utc).toEqual({
+      text: '31\u00a0May 2027',
+      title: '31 May 2027 00:59:59 BST'
+    })
+    expect(await expiryUnder('uk')).toEqual(utc)
+  })
+
+  test('the Change expiry dialog starts on the same UK day the list shows', async () => {
+    vi.mocked(listAccessTokensUseCase).mockResolvedValue(
+      listed([
+        token({ tokenId: ids.active, expiresAt: '2027-05-30T23:59:59.000Z' })
+      ])
+    )
+
+    const { $ } = await get(
+      `/dev-ops/clients/gas?token=${ids.active}&dialog=expiry`,
+      'dev-ops-times=utc'
+    )
+
+    expect($('[data-testid="token-row"] time').text()).toBe('31\u00a0May 2027')
+    expect(
+      $(`dialog#token-${ids.active}-expiry input[type="date"]`).attr('value')
+    ).toBe('2027-05-31')
+  })
+})
+
+/** Each action end to end as a browser without a script does it: follow the link, send the form as drawn, follow the redirect. */
+describe('each action without a script', () => {
+  test('issue: New token, the form, Token issued, Done', async () => {
+    vi.mocked(issueAccessTokenUseCase).mockResolvedValue({
+      outcome: 'issued',
+      raw,
+      token: token({ clientId: 'new-caller' })
+    })
+
+    const list = await get('/dev-ops/clients/gas')
+    const opened = await get(
+      list.$('[data-testid="token-new-open"]').attr('href') as string
+    )
+    const form = {
+      ...formOf(opened.$, 'token-new-form'),
+      clientId: 'new-caller'
+    }
+    const action = opened.$('form#token-new-form').attr('action') as string
+    const issued = await post(action, form)
+    const done = await get(
+      issued.$('[data-testid="token-issued-done"]').attr('href') as string
+    )
+
+    expect(form).toEqual({ clientId: 'new-caller', expiry: '90', date: '' })
+    expect(issued.$('#token-issued-value').attr('value')).toBe(raw)
+    expect(done.$('dialog[open]')).toHaveLength(0)
+    expect(vi.mocked(issueAccessTokenUseCase).mock.calls[0]).toEqual([
+      'gas',
+      'new-caller',
+      {
+        expiresAt: expect.stringMatching(/T2[23]:59:59\.000Z$/),
+        confirmed: false
+      }
+    ])
+  })
+
+  test('rotate: the drawer, Rotate, the form, Token issued, Done back to the drawer', async () => {
+    vi.mocked(rotateAccessTokenUseCase).mockResolvedValue({
       outcome: 'issued',
       raw,
       token: token()
     })
-    const reveal = await post('/dev-ops/clients/gas/tokens', {
-      clientId: 'grants-ui',
-      expiry: '90',
-      date: ''
-    })
-    const error = await post('/dev-ops/clients/gas/tokens', {
-      clientId: 'Bad',
-      expiry: '90',
-      date: ''
-    })
-    vi.mocked(deleteAccessTokenUseCase).mockResolvedValue({ outcome: 'done' })
-    const { page } = await postAndFollow(`${tokenPath}/delete`, {
-      hint: 'x7Qa'
+
+    const drawer = await get(`/dev-ops/clients/gas?token=${ids.inUse}`)
+    const opened = await get(
+      drawer
+        .$(`dialog#token-${ids.inUse} [data-testid="token-rotate"]`)
+        .attr('href') as string
+    )
+    const formId = `token-${ids.inUse}-rotate-form`
+    const issued = await post(
+      opened.$(`form#${formId}`).attr('action') as string,
+      formOf(opened.$, formId)
+    )
+    const done = await get(
+      issued.$('[data-testid="token-issued-done"]').attr('href') as string
+    )
+
+    expect(rotateAccessTokenUseCase).toHaveBeenCalledWith(
+      {
+        service: 'gas',
+        clientId: 'fg-grants-platform-admin',
+        tokenId: ids.inUse
+      },
+      '24h'
+    )
+    expect(isOpenWithoutScript(done.$, `token-${ids.inUse}`)).toBe(true)
+  })
+
+  test('change expiry: preset, then the drawer again with a toast, once', async () => {
+    vi.mocked(changeTokenExpiryUseCase).mockResolvedValue({
+      outcome: 'done',
+      token: token({ expiresAt: '2027-02-04T23:59:59.000Z' })
     })
 
-    expect(bannedIn(reveal.$)).toBe(false)
-    expect(bannedIn(error.$)).toBe(false)
-    expect(page.$('[data-testid="token-toast"]')).toHaveLength(1)
-    expect(bannedIn(page.$)).toBe(false)
+    const opened = await get(
+      `/dev-ops/clients/gas?token=${ids.active}&dialog=expiry`
+    )
+    const formId = `token-${ids.active}-expiry-form`
+    const form = { ...formOf(opened.$, formId), expiry: '30' }
+    const { written, page, cookie } = await postAndFollow(
+      opened.$(`form#${formId}`).attr('action') as string,
+      form
+    )
+
+    expect(form).toEqual({ hint: '3e1d', expiry: '30', date: '' })
+    expect(written.statusCode).toBe(303)
+    expect(written.headers.location).toBe(
+      `/dev-ops/clients/gas?token=${ids.active}`
+    )
+    expect(isOpenWithoutScript(page.$, `token-${ids.active}`)).toBe(true)
+    expect(toastOf(page.$)).toEqual({
+      tone: 'success',
+      text: 'Expiry changed to 4 Feb 2027'
+    })
+    const again = (await get('/dev-ops/clients/gas', cookie)).$
+
+    expect(toastOf(again).text).toBe('')
+    expect(again('.gpa-toast-region')).toHaveLength(0)
   })
+
+  test('change expiry: a custom date left as it is keeps the token’s exact instant', async () => {
+    vi.mocked(changeTokenExpiryUseCase).mockResolvedValue({
+      outcome: 'done',
+      token: token({ expiresAt: null })
+    })
+
+    const opened = await get(
+      `/dev-ops/clients/gas?token=${ids.dated}&dialog=expiry`
+    )
+    const formId = `token-${ids.dated}-expiry-form`
+    const { page } = await postAndFollow(
+      `${tokenPath(ids.dated, 'farming-grants-agreements-ui')}/expiry`,
+      formOf(opened.$, formId)
+    )
+
+    expect(changeTokenExpiryUseCase).toHaveBeenCalledWith(
+      {
+        service: 'gas',
+        clientId: 'farming-grants-agreements-ui',
+        tokenId: ids.dated
+      },
+      '2027-01-31T23:59:59.000Z'
+    )
+    expect(toastOf(page.$).text).toBe('Expiry changed to never')
+  })
+
+  test('change expiry: a custom date ends at 23:59:59 UK time, in summer too', async () => {
+    vi.mocked(changeTokenExpiryUseCase).mockResolvedValue({
+      outcome: 'done',
+      token: token()
+    })
+
+    await post(`${tokenPath(ids.active)}/expiry`, {
+      expiry: 'custom',
+      date: '2099-07-04',
+      hint: ''
+    })
+
+    expect(vi.mocked(changeTokenExpiryUseCase).mock.calls[0][1]).toBe(
+      '2099-07-04T22:59:59.000Z'
+    )
+  })
+
+  test('revoke: typed text, then the drawer again, now revoked, with a toast', async () => {
+    vi.mocked(revokeAccessTokenUseCase).mockResolvedValue({ outcome: 'done' })
+
+    const opened = await get(
+      `/dev-ops/clients/gas?token=${ids.active}&dialog=revoke`
+    )
+    const formId = `token-${ids.active}-revoke-form`
+    const form = { ...formOf(opened.$, formId), confirmText: 'grants-ui' }
+    const { written, page } = await postAndFollow(
+      opened.$(`form#${formId}`).attr('action') as string,
+      form
+    )
+
+    expect(form).toEqual({ hint: '3e1d', confirmText: 'grants-ui' })
+    expect(written.headers.location).toBe(
+      `/dev-ops/clients/gas?token=${ids.active}`
+    )
+    expect(revokeAccessTokenUseCase).toHaveBeenCalledWith({
+      service: 'gas',
+      clientId: 'grants-ui',
+      tokenId: ids.active
+    })
+    expect(toastOf(page.$)).toEqual({
+      tone: 'success',
+      text: 'Token …3e1d revoked'
+    })
+  })
+
+  test('delete: then the list, drawer closed, with an info toast', async () => {
+    vi.mocked(deleteAccessTokenUseCase).mockResolvedValue({ outcome: 'done' })
+
+    const opened = await get(
+      `/dev-ops/clients/gas?token=${ids.revoked}&dialog=delete`
+    )
+    const formId = `token-${ids.revoked}-delete-form`
+    const { written, page } = await postAndFollow(
+      opened.$(`form#${formId}`).attr('action') as string,
+      formOf(opened.$, formId)
+    )
+
+    expect(written.headers.location).toBe('/dev-ops/clients/gas')
+    expect(page.$('dialog[open]')).toHaveLength(0)
+    expect(toastOf(page.$)).toEqual({
+      tone: 'info',
+      text: 'Token record deleted'
+    })
+  })
+
+  test.each([
+    ['/dev-ops/clients/gas/tokens', { clientId: 'x', expiry: '90', date: '' }],
+    [`${tokenPath(ids.active)}/rotate`, { keepOld: '24h' }],
+    [`${tokenPath(ids.active)}/expiry`, { expiry: '30', date: '' }],
+    [`${tokenPath(ids.active)}/revoke`, { confirmText: 'grants-ui' }],
+    [`${tokenPath(ids.revoked, 'old-caller')}/delete`, {}]
+  ])(
+    'a cross-site POST to %s is refused, and nothing is written',
+    async (url, payload) => {
+      const { statusCode } = await post(url, payload, {
+        'sec-fetch-site': 'cross-site'
+      })
+
+      expect(statusCode).toBe(403)
+      for (const useCase of [
+        issueAccessTokenUseCase,
+        rotateAccessTokenUseCase,
+        changeTokenExpiryUseCase,
+        revokeAccessTokenUseCase,
+        deleteAccessTokenUseCase
+      ]) {
+        expect(useCase).not.toHaveBeenCalled()
+      }
+    }
+  )
 })

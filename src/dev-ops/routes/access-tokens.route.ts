@@ -6,8 +6,8 @@ import type {
 } from '@hapi/hapi'
 import Joi from 'joi'
 
+import { config } from '../../common/config.ts'
 import type {
-  ApiToken,
   ClientService,
   IssueResult,
   KeepOld,
@@ -31,34 +31,45 @@ import type {
 import {
   clientNamePattern,
   confirmsRevoke,
+  dialogKinds,
   expiryChoiceValues,
+  formStatus,
+  keepOldValues,
   parseExpiry,
   parseNewToken,
   revokeMismatch,
   toExpiryFieldErrors,
   toIssueFieldErrors
 } from '../view-models/access-token-forms.ts'
+import type {
+  TokenAction,
+  TokenNotice
+} from '../view-models/access-token-messages.ts'
+import {
+  accessTokenNoticeKey,
+  deletedToast,
+  toExpiryToast,
+  toNoticeFor,
+  toRefusal,
+  toRevokedToast,
+  toUnknownAlert,
+  isUncertain
+} from '../view-models/access-token-messages.ts'
 import {
   clientServices,
   toClientsPath
 } from '../view-models/access-token-services.ts'
 import type {
-  NoticeAction,
-  TokenNotice
-} from '../view-models/access-token-toasts.ts'
-import {
-  accessTokenNoticeKey,
-  toFailureOutcome,
-  toRefusalMessage
-} from '../view-models/access-token-toasts.ts'
-import type { Reveal } from '../view-models/access-tokens-page.view-model.ts'
+  OpenRequest,
+  Reveal
+} from '../view-models/access-tokens-page.view-model.ts'
 import {
   accessTokensPageCache,
-  toAccessTokensPage
+  toAccessTokensPage,
+  toListStatus
 } from '../view-models/access-tokens-page.view-model.ts'
 import { seeOther } from '../view-models/see-other.ts'
-
-const badRequest = 400
+import { shellQuery } from '../view-models/times.ts'
 
 const service = Joi.string()
   .valid(...clientServices)
@@ -66,10 +77,19 @@ const service = Joi.string()
 
 const serviceParams = Joi.object({ service })
 
+const tokenId = Joi.string().hex().length(24)
+
 const tokenParams = Joi.object({
   service,
   clientId: Joi.string().pattern(clientNamePattern).required(),
-  tokenId: Joi.string().hex().length(24).required()
+  tokenId: tokenId.required()
+})
+
+/** What the page is asked to open, besides what the shell asks of every page. */
+const openQuery = Joi.object({
+  token: tokenId,
+  dialog: Joi.string().valid(...dialogKinds),
+  ...shellQuery
 })
 
 /** Read only for the words of a toast, never for the write itself. */
@@ -85,82 +105,74 @@ const expiryFields = {
   date: Joi.string().allow('').max(10).default('')
 }
 
-/**
- * Every page this answers carries no-store: a reveal holds a live token, and
- * an error is rendered beside a list that may have changed since.
- */
-const view = (
-  h: ResponseToolkit,
-  page: ReturnType<typeof toAccessTokensPage>,
-  code = 200
-): ResponseObject =>
-  h.view('access-tokens', page).code(code).header('cache-control', 'no-store')
+const serviceOf = (request: Request): ClientService =>
+  (request.params as { service: ClientService }).service
+
+const tokenKeyOf = (request: Request): TokenKey =>
+  request.params as unknown as TokenKey
 
 interface PageExtras {
+  requested?: OpenRequest
   dialog?: OpenDialog
   reveal?: Reveal
+  notice?: TokenNotice | null
 }
 
+/**
+ * Every page this answers carries no-store: a reveal holds a live token, and
+ * an error is drawn beside a list that may have changed since.
+ */
 const renderPage = async (
+  request: Request,
   h: ResponseToolkit,
-  serviceName: ClientService,
   extras: PageExtras,
   code?: number
-): Promise<ResponseObject> =>
-  view(
-    h,
-    toAccessTokensPage({
-      service: serviceName,
-      tokens: await listAccessTokensUseCase(serviceName),
-      now: new Date(),
-      ...extras
-    }),
-    code
-  )
+): Promise<ResponseObject> => {
+  const shown = serviceOf(request)
+  const list = await listAccessTokensUseCase(shown)
+  const page = toAccessTokensPage({
+    service: shown,
+    list,
+    now: new Date(),
+    prod: config.get('environmentLabel') === 'prod',
+    ...extras
+  })
+  const status = code ?? toListStatus(list)
 
-/** The same page, with the dialog open again on what was wrong. */
-const reopen = (
-  h: ResponseToolkit,
-  serviceName: ClientService,
-  dialog: OpenDialog
-) => renderPage(h, serviceName, { dialog }, badRequest)
-
-/** Only the latest write's: a reveal left without Done never spends its own. */
-const putNotice = (request: Request, notice: TokenNotice) => {
-  request.yar.flash(accessTokenNoticeKey)
-  request.yar.flash(accessTokenNoticeKey, notice)
+  return h
+    .view('access-tokens', page)
+    .code(status)
+    .header('cache-control', 'no-store')
 }
+
+/** The same page, with the dialog open again on what was wrong: 400, or 200 for a warning that isn't an error. */
+const reopen = (
+  request: Request,
+  h: ResponseToolkit,
+  dialog: OpenDialog,
+  code: number = formStatus.refused
+) => renderPage(request, h, { dialog }, code)
 
 /**
  * The page the write came from, and nothing about the outcome in the url:
  * the outcome rides the session instead, spent on one render.
  */
-const backTo = (request: Request, h: ResponseToolkit, notice: TokenNotice) => {
-  putNotice(request, notice)
+const backTo = (
+  request: Request,
+  h: ResponseToolkit,
+  notice: TokenNotice,
+  to: string
+) => {
+  request.yar.flash(accessTokenNoticeKey)
+  request.yar.flash(accessTokenNoticeKey, notice)
 
-  return h.redirect(toClientsPath(notice.service)).code(seeOther)
+  return h.redirect(to).code(seeOther)
 }
 
-interface NoticeContext {
-  action: NoticeAction
-  key: TokenKey
-  hint: string
-}
+const tokenPage = ({ service: shown, tokenId: id }: TokenKey): string =>
+  `${toClientsPath(shown)}?token=${id}`
 
-const failureNotice = (
-  { action, key, hint: shown }: NoticeContext,
-  failure: TokenFailure
-): TokenNotice => ({
-  service: key.service,
-  action,
-  ...toFailureOutcome(failure),
-  tokenId: key.tokenId,
-  clientId: key.clientId,
-  hint: shown || null,
-  expiresAt: null
-})
-
-const dialogKinds: Record<NoticeAction, DialogKind> = {
+const dialogOf: Record<TokenAction, DialogKind> = {
   issue: 'new',
   rotate: 'rotate',
   expiry: 'expiry',
@@ -169,118 +181,95 @@ const dialogKinds: Record<NoticeAction, DialogKind> = {
 }
 
 /**
- * A refusal the operator can act on opens the dialog again, saying why;
- * anything else goes back to the page as a toast.
+ * A write that may have happened goes back to the list, saying so; any other
+ * failure opens its dialog again with the refusal, or, if the list no longer
+ * has the token, says it in a toast.
  */
 const afterFailure = (
   request: Request,
   h: ResponseToolkit,
-  context: NoticeContext,
+  action: TokenAction,
   failure: TokenFailure,
-  values: Record<string, string> = {}
+  {
+    tokenId: id = null,
+    values = {}
+  }: { tokenId?: string | null; values?: Record<string, string> }
 ) => {
-  const notice = failureNotice(context, failure)
+  const shown = serviceOf(request)
 
-  return notice.outcome === 'refused'
-    ? reopen(h, context.key.service, {
-        kind: dialogKinds[context.action],
-        tokenId: context.action === 'issue' ? null : context.key.tokenId,
+  return isUncertain(failure)
+    ? backTo(
+        request,
+        h,
+        { service: shown, alert: toUnknownAlert(action, shown, failure) },
+        toClientsPath(shown)
+      )
+    : reopen(request, h, {
+        kind: dialogOf[action],
+        tokenId: id,
         values,
-        errors: { form: toRefusalMessage(notice) }
+        errors: {},
+        refusal: toRefusal(action, failure, shown)
       })
-    : backTo(request, h, notice)
 }
 
-/**
- * The response to the POST that issued a token is the one place its value
- * appears. The page Done leads to says the token is live, from a notice that
- * names the client only.
- */
+/** The response to the POST that issued a token is the one place its value appears. */
 const toReveal = (
   request: Request,
   h: ResponseToolkit,
-  action: 'issue' | 'rotate',
-  key: Pick<TokenKey, 'service' | 'clientId'>,
-  result: Extract<IssueResult, { outcome: 'issued' }>
-) => {
-  const clientId = result.token.clientId ?? key.clientId
-  const tokenHint = result.token.tokenHint ?? result.raw.slice(-4)
-
-  putNotice(request, {
-    service: key.service,
-    action,
-    outcome: 'done',
-    errorCode: null,
-    tokenId: result.token.tokenId,
-    clientId,
-    hint: tokenHint,
-    expiresAt: null
+  clientId: string,
+  result: Extract<IssueResult, { outcome: 'issued' }>,
+  rotatedTokenId: string | null = null
+) =>
+  renderPage(request, h, {
+    reveal: {
+      clientId: result.token.clientId ?? clientId,
+      raw: result.raw,
+      rotatedTokenId
+    }
   })
-
-  return renderPage(h, key.service, {
-    reveal: { clientId, raw: result.raw, hint: tokenHint }
-  })
-}
-
-const tokenKeyOf = (request: Request): TokenKey =>
-  request.params as unknown as TokenKey
 
 export const viewAccessTokensRoute: ServerRoute = {
   method: 'GET',
   path: '/dev-ops/clients/{service}',
   options: {
     cache: accessTokensPageCache,
-    validate: { params: serviceParams }
+    validate: { params: serviceParams, query: openQuery }
   },
   async handler(request: Request, h: ResponseToolkit) {
-    const { service: shown } = request.params as { service: ClientService }
+    const { token, dialog } = request.query as {
+      token?: string
+      dialog?: DialogKind
+    }
     // Read before the list, so the message is spent whatever the read says.
     const [notice] = request.yar.flash(accessTokenNoticeKey)
 
-    return h.view(
-      'access-tokens',
-      toAccessTokensPage({
-        service: shown,
-        tokens: await listAccessTokensUseCase(shown),
-        now: new Date(),
-        notice
-      })
-    )
+    return renderPage(request, h, {
+      requested: { tokenId: token ?? null, dialog: dialog ?? null },
+      notice: toNoticeFor(notice, serviceOf(request))
+    })
   }
 }
 
-const afterIssueFailure = (
+const issueRefused = (
   request: Request,
   h: ResponseToolkit,
   values: NewTokenInput,
   failure: TokenFailure
 ) => {
-  const { service: shown } = request.params as { service: ClientService }
   const errors =
-    failure.outcome === 'refused' ? toIssueFieldErrors(failure.errorCode) : null
+    failure.outcome === 'refused'
+      ? toIssueFieldErrors(failure.errorCode, values.expiry)
+      : null
 
   return errors
-    ? reopen(h, shown, {
+    ? reopen(request, h, {
         kind: 'new',
         tokenId: null,
         values: { ...values },
         errors
       })
-    : afterFailure(
-        request,
-        h,
-        {
-          action: 'issue',
-          key: {
-            service: shown,
-            clientId: values.clientId.trim(),
-            tokenId: ''
-          },
-          hint: ''
-        },
-        failure,
-        { ...values }
-      )
+    : afterFailure(request, h, 'issue', failure, { values: { ...values } })
 }
 
 /** Creates the client too when no token has its name yet. */
@@ -292,17 +281,17 @@ export const issueAccessTokenRoute: ServerRoute = {
       params: serviceParams,
       payload: Joi.object({
         clientId: Joi.string().allow('').max(200).required(),
+        confirmFor: Joi.string().allow('').max(200).default(''),
         ...expiryFields
       })
     }
   },
   async handler(request: Request, h: ResponseToolkit) {
-    const { service: shown } = request.params as { service: ClientService }
     const values = request.payload as NewTokenInput
     const parsed = parseNewToken(values, new Date())
 
     if (!parsed.ok) {
-      return reopen(h, shown, {
+      return reopen(request, h, {
         kind: 'new',
         tokenId: null,
         values: { ...values },
@@ -311,11 +300,29 @@ export const issueAccessTokenRoute: ServerRoute = {
     }
 
     const { clientId, expiresAt } = parsed.value
-    const result = await issueAccessTokenUseCase(shown, clientId, expiresAt)
+    const result = await issueAccessTokenUseCase(serviceOf(request), clientId, {
+      expiresAt,
+      confirmed: values.confirmFor === clientId
+    })
 
-    return result.outcome === 'issued'
-      ? toReveal(request, h, 'issue', { service: shown, clientId }, result)
-      : afterIssueFailure(request, h, values, result)
+    if (result.outcome === 'issued') {
+      return toReveal(request, h, clientId, result)
+    }
+
+    return result.outcome === 'has-active'
+      ? reopen(
+          request,
+          h,
+          {
+            kind: 'new',
+            tokenId: null,
+            values: { ...values, clientId },
+            errors: {},
+            active: result.active
+          },
+          formStatus.warned
+        )
+      : issueRefused(request, h, values, result)
   }
 }
 
@@ -326,7 +333,9 @@ export const rotateAccessTokenRoute: ServerRoute = {
     validate: {
       params: tokenParams,
       payload: Joi.object({
-        keepOld: Joi.string().valid('none', '24h', '7d').required()
+        keepOld: Joi.string()
+          .valid(...keepOldValues)
+          .required()
       })
     }
   },
@@ -336,9 +345,10 @@ export const rotateAccessTokenRoute: ServerRoute = {
     const result = await rotateAccessTokenUseCase(key, keepOld)
 
     return result.outcome === 'issued'
-      ? toReveal(request, h, 'rotate', key, result)
-      : afterFailure(request, h, { action: 'rotate', key, hint: '' }, result, {
-          keepOld
+      ? toReveal(request, h, key.clientId, result, key.tokenId)
+      : afterFailure(request, h, 'rotate', result, {
+          tokenId: key.tokenId,
+          values: { keepOld }
         })
   }
 }
@@ -347,51 +357,30 @@ interface ExpiryPayload extends ExpiryInput {
   hint: string
 }
 
-const reopenExpiry = (
-  h: ResponseToolkit,
-  key: TokenKey,
-  { expiry, date }: ExpiryPayload,
-  errors: Record<string, string>
-) =>
-  reopen(h, key.service, {
-    kind: 'expiry',
-    tokenId: key.tokenId,
-    values: { expiry, date },
-    errors
-  })
+/** The expiry the token has now, from the service rather than the form: a date left on its day keeps it to the second. */
+const currentExpiryOf = async (key: TokenKey): Promise<string> => {
+  const list = await listAccessTokensUseCase(key.service)
+  const tokens = list.outcome === 'done' ? list.tokens : []
 
-const expiryNotice = (key: TokenKey, token: ApiToken): TokenNotice => ({
-  service: key.service,
-  action: 'expiry',
-  outcome: 'done',
-  errorCode: null,
-  tokenId: key.tokenId,
-  clientId: key.clientId,
-  hint: token.tokenHint,
-  expiresAt: token.expiresAt
-})
+  return tokens.find(({ tokenId: id }) => id === key.tokenId)?.expiresAt ?? ''
+}
 
-const afterExpiryFailure = (
+/** A refused date comes back on its field; any other failure, as any write's. */
+const expiryRefused = (
   request: Request,
   h: ResponseToolkit,
-  payload: ExpiryPayload,
+  values: { expiry: string; date: string },
   failure: TokenFailure
 ) => {
-  const key = tokenKeyOf(request)
+  const { tokenId: id } = tokenKeyOf(request)
   const errors =
     failure.outcome === 'refused'
-      ? toExpiryFieldErrors(failure.errorCode)
+      ? toExpiryFieldErrors(failure.errorCode, values.expiry)
       : null
 
   return errors
-    ? reopenExpiry(h, key, payload, errors)
-    : afterFailure(
-        request,
-        h,
-        { action: 'expiry', key, hint: payload.hint },
-        failure,
-        { expiry: payload.expiry, date: payload.date }
-      )
+    ? reopen(request, h, { kind: 'expiry', tokenId: id, values, errors })
+    : afterFailure(request, h, 'expiry', failure, { tokenId: id, values })
 }
 
 export const changeTokenExpiryRoute: ServerRoute = {
@@ -402,42 +391,43 @@ export const changeTokenExpiryRoute: ServerRoute = {
       params: tokenParams,
       payload: Joi.object({
         ...expiryFields,
-        hint,
-        current: Joi.string().isoDate().allow('').default('')
+        hint
       })
     }
   },
   async handler(request: Request, h: ResponseToolkit) {
     const key = tokenKeyOf(request)
     const payload = request.payload as ExpiryPayload
-    const parsed = parseExpiry(payload, new Date())
+    const values = { expiry: payload.expiry, date: payload.date }
+    const parsed = parseExpiry(
+      { ...payload, current: await currentExpiryOf(key) },
+      new Date()
+    )
 
     if (!parsed.ok) {
-      return reopenExpiry(h, key, payload, parsed.errors)
+      return reopen(request, h, {
+        kind: 'expiry',
+        tokenId: key.tokenId,
+        values,
+        errors: parsed.errors
+      })
     }
 
     const result = await changeTokenExpiryUseCase(key, parsed.value)
 
     return result.outcome === 'done'
-      ? backTo(request, h, expiryNotice(key, result.token))
-      : afterExpiryFailure(request, h, payload, result)
+      ? backTo(
+          request,
+          h,
+          {
+            service: key.service,
+            toast: toExpiryToast(result.token.expiresAt)
+          },
+          tokenPage(key)
+        )
+      : expiryRefused(request, h, values, result)
   }
 }
-
-const doneNotice = ({
-  action,
-  key,
-  hint: shown
-}: NoticeContext): TokenNotice => ({
-  service: key.service,
-  action,
-  outcome: 'done',
-  errorCode: null,
-  tokenId: key.tokenId,
-  clientId: key.clientId,
-  hint: shown || null,
-  expiresAt: null
-})
 
 export const revokeAccessTokenRoute: ServerRoute = {
   method: 'POST',
@@ -446,33 +436,37 @@ export const revokeAccessTokenRoute: ServerRoute = {
     validate: {
       params: tokenParams,
       payload: Joi.object({
-        confirm: Joi.string().allow('').max(200).default(''),
+        confirmText: Joi.string().allow('').max(200).default(''),
         hint
       })
     }
   },
   async handler(request: Request, h: ResponseToolkit) {
     const key = tokenKeyOf(request)
-    const { confirm, hint: shown } = request.payload as {
-      confirm: string
+    const { confirmText, hint: shown } = request.payload as {
+      confirmText: string
       hint: string
     }
 
-    if (!confirmsRevoke(confirm, key.clientId)) {
-      return reopen(h, key.service, {
+    if (!confirmsRevoke(confirmText, key.clientId)) {
+      return reopen(request, h, {
         kind: 'revoke',
         tokenId: key.tokenId,
-        values: { confirm },
+        values: { confirmText },
         errors: { confirm: revokeMismatch }
       })
     }
 
     const result = await revokeAccessTokenUseCase(key)
-    const context: NoticeContext = { action: 'revoke', key, hint: shown }
 
     return result.outcome === 'done'
-      ? backTo(request, h, doneNotice(context))
-      : afterFailure(request, h, context, result)
+      ? backTo(
+          request,
+          h,
+          { service: key.service, toast: toRevokedToast(shown || null) },
+          tokenPage(key)
+        )
+      : afterFailure(request, h, 'revoke', result, { tokenId: key.tokenId })
   }
 }
 
@@ -481,20 +475,20 @@ export const deleteAccessTokenRoute: ServerRoute = {
   method: 'POST',
   path: '/dev-ops/clients/{service}/{clientId}/tokens/{tokenId}/delete',
   options: {
-    validate: {
-      params: tokenParams,
-      payload: Joi.object({ hint })
-    }
+    validate: { params: tokenParams }
   },
   async handler(request: Request, h: ResponseToolkit) {
     const key = tokenKeyOf(request)
-    const { hint: shown } = request.payload as { hint: string }
     const result = await deleteAccessTokenUseCase(key)
-    const context: NoticeContext = { action: 'delete', key, hint: shown }
 
     return result.outcome === 'done'
-      ? backTo(request, h, doneNotice(context))
-      : afterFailure(request, h, context, result)
+      ? backTo(
+          request,
+          h,
+          { service: key.service, toast: deletedToast },
+          toClientsPath(key.service)
+        )
+      : afterFailure(request, h, 'delete', result, { tokenId: key.tokenId })
   }
 }
 

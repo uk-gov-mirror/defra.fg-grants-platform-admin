@@ -1,315 +1,327 @@
 import {
   confirmsRevoke,
+  missingDate,
   parseClientId,
   parseExpiry,
   parseNewToken,
+  pastDate,
   toExpiryFieldErrors,
-  toExpiryPicker,
-  toExpirySummary,
+  toExpiryGroup,
+  toFirstCustomDate,
   toIssueFieldErrors,
-  toKeepOldChoices
+  toKeepOldOptions
 } from './access-token-forms.ts'
 
-const now = new Date('2026-11-04T13:50:00.000Z')
+/** A winter afternoon in the UK. */
+const winter = new Date('2026-11-10T15:00:00.000Z')
+/** 00:30 BST on 1 Jul: still 30 Jun in UTC, already 1 Jul in the UK. */
+const summerMidnight = new Date('2026-06-30T23:30:00.000Z')
 
 describe('parseExpiry', () => {
-  test.each([
-    ['never', '', null],
-    ['30', '', '2026-12-04T23:59:59.000Z'],
-    ['90', '', '2027-02-02T23:59:59.000Z'],
-    ['365', '', '2027-11-04T23:59:59.000Z'],
-    ['custom', '2027-01-31', '2027-01-31T23:59:59.000Z'],
-    ['custom', '2026-11-04', '2026-11-04T23:59:59.000Z']
-  ] as const)('reads %s %s as %s', (expiry, date, expiresAt) => {
-    expect(parseExpiry({ expiry, date }, now)).toEqual({
-      ok: true,
-      value: expiresAt
-    })
-  })
-
-  test.each([
-    ['', 'Pick a date.'],
-    ['31/01/2027', 'Pick a date.'],
-    ['2027-02-31', 'Pick a date.'],
-    ['2027-13-01', 'Pick a date.'],
-    ['2027-01-00', 'Pick a date.'],
-    ['2027-01-32', 'Pick a date.'],
-    ['2026-11-03', 'Pick a date in the future.']
-  ])('refuses a custom date of "%s"', (date, message) => {
-    expect(parseExpiry({ expiry: 'custom', date }, now)).toEqual({
-      ok: false,
-      errors: { expiry: message }
-    })
-  })
-
-  test('keeps the exact current expiry when the custom date is left on its day', () => {
-    expect(
-      parseExpiry(
-        {
-          expiry: 'custom',
-          date: '2027-01-31',
-          current: '2027-01-31T10:00:00.000Z'
-        },
-        now
-      )
-    ).toEqual({ ok: true, value: '2027-01-31T10:00:00.000Z' })
-  })
-
-  test('never keeps a current expiry that has passed: an untouched date does not revive', () => {
-    expect(
-      parseExpiry(
-        {
-          expiry: 'custom',
-          date: '2026-11-04',
-          current: '2026-11-04T09:00:00.000Z'
-        },
-        now
-      )
-    ).toEqual({ ok: false, errors: { expiry: 'Pick a date in the future.' } })
-  })
-
-  test('moves to the end of a new day when the custom date is changed', () => {
-    expect(
-      parseExpiry(
-        {
-          expiry: 'custom',
-          date: '2027-02-01',
-          current: '2027-01-31T10:00:00.000Z'
-        },
-        now
-      )
-    ).toEqual({ ok: true, value: '2027-02-01T23:59:59.000Z' })
-  })
-
-  test.each([
-    [
-      'in winter, when the UK keeps GMT',
-      '2027-01-15',
-      '2027-01-15T23:59:59.000Z'
-    ],
-    [
-      'in summer, when the UK is an hour ahead',
-      '2027-07-15',
-      '2027-07-15T22:59:59.000Z'
-    ]
-  ])('ends a custom date at 23:59:59 UK time %s', (_name, date, expiresAt) => {
-    expect(parseExpiry({ expiry: 'custom', date }, now)).toEqual({
-      ok: true,
-      value: expiresAt
-    })
-  })
-
-  test('says a summer custom date as that day, not the next', () => {
-    expect(toExpirySummary({ expiry: 'custom', date: '2027-07-15' }, now)).toBe(
-      'Expires 15 Jul 2027.'
-    )
-  })
-
-  test('ends a preset at 23:59:59 UK time on its day, taking the day from UK time', () => {
-    expect(
-      parseExpiry(
-        { expiry: '30', date: '' },
-        new Date('2027-06-10T22:30:00.000Z')
-      )
-    ).toEqual({ ok: true, value: '2027-07-10T22:59:59.000Z' })
-  })
-
-  test('keeps a current expiry by its UK day, though in UTC it falls on the day before', () => {
-    expect(
-      parseExpiry(
-        {
-          expiry: 'custom',
-          date: '2027-07-16',
-          current: '2027-07-15T23:30:00.000Z'
-        },
-        now
-      )
-    ).toEqual({ ok: true, value: '2027-07-15T23:30:00.000Z' })
-  })
-
-  test('ignores the date for a preset', () => {
-    expect(parseExpiry({ expiry: 'never', date: 'nonsense' }, now)).toEqual({
+  test('never is null', () => {
+    expect(parseExpiry({ expiry: 'never', date: '' }, winter)).toEqual({
       ok: true,
       value: null
     })
   })
-})
 
-describe('toExpirySummary', () => {
   test.each([
-    ['never', '', 'Never expires.'],
-    ['90', '', 'Expires 2 Feb 2027.'],
-    ['custom', '2026-11-04', 'Expires 4 Nov 2026.'],
-    ['custom', '', 'Pick a date.'],
-    ['custom', '2026-11-03', 'Pick a date in the future.']
-  ] as const)('sums up %s %s', (expiry, date, summary) => {
-    expect(toExpirySummary({ expiry, date }, now)).toBe(summary)
-  })
-})
+    ['30', '2026-12-10T23:59:59.000Z'],
+    ['90', '2027-02-08T23:59:59.000Z'],
+    ['365', '2027-11-10T23:59:59.000Z']
+  ] as const)(
+    'a %s-day preset ends at 23:59:59 UK time on that day',
+    (expiry, expected) => {
+      expect(parseExpiry({ expiry, date: '' }, winter)).toEqual({
+        ok: true,
+        value: expected
+      })
+    }
+  )
 
-describe('toExpiryPicker', () => {
-  test('checks the chosen option and offers no day before today', () => {
-    expect(
-      toExpiryPicker('p', { expiry: '90', date: '' }, undefined, now)
-    ).toEqual({
-      id: 'p',
-      choices: [
-        { value: 'never', label: 'Never', checked: false },
-        { value: '30', label: '30 days', checked: false },
-        { value: '90', label: '90 days', checked: true },
-        { value: '365', label: '1 year', checked: false },
-        { value: 'custom', label: 'Custom date', checked: false }
-      ],
-      date: '',
-      min: '2026-11-04',
-      summary: 'Expires 2 Feb 2027.',
-      error: null,
-      current: '',
-      resetTo: '90',
-      resetDate: ''
+  test('a preset counts its days from the UK date, and ends in summer time when it lands in summer', () => {
+    expect(parseExpiry({ expiry: '30', date: '' }, summerMidnight)).toEqual({
+      ok: true,
+      value: '2026-07-31T22:59:59.000Z'
     })
   })
 
-  test('says an error the server sent instead of the summary', () => {
-    const picker = toExpiryPicker(
-      'p',
-      { expiry: 'custom', date: '2026-01-01' },
-      'Pick a date in the future.',
-      now
+  test('a preset adds calendar days to the UK date in the hour after UK midnight in summer time', () => {
+    // 00:30 BST on 1 Oct 2026 is still 30 Sep in UTC: 90 days from 1 Oct is 30 Dec.
+    expect(
+      parseExpiry(
+        { expiry: '90', date: '' },
+        new Date('2026-09-30T23:30:00.000Z')
+      )
+    ).toEqual({ ok: true, value: '2026-12-30T23:59:59.000Z' })
+  })
+
+  test('a preset adds calendar days across the change to summer time', () => {
+    // 23:30 GMT on 1 Mar 2027: 30 days on is 31 Mar, in BST.
+    expect(
+      parseExpiry(
+        { expiry: '30', date: '' },
+        new Date('2027-03-01T23:30:00.000Z')
+      )
+    ).toEqual({ ok: true, value: '2027-03-31T22:59:59.000Z' })
+  })
+
+  test('a preset adds calendar days in the hour after UK midnight across the change to winter time', () => {
+    // 00:30 BST on 25 Oct 2026, the day the clocks go back: 30 days on is 24 Nov, in GMT.
+    expect(
+      parseExpiry(
+        { expiry: '30', date: '' },
+        new Date('2026-10-24T23:30:00.000Z')
+      )
+    ).toEqual({ ok: true, value: '2026-11-24T23:59:59.000Z' })
+  })
+
+  test('a custom date ends at 23:59:59 UK time, across the clock change', () => {
+    expect(
+      parseExpiry({ expiry: 'custom', date: '2027-04-04' }, winter)
+    ).toEqual({ ok: true, value: '2027-04-04T22:59:59.000Z' })
+    expect(
+      parseExpiry({ expiry: 'custom', date: '2027-02-04' }, winter)
+    ).toEqual({ ok: true, value: '2027-02-04T23:59:59.000Z' })
+  })
+
+  test.each(['', '2027-02-30', 'tomorrow'])(
+    'a custom date of %j asks for a date',
+    (date) => {
+      expect(parseExpiry({ expiry: 'custom', date }, winter)).toEqual({
+        ok: false,
+        errors: { date: missingDate }
+      })
+    }
+  )
+
+  test.each(['2026-11-10', '2026-11-09'])(
+    'a custom date of today or earlier (%s) asks for a later one',
+    (date) => {
+      expect(parseExpiry({ expiry: 'custom', date }, winter)).toEqual({
+        ok: false,
+        errors: { date: pastDate }
+      })
+    }
+  )
+
+  test('tomorrow is the first date it takes, in UK days', () => {
+    expect(
+      parseExpiry({ expiry: 'custom', date: '2026-07-01' }, summerMidnight)
+    ).toEqual({ ok: false, errors: { date: pastDate } })
+    expect(
+      parseExpiry({ expiry: 'custom', date: '2026-07-02' }, summerMidnight)
+    ).toEqual({ ok: true, value: '2026-07-02T22:59:59.000Z' })
+  })
+
+  test('a date left on the day the token already ends keeps its exact instant while it is ahead', () => {
+    expect(
+      parseExpiry(
+        {
+          expiry: 'custom',
+          date: '2026-11-10',
+          current: '2026-11-10T18:00:00.000Z'
+        },
+        winter
+      )
+    ).toEqual({ ok: true, value: '2026-11-10T18:00:00.000Z' })
+  })
+
+  test('a date left on the day an expired token ended never brings it back', () => {
+    expect(
+      parseExpiry(
+        {
+          expiry: 'custom',
+          date: '2026-11-05',
+          current: '2026-11-05T23:59:59.000Z'
+        },
+        winter
+      )
+    ).toEqual({ ok: false, errors: { date: pastDate } })
+  })
+})
+
+describe('toExpiryGroup', () => {
+  test('says where each choice lands, the custom date starting tomorrow', () => {
+    const group = toExpiryGroup(
+      'token-new-expiry',
+      { expiry: '90', date: '' },
+      {},
+      winter
     )
 
-    expect(picker.summary).toBe('Pick a date in the future.')
-    expect(picker.error).toBe('Pick a date in the future.')
+    expect(group.options).toEqual([
+      {
+        value: 'never',
+        text: 'Never',
+        hint: 'Not recommended for a service.',
+        checked: false
+      },
+      {
+        value: '30',
+        text: '30 days',
+        hint: 'Ends 10 Dec 2026.',
+        checked: false
+      },
+      { value: '90', text: '90 days', hint: 'Ends 8 Feb 2027.', checked: true },
+      {
+        value: '365',
+        text: '1 year',
+        hint: 'Ends 10 Nov 2027.',
+        checked: false
+      },
+      { value: 'custom', text: 'Custom date', hint: null, checked: false }
+    ])
+    expect(group).toMatchObject({
+      dateId: 'token-new-expiry-date',
+      min: '2026-11-11',
+      error: null,
+      dateError: null
+    })
+  })
+
+  test('carries the errors for the choices and the date box apart', () => {
+    expect(
+      toExpiryGroup(
+        'g',
+        { expiry: 'custom', date: '' },
+        { date: missingDate },
+        winter
+      )
+    ).toMatchObject({ error: null, dateError: missingDate, date: '' })
+  })
+})
+
+describe('toFirstCustomDate', () => {
+  test('is the next UK day', () => {
+    expect(toFirstCustomDate(winter)).toBe('2026-11-11')
+    expect(toFirstCustomDate(summerMidnight)).toBe('2026-07-02')
   })
 })
 
 describe('parseClientId', () => {
-  test.each([
-    ['grants-ui', 'grants-ui'],
-    ['  grants-ui  ', 'grants-ui'],
-    ['a'.repeat(64), 'a'.repeat(64)]
-  ])('accepts "%s"', (value, clientId) => {
-    expect(parseClientId(value)).toEqual({ ok: true, value: clientId })
+  test('trims what a paste brings along', () => {
+    expect(parseClientId('  grants-ui ')).toEqual({
+      ok: true,
+      value: 'grants-ui'
+    })
   })
 
-  test.each([
-    ['', 'Enter a client ID.'],
-    ['   ', 'Enter a client ID.'],
-    ['Grants_UI', 'Use lowercase letters, digits and hyphens only.'],
-    ['grants ui', 'Use lowercase letters, digits and hyphens only.'],
-    ['a'.repeat(65), 'Use 64 characters or fewer.']
-  ])('refuses "%s"', (value, message) => {
-    expect(parseClientId(value)).toEqual({
+  test.each(['', 'Grants-UI', 'grants_ui', 'grants ui'])(
+    '%j breaks the name rule',
+    (value) => {
+      expect(parseClientId(value)).toEqual({
+        ok: false,
+        errors: {
+          clientId: 'Use lowercase letters, digits and hyphens only.'
+        }
+      })
+    }
+  )
+
+  test('takes 64 characters but not 65', () => {
+    expect(parseClientId('a'.repeat(64)).ok).toBe(true)
+    expect(parseClientId('a'.repeat(65))).toEqual({
       ok: false,
-      errors: { clientId: message }
+      errors: { clientId: 'Use 64 characters or fewer.' }
     })
   })
 })
 
 describe('parseNewToken', () => {
-  test('reads a client and an expiry', () => {
+  test('shows every mistake at once', () => {
     expect(
-      parseNewToken({ clientId: 'grants-ui', expiry: 'never', date: '' }, now)
-    ).toEqual({ ok: true, value: { clientId: 'grants-ui', expiresAt: null } })
-  })
-
-  test('says every mistake at once', () => {
-    expect(
-      parseNewToken({ clientId: 'Bad', expiry: 'custom', date: '' }, now)
+      parseNewToken(
+        { clientId: '', expiry: 'custom', date: '', confirmFor: '' },
+        winter
+      )
     ).toEqual({
       ok: false,
       errors: {
         clientId: 'Use lowercase letters, digits and hyphens only.',
-        expiry: 'Pick a date.'
+        date: missingDate
       }
     })
   })
+
+  test('answers the client and its expiry', () => {
+    expect(
+      parseNewToken(
+        { clientId: 'grants-ui', expiry: 'never', date: '', confirmFor: '' },
+        winter
+      )
+    ).toEqual({ ok: true, value: { clientId: 'grants-ui', expiresAt: null } })
+  })
 })
 
-describe('toIssueFieldErrors', () => {
-  test.each([
-    ['API_CLIENT_INVALID_NAME', 'clientId'],
-    ['API_CLIENT_EXISTS', 'clientId'],
-    ['API_CLIENT_NOT_FOUND', 'clientId'],
-    ['API_TOKEN_INVALID_EXPIRY', 'expiry']
-  ])('puts %s on the %s field', (errorCode, field) => {
-    expect(Object.keys(toIssueFieldErrors(errorCode) ?? {})).toEqual([field])
+describe('the refusals a different answer can fix', () => {
+  test('a race on the client goes on the client field, in Issue’s words', () => {
+    expect(toIssueFieldErrors('API_CLIENT_EXISTS', '90')).toEqual({
+      clientId:
+        'Someone has just created this client. Issue again to add a token to it.'
+    })
+    expect(toIssueFieldErrors('API_CLIENT_NOT_FOUND', '90')).toEqual({
+      clientId:
+        'This client has just lost its last token. Issue again to make it afresh.'
+    })
   })
 
-  test.each([['API_TOKEN_DUPLICATE'], [null]])(
-    'has no field for %s',
-    (errorCode) => {
-      expect(toIssueFieldErrors(errorCode)).toBeNull()
-    }
-  )
-})
-
-describe('toExpiryFieldErrors', () => {
-  test('puts a refused expiry on the picker, and nothing else', () => {
-    expect(toExpiryFieldErrors('API_TOKEN_INVALID_EXPIRY')).toEqual({
-      expiry: 'Pick a date in the future.'
+  test('a refused expiry goes on the date box for a custom date, else on the choices', () => {
+    expect(toIssueFieldErrors('API_TOKEN_INVALID_EXPIRY', 'custom')).toEqual({
+      date: pastDate
     })
-    expect(toExpiryFieldErrors('API_TOKEN_IN_USE')).toBeNull()
+    expect(toExpiryFieldErrors('API_TOKEN_INVALID_EXPIRY', '30')).toEqual({
+      expiry: pastDate
+    })
+  })
+
+  test('any other code is none of a field’s', () => {
+    expect(toIssueFieldErrors('API_TOKEN_DUPLICATE', '90')).toBeNull()
+    expect(toExpiryFieldErrors(null, '90')).toBeNull()
   })
 })
 
 describe('confirmsRevoke', () => {
-  test.each([
-    ['grants-ui', true],
-    [' grants-ui ', true],
-    ['grants-u', false],
-    ['GRANTS-UI', false],
-    ['', false]
-  ])('reads "%s" as %s', (typed, confirmed) => {
-    expect(confirmsRevoke(typed, 'grants-ui')).toBe(confirmed)
+  test('takes the client typed exactly, spaces aside', () => {
+    expect(confirmsRevoke(' grants-ui ', 'grants-ui')).toBe(true)
+    expect(confirmsRevoke('grants', 'grants-ui')).toBe(false)
+    expect(confirmsRevoke('GRANTS-UI', 'grants-ui')).toBe(false)
   })
 })
 
-describe('toKeepOldChoices', () => {
-  test('offers all three, keeping the old token 24 hours by default', () => {
+describe('toKeepOldOptions', () => {
+  test('starts on Keep valid until end of tomorrow', () => {
     expect(
-      toKeepOldChoices(false).map(({ value, checked }) => [value, checked])
-    ).toEqual([
-      ['none', false],
-      ['24h', true],
-      ['7d', false]
-    ])
-  })
-
-  test('comes back on the choice a refused rotation was sent with, starting afresh on 24 hours', () => {
-    expect(
-      toKeepOldChoices(false, '7d').map(({ value, checked, resetChecked }) => [
+      toKeepOldOptions(null, undefined).map(({ value, checked, disabled }) => [
         value,
         checked,
-        resetChecked
+        disabled
       ])
     ).toEqual([
       ['none', false, false],
-      ['24h', false, true],
-      ['7d', true, false]
+      ['24h', true, false],
+      ['7d', false, false]
     ])
   })
 
-  test('never comes back checked on a choice it offers disabled', () => {
+  test('comes back on the choice a refused rotation was sent with', () => {
     expect(
-      toKeepOldChoices(true, 'none').map(({ value, checked }) => [
-        value,
-        checked
-      ])
-    ).toEqual([
-      ['none', false],
-      ['24h', true],
-      ['7d', false]
-    ])
+      toKeepOldOptions(null, '7d').find(({ checked }) => checked)?.value
+    ).toBe('7d')
   })
 
-  test('offers the token in use no immediate end, disabled rather than hidden', () => {
-    expect(
-      toKeepOldChoices(true).map(({ value, disabled }) => [value, disabled])
-    ).toEqual([
-      ['none', true],
-      ['24h', false],
-      ['7d', false]
-    ])
+  test('turns Expire immediately off for the token in use, saying why, and never starts on it', () => {
+    const options = toKeepOldOptions(
+      { reason: 'Not for the token in use.' },
+      'none'
+    )
+
+    expect(options[0]).toMatchObject({
+      value: 'none',
+      checked: false,
+      disabled: true,
+      reason: 'Not for the token in use.'
+    })
+    expect(options[1].checked).toBe(true)
   })
 })

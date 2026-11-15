@@ -1,6 +1,6 @@
 import { getFromGas, postToGas } from '../../common/gas.ts'
 
-/** Named by meaning; the classes live in status-badge/template.njk, where Tailwind can see them. */
+/** Named by meaning: the tone a page draws the status in. */
 export type BadgeRole = 'neutral' | 'info' | 'warning' | 'success' | 'error'
 
 export type EventService = 'gas' | 'caseworking'
